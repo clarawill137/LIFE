@@ -4,10 +4,11 @@
 // Life режет общий чат на главы-комнаты только на экране, рисует карты районов и даёт кнопки.
 
 import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icons.js';
+import { initControl, applyTheme, openCC } from './control.js';
 import { chronSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2427,7 +2428,11 @@ function addWandButton() {
     btn.tabIndex = 0;
     btn.innerHTML = '<div class="fa-solid fa-map-location-dot extensionsMenuExtensionButton"></div><span>Life</span>';
     btn.addEventListener('click', () => openHub());
-    menu.append(btn);
+    const cc = btn.cloneNode(false);
+    cc.id = 'lf-wand-cc';
+    cc.innerHTML = '<div class="fa-solid fa-sliders extensionsMenuExtensionButton"></div><span>Пульт</span>';
+    cc.addEventListener('click', () => openCC());
+    menu.append(btn, cc);
     return true;
 }
 
@@ -2441,19 +2446,27 @@ function renderSettingsDrawer() {
         <div class="inline-drawer-toggle inline-drawer-header"><b>✦ Life</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div>
         <div class="inline-drawer-content">
           <label class="checkbox_label"><input id="lf_set_enabled" type="checkbox" ${s.enabled ? 'checked' : ''}> Включено</label>
-          <div id="lf_open_btn" class="menu_button"><i class="fa-solid fa-map-location-dot"></i> Открыть Life</div>
-          <small>Настройки — в хабе: Мир → ⚙. Команда <code>/life</code>, аварийно <code>/life off</code>.</small>
+          <div class="flex-container">
+            <div id="lf_open_btn" class="menu_button"><i class="fa-solid fa-map-location-dot"></i> Открыть Life</div>
+            <div id="lf_cc_btn" class="menu_button"><i class="fa-solid fa-sliders"></i> Пульт</div>
+          </div>
+          <label class="checkbox_label"><input id="lf_set_edge" type="checkbox" ${s.cc?.on !== false ? 'checked' : ''}> Язычок пульта на краю экрана</label>
+          <label class="checkbox_label"><input id="lf_set_theme" type="checkbox" ${s.cc?.theme !== false ? 'checked' : ''}> Тема «Графит и вино» на всю Таверну</label>
+          <small>Настройки — в хабе: Мир → ⚙ и в пульте. Команды <code>/life</code>, <code>/life cc</code>, аварийно <code>/life off</code>.</small>
         </div>
       </div>
     </div>`);
     document.getElementById('lf_set_enabled')?.addEventListener('change', function () { setEnabled(this.checked); });
     document.getElementById('lf_open_btn')?.addEventListener('click', () => openHub());
+    document.getElementById('lf_cc_btn')?.addEventListener('click', () => openCC());
+    document.getElementById('lf_set_edge')?.addEventListener('change', function () { settings().cc.on = this.checked; saveSettings(); applyTheme(); });
+    document.getElementById('lf_set_theme')?.addEventListener('change', function () { settings().cc.theme = this.checked; saveSettings(); applyTheme(); });
 }
 
 function setEnabled(on) {
     const s = settings();
     s.enabled = !!on;
-    saveSettings(); syncFab(); invalidate(); decorate(); updateMovePrompt();
+    saveSettings(); syncFab(); invalidate(); decorate(); updateMovePrompt(); applyTheme();
     const cb = document.getElementById('lf_set_enabled');
     if (cb) cb.checked = s.enabled;
 }
@@ -2463,12 +2476,14 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; map / person / world — вкладка; all — весь чат; chron — Летописец по последнему посту; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'map | person | world | all | chron | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; all — весь чат; chron — Летописец по последнему посту; theme — тема вкл/выкл; on / off — включить или выключить.',
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | all | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
                 if (v === 'all') { ui.focus = null; decorate(); return ''; }
+                if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
+                if (v === 'theme') { const c = settings().cc; c.theme = !c.theme; saveSettings(); applyTheme(); toast('info', c.theme ? 'Тема Life включена' : 'Тема Life выключена'); return ''; }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
                 openHub(['map', 'person', 'world'].includes(v) ? v : 'scene');
                 return '';
@@ -2500,8 +2515,14 @@ function lastAiIndex() {
     return -1;
 }
 
+const controlApi = {
+    settings, saveSettings, esc, toast, worldState, chapters, focusChapter, chapterCover,
+    weekday, weatherWord, placeName, locTop, openHub, directorSheet, newChapterSheet, version: VERSION,
+};
+
 jQuery(async () => {
     settings();
+    try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
     registerSlash();
     syncFab();
