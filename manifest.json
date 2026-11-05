@@ -1,0 +1,13 @@
+{
+    "display_name": "Life",
+    "loading_order": 90,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Дарья + Claude",
+    "version": "0.1.0",
+    "homePage": "https://github.com/clarawill137/LIFE",
+    "auto_update": false,
+    "generate_interceptor": "life_intercept"
+}
