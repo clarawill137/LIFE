@@ -40,7 +40,8 @@ const FABS = [
     ['#fmt_fab', '#fmt_fab_btn', 'brain', 'Факты'], ['#fm-mini-btn', '#fm-mini-btn', 'heart', 'FM'], ['#kab-handle', '#kab-handle', 'book', 'Кабинет'],
 ];
 
-const KILL_IDS = /^(MoonlitEchosTheme-(style|extension)|moonlit-raw-css)$/;
+// стили Moonlit: основной и extension.css, свой CSS, мобильные блоки css-block-*
+const KILL_IDS = /^(MoonlitEchosTheme-(style|extension)|moonlit-raw-css|css-block-.+)$/;
 
 const esc = (v) => api.esc(v);
 const ctx = () => SillyTavern.getContext();
@@ -81,7 +82,7 @@ export function applyTheme() {
     const kill = on && c.theme && c.killMoonlit;
     document.querySelectorAll('link[rel="stylesheet"], style').forEach(el => {
         const href = el.getAttribute?.('href') || '';
-        if (/MoonlitEchoesTheme\/(style|extension)\.css/i.test(href) || KILL_IDS.test(el.id || '')) el.disabled = kill;
+        if (/MoonlitEchoesTheme\/.+\.css/i.test(href) || KILL_IDS.test(el.id || '')) el.disabled = kill;
     });
     syncEdge();
 }
@@ -210,12 +211,17 @@ function profilesInfo() {
     return { list: Array.isArray(cm?.profiles) ? cm.profiles : [], selected: cm?.selectedProfile || '' };
 }
 
+// кнопки над вводом: Quick Reply, скрипты Tavern Helper (у них тот же класс qr--button), Guided Generations
+const QB_SEL = '#send_form .qr--button, #qr--popout .qr--button, #gg-regular-buttons-container .gg-action-button';
+
 function quickButtons() {
     const seen = new Set();
     const out = [];
-    document.querySelectorAll('#send_form .qr--button').forEach((el, i) => {
-        const label = (el.querySelector('.qr--button-label')?.textContent || el.textContent || el.title || '').replace(/\s+/g, ' ').trim();
-        const ic = [...(el.querySelector('.qr--button-icon, i, .fa-solid')?.classList || [])].find(c => /^fa-(?!solid|regular|fw)/.test(c)) || '';
+    document.querySelectorAll(QB_SEL).forEach((el, i) => {
+        if (el.closest('#lf-cc')) return;
+        const label = (el.querySelector('.qr--button-label')?.textContent || el.textContent || el.title || '').replace(/\s+/g, ' ').trim()
+            || (el.title || '').trim();
+        const ic = faClass(el.querySelector('.qr--button-icon') || el);
         if (!label && !ic) return;
         const k = `${label}|${ic}`;
         if (seen.has(k)) return;
@@ -404,7 +410,7 @@ async function onCCClick(ev) {
             break;
         }
         case 'qr': {
-            const orig = document.querySelector(`#send_form .qr--button[data-lf-qr="${CSS.escape(el.dataset.v)}"]`);
+            const orig = [...document.querySelectorAll(QB_SEL)].find(x => x.dataset.lfQr === el.dataset.v);
             if (!orig) { api.toast('info', 'Кнопка пропала — открой пульт заново'); break; }
             closeCC();
             setTimeout(() => orig.click(), 250);

@@ -8,7 +8,7 @@ import { initControl, applyTheme, openCC } from './control.js';
 import { chronSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -16,8 +16,7 @@ const DEFAULTS = {
     enabled: true,
     showFab: true,
     fabPos: null,
-    dividers: true,
-    focusDefault: true,
+    chatMarks: 'off',
     chapterBy: 'top',
     aliases: '',
     artStyle: 'semi-realistic colored-pencil sketch on toned paper, moody cinematic light, graphite and deep wine palette',
@@ -40,6 +39,7 @@ function settings() {
     for (const [k, v] of Object.entries(DEFAULTS)) if (s[k] === undefined) s[k] = clone(v);
     for (const [k, v] of Object.entries(DEFAULTS.chron)) if (s.chron[k] === undefined) s.chron[k] = v;
     if (!s.migr02) migrate01(s);
+    if (!s.migr03) { s.chatMarks = 'off'; delete s.dividers; delete s.focusDefault; s.migr03 = true; }
     if (!Array.isArray(s.regions)) s.regions = [];
     if (!s.regions.length) s.regions.push({ id: uid(), name: 'Манхэттен', map: '', note: '' });
     return s;
@@ -901,9 +901,10 @@ const ui = {
 let observer = null;
 let decorating = false;
 
+// глава, которую сейчас показывает хаб (в самом чате ничего не прячется)
 function focusChapter(list = chapters()) {
-    if (!settings().enabled || ui.focus === null || !list.length) return null;
-    if (ui.focus === 'last') return list[list.length - 1];
+    if (!list.length) return null;
+    if (ui.focus === 'last' || ui.focus === null) return list[list.length - 1];
     return list.find(ch => ch.start === ui.focus) || list[list.length - 1];
 }
 
@@ -914,40 +915,10 @@ function firstShownId(chatEl) {
 
 function chapterCover(ch) { return (chatMeta().frames || {})[ch.start] || placeCover(ch.loc); }
 
-function dividerHtml(ch) {
-    const cover = chapterCover(ch);
-    const when = whenLabel(ch.date, ch.time);
-    return `<div class="lf-div${cover ? ' has-cover' : ''}" data-start="${ch.start}" role="button" tabindex="0">
-        ${cover ? `<div class="lf-div-cover" style="background-image:url('${esc(cover)}')"></div>` : ''}
-        <div class="lf-div-line"></div>
-        <div class="lf-div-txt">
-            <span class="lf-div-k">Глава ${pad2(ch.num)}${ch.loc && norm(placeName(locTop(ch.loc))) !== norm(ch.title) ? ` · ${esc(placeName(locTop(ch.loc)))}` : ''}</span>
-            <b>${esc(ch.title)}</b>
-            ${when ? `<span class="lf-div-t">${esc(when)}</span>` : ''}
-        </div>
-        <div class="lf-div-line"></div>
-    </div>`;
-}
-
-function moveHtml(m) {
-    const l = m.extra.life;
-    return `<div class="lf-move">${icon(iconName(guessPlaceIcon(norm(locLeaf(l.location)))))} ${esc(locLeaf(l.location) || l.title || 'переход')}</div>`;
-}
-
-function barHtml(list, fch) {
-    if (!fch) {
-        return `<div id="lf-bar" class="lf-bar-all">
-            <button class="lf-bar-mid" data-lfb="hub">${icon('book')} Весь чат · ${list.length} ${plural(list.length, 'глава', 'главы', 'глав')}</button>
-            <button class="lf-bar-btn" data-lfb="focus" title="Только текущая глава">${icon('door')}</button>
-        </div>`;
-    }
-    const i = fch.idx;
-    return `<div id="lf-bar">
-        <button class="lf-bar-btn" data-lfb="prev" ${i === 0 ? 'disabled' : ''} title="Предыдущая глава">${icon('chevL')}</button>
-        <button class="lf-bar-mid" data-lfb="hub"><span class="lf-bar-k">Гл. ${fch.num}</span>${esc(cut(fch.title, 30))}</button>
-        <button class="lf-bar-btn" data-lfb="next" ${i >= list.length - 1 ? 'disabled' : ''} title="Следующая глава">${icon('chevR')}</button>
-        <button class="lf-bar-btn" data-lfb="all" title="Показать весь чат">${icon('layers')}</button>
-    </div>`;
+function thinHtml(ch) {
+    const where = ch.loc ? placeName(locTop(ch.loc)) : '';
+    const label = [where && norm(where) !== norm(ch.title) ? `${ch.title} · ${where}` : ch.title, ch.time].filter(Boolean).join(' · ');
+    return `<div class="lf-thin" data-start="${ch.start}" role="button">${esc(cut(label, 60))}</div>`;
 }
 
 function chipsHtml(i) {
@@ -977,39 +948,26 @@ function decorate() {
     if (!chatEl || decorating) return;
     decorating = true;
     try {
-        chatEl.querySelectorAll(':scope > .lf-div, :scope > #lf-bar, :scope > .lf-more, :scope > .lf-move').forEach(x => x.remove());
+        chatEl.querySelectorAll(':scope > .lf-div, :scope > #lf-bar, :scope > .lf-more, :scope > .lf-move, :scope > .lf-thin').forEach(x => x.remove());
+        chatEl.classList.remove('lf-focus', 'lf-focus-full');
         const s = settings();
         const mesEls = chatEl.querySelectorAll(':scope > .mes[mesid]');
         if (!s.enabled || !hasChat()) {
-            chatEl.classList.remove('lf-focus', 'lf-focus-full');
             mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelector('.lf-pchips')?.remove(); });
             return;
         }
-        const list = chapters();
-        const fch = focusChapter(list);
+        // чат остаётся сплошным: только прячем служебные отметки Life и (по желанию) ставим тонкую черту, где сменилось место
         const chat = chatArr();
+        const thin = s.chatMarks === 'thin';
+        const list = thin ? chapters() : [];
         const starts = new Map(list.map(ch => [ch.start, ch]));
         for (const el of mesEls) {
             const id = Number(el.getAttribute('mesid'));
-            const ch = chapterOf(id, list);
-            const mark = chat[id]?.extra?.life;
-            el.classList.toggle('lf-out', !!fch && ch !== fch);
-            el.classList.toggle('lf-marker', !!mark && s.dividers);
+            el.classList.remove('lf-out');
+            el.classList.toggle('lf-marker', !!chat[id]?.extra?.life);
             const st = starts.get(id);
-            if (st && s.dividers && (st.loc || st.marker >= 0 || st.idx > 0) && (!fch || st === fch)) el.insertAdjacentHTML('beforebegin', dividerHtml(st));
-            else if (mark && mark.chapter === false && s.dividers && (!fch || ch === fch)) el.insertAdjacentHTML('beforebegin', moveHtml(chat[id]));
+            if (st && st.idx > 0) el.insertAdjacentHTML('beforebegin', thinHtml(st));
         }
-        const firstId = firstShownId(chatEl);
-        const full = !!fch && fch.start >= firstId;
-        chatEl.classList.toggle('lf-focus', !!fch);
-        chatEl.classList.toggle('lf-focus-full', full);
-        if (fch && !full && Number.isFinite(firstId)) {
-            const hidden = firstId - fch.start;
-            const anchor = chatEl.querySelector(':scope > #show_more_messages');
-            const html = `<button class="lf-more" data-lfb="more">${icon('chevU')} Начало главы — ещё ${hidden} ${plural(hidden, 'сообщение', 'сообщения', 'сообщений')}</button>`;
-            if (anchor) anchor.insertAdjacentHTML('afterend', html); else chatEl.insertAdjacentHTML('afterbegin', html);
-        }
-        if (list.length > 1 || fch?.loc) chatEl.insertAdjacentHTML('afterbegin', barHtml(list, fch));
         paintChips();
     } catch (e) {
         console.error('[Life] decorate', e);
@@ -1036,26 +994,13 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
-    const b = ev.target.closest('[data-lfb], .lf-div, .lf-pchips');
+    const b = ev.target.closest('.lf-thin, .lf-pchips');
     if (!b) return;
     ev.preventDefault();
     ev.stopPropagation();
-    const list = chapters();
-    const fch = focusChapter(list);
     if (b.classList.contains('lf-pchips')) { if (!b.classList.contains('busy')) { openHub('world'); chronSheet(Number(b.dataset.mes)); } return; }
-    if (b.classList.contains('lf-div')) {
-        const st = Number(b.dataset.start);
-        if (fch && fch.start === st) openHub('scene'); else gotoChapter(st);
-        return;
-    }
-    switch (b.dataset.lfb) {
-        case 'hub': openHub('scene'); break;
-        case 'prev': if (fch && fch.idx > 0) gotoChapter(list[fch.idx - 1].start); break;
-        case 'next': if (fch && fch.idx < list.length - 1) gotoChapter(list[fch.idx + 1].start); break;
-        case 'all': ui.focus = null; decorate(); break;
-        case 'focus': ui.focus = 'last'; decorate(); scrollChatBottom(); break;
-        case 'more': if (fch) await jumpTo(fch.start); break;
-    }
+    ui.focus = Number(b.dataset.start);
+    openHub('scene');
 }
 
 function scrollChatBottom() { const el = document.getElementById('chat'); if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }
@@ -1067,7 +1012,7 @@ async function jumpTo(mesId) {
         try { await ctx().executeSlashCommandsWithOptions?.(`/chat-jump ${mesId}`); } catch (e) { console.warn('[Life] chat-jump', e); }
         decorate();
     }
-    const el = chatEl.querySelector(`.lf-div[data-start="${mesId}"]`) || chatEl.querySelector(`.mes[mesid="${mesId}"]`);
+    const el = chatEl.querySelector(`.lf-thin[data-start="${mesId}"]`) || chatEl.querySelector(`.mes[mesid="${mesId}"]`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1075,10 +1020,9 @@ async function gotoChapter(start, { close = true } = {}) {
     const list = chapters();
     const ch = list.find(x => x.start === start);
     if (!ch) return;
-    ui.focus = ch.idx === list.length - 1 ? 'last' : ch.start;
     if (close) closeHub();
     decorate();
-    if (ui.focus === 'last' && ch.end - ch.start > 3) scrollChatBottom(); else await jumpTo(ch.start);
+    if (ch.idx === list.length - 1 && ch.end - ch.start > 3) scrollChatBottom(); else await jumpTo(ch.start);
 }
 
 // ───────────── хаб: каркас ─────────────
@@ -1140,6 +1084,7 @@ function openHub(tab) {
 
 function closeHub() {
     ui.open = false;
+    ui.focus = 'last';
     closeSheet();
     const dlg = document.getElementById('lf-dialog');
     if (!dlg) return;
@@ -1653,8 +1598,8 @@ function renderCfg() {
     const profOpts = (cur) => `<option value="">— как у костюмера Гардероба —</option>${profiles().map(p => `<option value="${esc(p.name)}" ${p.name === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
     return `<div class="lf-form">
         ${sw('enabled', 'Life включён')}
-        ${sw('dividers', 'Разделители глав в чате')}
-        ${sw('focusDefault', 'Показывать только текущую главу (как комнату)')}
+        <div class="lf-field"><label>Главы в самом чате</label>
+            <select data-set="chatMarks"><option value="off" ${s.chatMarks !== 'thin' ? 'selected' : ''}>никак — сплошной чат, главы только здесь</option><option value="thin" ${s.chatMarks === 'thin' ? 'selected' : ''}>тонкая строчка, где сменилось место</option></select></div>
         ${sw('showFab', 'Плавающая кнопка со свечой')}
         <div class="lf-field"><label>Новая глава, когда меняется</label>
             <select data-set="chapterBy"><option value="top" ${s.chapterBy !== 'full' ? 'selected' : ''}>место целиком (квартира → бар)</option><option value="full" ${s.chapterBy === 'full' ? 'selected' : ''}>даже комната (кухня → спальня)</option></select></div>
@@ -2349,8 +2294,7 @@ async function onChange(ev) {
         obj[k] = el.type === 'checkbox' ? el.checked : el.value;
         saveSettings();
         if (k === 'showFab' || k === 'enabled') syncFab();
-        if (k === 'focusDefault') ui.focus = s.focusDefault ? 'last' : null;
-        if (['enabled', 'dividers', 'focusDefault', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
+        if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
         return;
@@ -2476,12 +2420,11 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; all — весь чат; chron — Летописец по последнему посту; theme — тема вкл/выкл; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | all | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; chron — Летописец по последнему посту; theme — тема вкл/выкл; on / off — включить или выключить.',
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
-                if (v === 'all') { ui.focus = null; decorate(); return ''; }
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
                 if (v === 'theme') { const c = settings().cc; c.theme = !c.theme; saveSettings(); applyTheme(); toast('info', c.theme ? 'Тема Life включена' : 'Тема Life выключена'); return ''; }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
@@ -2499,7 +2442,7 @@ window.addEventListener('error', (e) => {
 });
 
 function onChatChanged() {
-    ui.focus = settings().focusDefault ? 'last' : null;
+    ui.focus = 'last';
     Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '' });
     chronQueue.length = 0;
     invalidate();
@@ -2528,7 +2471,7 @@ jQuery(async () => {
     syncFab();
     if (!addWandButton()) { let t = 0; const iv = setInterval(() => { if (addWandButton() || ++t > 20) clearInterval(iv); }, 500); }
     if (!hookChat()) { let t = 0; const iv = setInterval(() => { if (hookChat() || ++t > 40) { clearInterval(iv); decorateSoon(); } }, 500); }
-    ui.focus = settings().focusDefault ? 'last' : null;
+    ui.focus = 'last';
     const { eventSource, eventTypes: E } = ctx();
     eventSource.on(E.CHAT_CHANGED, onChatChanged);
     const later = () => { invalidate(); decorateSoon(450); setTimeout(() => { invalidate(); decorateSoon(); }, 1600); };
@@ -2541,7 +2484,7 @@ jQuery(async () => {
     };
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
-    if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, () => { if (settings().focusDefault && ui.focus !== null) ui.focus = 'last'; later(); });
+    if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, () => { ui.focus = 'last'; later(); });
     const endGen = () => {
         const cm = chatMeta();
         if (cm.director?.once && lastAiIndex() > (cm.director.after ?? -1)) { cm.director = null; saveMeta(); }
