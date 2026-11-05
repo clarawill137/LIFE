@@ -9,7 +9,7 @@ let api = null;
 
 const CC_DEFAULTS = {
     on: true, side: 'left', top: 50, hideFabs: true, qrHidden: true,
-    theme: true, killMoonlit: true, bg: 'dim', read: false, fs: 17, lh: 1.7, width: 760, ava: 'big',
+    theme: true, killMoonlit: true, killCustom: true, palette: 'graphite', bg: 'dim', read: false, fs: 17, lh: 1.7, width: 760, ava: 'wide',
 };
 
 const AGENTS = [
@@ -50,8 +50,11 @@ function cc() {
     const s = api.settings();
     if (!s.cc || typeof s.cc !== 'object') s.cc = {};
     for (const [k, v] of Object.entries(CC_DEFAULTS)) if (s.cc[k] === undefined) s.cc[k] = v;
+    // 0.5: аватарки баном во всю ширину, старые «крупные/огромные» — в новый режим
+    if (!s.cc.v05) { if (s.cc.ava === 'huge' || s.cc.ava === 'big') s.cc.ava = 'wide'; s.cc.v05 = 1; }
     return s.cc;
 }
+const PALETTES = [['graphite', 'Графит'], ['paper', 'Бумага'], ['moon', 'Луна']];
 
 // ───────────── тема ─────────────
 
@@ -64,8 +67,12 @@ export function applyTheme() {
     b.classList.toggle('lf-bg-dim', on && c.theme && c.bg === 'dim');
     b.classList.toggle('lf-bg-flat', on && c.theme && c.bg === 'flat');
     b.classList.toggle('lf-read', on && c.read);
-    b.classList.toggle('lf-ava-big', on && c.ava === 'big');
-    b.classList.toggle('lf-ava-huge', on && c.ava === 'huge');
+    const th = on && c.theme;
+    for (const [k] of PALETTES) b.classList.toggle(`lf-pal-${k}`, th && c.palette === k);
+    b.classList.toggle('lf-ava-wide', th && c.ava === 'wide');
+    b.classList.toggle('lf-ava-big', th && c.ava === 'big');
+    b.classList.remove('lf-ava-huge');
+    syncAvatars(th && (c.ava === 'wide' || c.ava === 'big'));
     b.classList.toggle('lf-qr-hidden', on && c.on && c.qrHidden);
     b.classList.toggle('lf-hide-fabs', on && c.on && c.hideFabs);
     b.style.setProperty('--lf-read-fs', `${c.fs}px`);
@@ -76,7 +83,7 @@ export function applyTheme() {
         st.id = 'lf-theme-icons';
         st.textContent = MASKS.map(([sel, n]) => {
             const u = iconUrl(n, 1.5);
-            return `body.lf-theme ${sel}::before{content:''!important;display:inline-block;width:1em;height:1em;vertical-align:-.125em;background-color:currentColor;-webkit-mask:${u} center/contain no-repeat;mask:${u} center/contain no-repeat;}`;
+            return `body.lf-theme ${sel}::before{content:''!important;display:inline-block!important;width:1em!important;height:1em!important;vertical-align:-.125em;background:currentColor!important;-webkit-mask:${u} center/contain no-repeat!important;mask:${u} center/contain no-repeat!important;font-family:inherit!important;}`;
         }).join('\n');
         document.head.append(st);
     }
@@ -86,7 +93,40 @@ export function applyTheme() {
         const href = el.getAttribute?.('href') || '';
         if (/MoonlitEchoesTheme\/.+\.css/i.test(href) || KILL_IDS.test(el.id || '')) el.disabled = kill;
     });
+    // свой CSS темы ST (поле Custom CSS) часто красит то же самое — пока стоит тема Life, он выключен
+    const cs = document.getElementById('custom-style');
+    if (cs) cs.disabled = on && c.theme && c.killCustom;
     syncEdge();
+}
+
+// ───────────── аватарки в полном размере ─────────────
+// ST кладёт в чат превьюшки 96×144 — для баннера во всю ширину они мыльные, подменяем на оригинал.
+
+let avaObs = null;
+function fullSrc(src) {
+    const m = String(src || '').match(/^\/thumbnail\?type=(avatar|persona)&file=([^&]+)/);
+    if (!m) return '';
+    const file = decodeURIComponent(m[2]);
+    return m[1] === 'avatar' ? `/characters/${encodeURIComponent(file)}` : `/User Avatars/${encodeURIComponent(file)}`;
+}
+function upgradeAvatars(root) {
+    (root || document).querySelectorAll('#chat .mes .avatar img').forEach(img => {
+        const full = fullSrc(img.getAttribute('src'));
+        if (!full) return;
+        img.dataset.lfThumb = img.getAttribute('src');
+        img.onerror = () => { if (img.dataset.lfThumb) { img.onerror = null; img.src = img.dataset.lfThumb; } };
+        img.src = full;
+    });
+}
+function syncAvatars(on) {
+    const chat = document.getElementById('chat');
+    if (!on) { avaObs?.disconnect(); avaObs = null; return; }
+    if (!chat) return;
+    upgradeAvatars(chat);
+    if (avaObs) return;
+    let t = null;
+    avaObs = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => upgradeAvatars(chat), 120); });
+    avaObs.observe(chat, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
 }
 
 // ───────────── язычок ─────────────
@@ -331,10 +371,11 @@ function renderCC() {
 
     <div class="cc-label">Вид</div>
     <div class="cc-row">
-        ${toggleTile('cc.theme', 'Тема', 'palette', c.theme)}
+        ${toggleTile('cc.theme', c.theme ? (PALETTES.find(p => p[0] === c.palette) || PALETTES[0])[1] : 'Тема выкл', 'palette', c.theme)}
         ${toggleTile('cc.bg', c.bg === 'flat' ? 'Без фона' : c.bg === 'dim' ? 'Фон тише' : 'Фон как есть', 'image', c.bg !== 'off')}
         ${toggleTile('cc.scene', 'Фон сцены', 'film', !!api.sceneBg?.())}
-        ${toggleTile('cc.ava', c.ava === 'huge' ? 'Аватарки XL' : c.ava === 'big' ? 'Аватарки' : 'Аватарки мелко', 'user', c.ava !== 'off')}
+        ${toggleTile('cc.ava', c.ava === 'wide' ? 'Баннер' : c.ava === 'big' ? 'Портрет' : 'Аватарки', 'user', c.ava !== 'off')}
+        ${toggleTile('cc.detail', 'Детали', 'image', !!api.detail?.())}
         ${toggleTile('cc.read', 'Чтение', 'book', c.read)}
         ${toggleTile('cc.qrShown', 'Над вводом', 'keyboard', !c.qrHidden)}
         ${toggleTile('cc.fabs', 'Плавающие', 'pointer', !c.hideFabs)}
@@ -399,10 +440,15 @@ async function onCCClick(ev) {
             const k = el.dataset.k;
             const a = AGENTS.find(x => x.key === k);
             if (a) { const on = !agentOn(a); el.classList.toggle('on', on); await setAgent(a, on); setTimeout(renderCC, 400); break; }
-            if (k === 'cc.theme') c.theme = !c.theme;
+            if (k === 'cc.theme') {
+                // Графит → Бумага → Луна → выкл → Графит
+                if (!c.theme) { c.theme = true; c.palette = 'graphite'; }
+                else { const i = PALETTES.findIndex(p => p[0] === c.palette); if (i >= PALETTES.length - 1) c.theme = false; else c.palette = PALETTES[i + 1][0]; }
+            }
+            else if (k === 'cc.detail') api.detail?.(!api.detail?.());
             else if (k === 'cc.bg') c.bg = c.bg === 'dim' ? 'flat' : c.bg === 'flat' ? 'off' : 'dim';
             else if (k === 'cc.scene') api.sceneBg?.(!api.sceneBg?.());
-            else if (k === 'cc.ava') c.ava = c.ava === 'big' ? 'huge' : c.ava === 'huge' ? 'off' : 'big';
+            else if (k === 'cc.ava') c.ava = c.ava === 'wide' ? 'big' : c.ava === 'big' ? 'off' : 'wide';
             else if (k === 'cc.read') c.read = !c.read;
             else if (k === 'cc.qrShown') c.qrHidden = !c.qrHidden;
             else if (k === 'cc.fabs') c.hideFabs = !c.hideFabs;

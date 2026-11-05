@@ -54,17 +54,30 @@ export function imagesWith(list, names) {
 
 // ───────────── просмотр картинки ─────────────
 
-export function lightbox(src, caption = '', onJump = null) {
+/** поверх модального окна (хаб, пульт) — иначе картинка уйдёт под него; закрывающееся окно не берём */
+function topDialog() {
+    const ds = [...document.querySelectorAll('dialog[open]')].filter(d => {
+        try { if (!d.matches(':modal')) return false; } catch { /* старый Safari */ }
+        if (d.id === 'lf-dialog' && !d.classList.contains('on')) return false;
+        return d.getClientRects().length > 0;
+    });
+    return ds.pop() || null;
+}
+
+export function lightbox(src, caption = '', onJump = null, motion = '') {
     document.getElementById('lf-lightbox')?.remove();
     const el = document.createElement('div');
     el.id = 'lf-lightbox';
-    el.innerHTML = `<img src="${esc(src)}" alt=""><div class="lf-lb-bar">${caption ? `<span>${esc(caption)}</span>` : '<span></span>'}${onJump ? `<button data-lb="jump">${icon('right')} к посту</button>` : ''}<button data-lb="x">${icon('x')}</button></div>`;
+    const pic = motion
+        ? `<div class="lf-lb-mo lf-mo m-${esc(motion)} play"><img src="${esc(src)}" alt=""><i class="fx"></i><i class="fx2"></i></div>`
+        : `<img src="${esc(src)}" alt="">`;
+    el.innerHTML = `${pic}<div class="lf-lb-bar">${caption ? `<span>${esc(caption)}</span>` : '<span></span>'}${onJump ? `<button data-lb="jump">${icon('right')} к посту</button>` : ''}<button data-lb="x">${icon('x')}</button></div>`;
     el.addEventListener('click', (e) => {
         const b = e.target.closest('[data-lb]');
         if (b?.dataset.lb === 'jump') { el.remove(); onJump?.(); return; }
-        if (b || e.target === el || e.target.tagName === 'IMG') el.remove();
+        if (b || e.target === el || e.target.tagName === 'IMG' || e.target.closest('.lf-lb-mo')) el.remove();
     });
-    ([...document.querySelectorAll('dialog[open]')].pop() || document.body).append(el);
+    (topDialog() || document.body).append(el);
     requestAnimationFrame(() => el.classList.add('on'));
 }
 
@@ -83,7 +96,7 @@ export function playCut(cut, { onEnd = null, music = null } = {}) {
         <div class="lf-cut-cap"><small></small><span></span></div>
         <div class="lf-cut-dots">${frames.map((_, i) => `<b data-i="${i}"></b>`).join('')}</div>
         <button class="lf-cut-x" aria-label="Закрыть">${icon('x')}</button>`;
-    ([...document.querySelectorAll('dialog[open]')].pop() || document.body).append(el);
+    (topDialog() || document.body).append(el);
     let i = -1;
     const show = (n) => {
         if (n >= frames.length) { stopCut(); onEnd?.(); return; }

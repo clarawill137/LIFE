@@ -7,10 +7,10 @@ import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icon
 import { initControl, applyTheme, openCC } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
-import { chronSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
+import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -32,6 +32,7 @@ const DEFAULTS = {
     money: { autopay: true },
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
+    detail: { on: true, auto: true, motion: true },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -45,6 +46,8 @@ function settings() {
     for (const [k, v] of Object.entries(DEFAULTS.chron)) if (s.chron[k] === undefined) s.chron[k] = v;
     for (const [k, v] of Object.entries(DEFAULTS.money)) if (s.money[k] === undefined) s.money[k] = v;
     for (const [k, v] of Object.entries(DEFAULTS.music)) if (s.music[k] === undefined) s.music[k] = clone(v);
+    if (!s.detail || typeof s.detail !== 'object') s.detail = clone(DEFAULTS.detail);
+    for (const [k, v] of Object.entries(DEFAULTS.detail)) if (s.detail[k] === undefined) s.detail[k] = v;
     if (!s.migr02) migrate01(s);
     if (!s.migr03) { s.chatMarks = 'off'; delete s.dividers; delete s.focusDefault; s.migr03 = true; }
     if (!Array.isArray(s.regions)) s.regions = [];
@@ -80,6 +83,9 @@ function norm(v) { return String(v ?? '').toLowerCase().replace(/ё/g, 'е').rep
 function cut(t, n) { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; }
 function cap(t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); }
 function pad2(n) { return String(n).padStart(2, '0'); }
+function absUrl(u) { try { return new URL(u, location.href).href; } catch { return u; } }
+/** картинка целиком, по краям — размытая она же (вместо обрезки) */
+function fitAttr(src) { return src ? ` style="--img:url('${esc(absUrl(src))}')"` : ''; }
 function hash(t) { let h = 0; t = String(t || ''); for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 function plural(n, one, few, many) {
     const a = Math.abs(n) % 100, b = a % 10;
@@ -758,7 +764,8 @@ async function runChron(i, { force = false } = {}) {
             regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: m.name, prev,
             chapterTitle: ch?.title,
         });
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle) }, { role: 'user', content: input }], s.chron.tokens);
+        const askDetail = !!s.detail.on;
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0));
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -775,11 +782,15 @@ async function runChron(i, { force = false } = {}) {
             cm.autoTitles[ch.start] = res.title;
             cm.ver = (cm.ver || 0) + 1;
         }
+        const old = store[key];
         store[key] = { chips: res.chips, ops: res.items, rel: s.chron.relations ? res.relations : [], sec: s.chron.secrets ? res.secrets : [], place: res.place, title: res.title, undo, at: Date.now() };
+        if (old?.detImg && old.det) { store[key].det = old.det; store[key].detImg = old.detImg; }
+        else if (askDetail && res.detail) store[key].det = res.detail;
         trimChron();
         await ctx().saveChat();
         saveMeta();
         invalidate();
+        if (store[key].det && !store[key].detImg && s.detail.auto) queueDetail(key);
     } catch (e) {
         console.warn('[Life] Летописец:', e);
         toast('warning', esc(String(e?.message || e)), '✦ Летописец', { timeOut: 6000 });
@@ -789,6 +800,102 @@ async function runChron(i, { force = false } = {}) {
         decorateSoon(100);
         if (ui.open) renderSoon();
     }
+}
+
+// ───────────── деталь крупным планом ─────────────
+
+const detBusy = new Set();
+const detQueue = [];
+let detRunning = false;
+
+function detailPrompt(d) {
+    const look = d.motion === 'scan'
+        ? 'Look: grainy black-and-white medical ultrasound sonogram, fan-shaped scan sector on a dark monitor, soft speckle noise'
+        : `Style: ${style()}`;
+    return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}\n${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
+}
+
+function queueDetail(key) {
+    if (detBusy.has(key) || detQueue.includes(key)) return;
+    detQueue.push(key);
+    if (!detRunning) drainDetail();
+}
+
+async function drainDetail() {
+    detRunning = true;
+    try { while (detQueue.length) await drawDetail(detQueue.shift()); } finally { detRunning = false; }
+}
+
+async function drawDetail(key) {
+    const cm = chatMeta();
+    const e = chronStore()[key];
+    if (!e?.det) return;
+    detBusy.add(key);
+    paintChips();
+    try {
+        const img = await drawPicture(detailPrompt(e.det), { aspect: '16:9', max: 1400, prefix: 'life_det' });
+        if (chatMeta() !== cm) return; // чат сменился, пока рисовала
+        const e2 = chronStore()[key];
+        if (e2) { e2.detImg = img; saveMeta(); }
+    } catch (err) {
+        console.warn('[Life] деталь', err);
+        toast('warning', esc(String(err?.message || err)), '✦ Деталь', { timeOut: 5000 });
+    } finally {
+        detBusy.delete(key);
+        paintChips();
+    }
+}
+
+function detailHtml(i) {
+    const s = settings();
+    const m = chatArr()[i];
+    if (!m || !s.detail.on) return '';
+    const key = `${i}:${msgKey(m)}`;
+    const e = chronStore()[key];
+    if (!e?.det || e.undone || e.detHidden) return '';
+    const d = e.det;
+    const busy = detBusy.has(key) || detQueue.includes(key);
+    const cap = esc(d.caption || 'Деталь');
+    if (!e.detImg) {
+        return busy
+            ? `<div class="lf-detail wait" data-key="${esc(key)}"><i class="lf-det-sh"></i><span>${icon('camera')} ${cap}<small>рисую крупный план…</small></span></div>`
+            : `<div class="lf-detail wait idle" data-key="${esc(key)}" data-det="draw" role="button"><span>${icon('camera')} ${cap}<small>нарисовать крупный план</small></span></div>`;
+    }
+    const mo = s.detail.motion ? ` m-${esc(d.motion || 'drift')}` : '';
+    return `<figure class="lf-detail lf-mo${mo}${busy ? ' redraw' : ''}" data-key="${esc(key)}" data-det="open" data-src="${esc(e.detImg)}" data-motion="${esc(d.motion || '')}" data-cap="${cap}">
+        <img src="${esc(e.detImg)}" alt="" loading="lazy" decoding="async"><i class="fx"></i><i class="fx2"></i>
+        <figcaption>${cap}</figcaption>
+        <span class="lf-det-btns"><button data-det="redo" title="Перерисовать">${icon('refresh')}</button><button data-det="hide" title="Убрать">${icon('x')}</button></span>
+    </figure>`;
+}
+
+async function newDetail(i) {
+    const m = chatArr()[i];
+    const st = worldState();
+    const input = `Место: ${st.scene?.location || '—'}. Время: ${fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time) || '—'}.\nПост (${m?.name || ''}):\n${cut(plainText(m?.mes || ''), 6000)}`;
+    const out = await askModel([{ role: 'system', content: detailSystem() }, { role: 'user', content: input }], 700);
+    const j = extractJson(out);
+    const d = normalizeResult({ detail: j?.detail || j }).detail;
+    if (!d) throw new Error('Летописец не придумал деталь');
+    return d;
+}
+
+// живые детали двигаются только на экране — айфону так легче
+let detIO = null;
+function watchDetails(root) {
+    if (!('IntersectionObserver' in window)) { root.querySelectorAll('.lf-mo').forEach(x => x.classList.add('play')); return; }
+    detIO = detIO || new IntersectionObserver(es => es.forEach(en => en.target.classList.toggle('play', en.isIntersecting)), { rootMargin: '80px' });
+    root.querySelectorAll('.lf-mo:not([data-io])').forEach(x => { x.dataset.io = '1'; detIO.observe(x); });
+}
+
+async function onDetailClick(b, el) {
+    const key = el.dataset.key;
+    const e = chronStore()[key];
+    if (!e) return;
+    const act = b.dataset.det;
+    if (act === 'open') { lightbox(el.dataset.src, el.dataset.cap || '', null, settings().detail.motion ? el.dataset.motion : ''); return; }
+    if (act === 'hide') { e.detHidden = true; saveMeta(); paintChips(); toast('info', 'Деталь убрана. Вернуть — в карточке Летописца.'); return; }
+    if (act === 'redo' || act === 'draw') { if (act === 'redo') delete e.detImg; queueDetail(key); }
 }
 
 /** Летописец сказал, где сцена: отнести место к району (новый район — завести). */
@@ -962,6 +1069,19 @@ function paintChips() {
         const cutHtml = cutCardHtml(id);
         if (!cutHtml) oldCut?.remove();
         else if (!oldCut || oldCut.dataset.sig !== String(cutHtml.length)) { oldCut?.remove(); host0.insertAdjacentHTML('beforeend', `<div class="lf-cutcards" data-sig="${cutHtml.length}">${cutHtml}</div>`); }
+        const oldDet = host0.querySelector(':scope > .lf-detail');
+        const detHtml = detailHtml(id);
+        const detSig = hash(detHtml);
+        if (!detHtml) oldDet?.remove();
+        else if (!oldDet || oldDet.dataset.sig !== detSig) {
+            oldDet?.remove();
+            const anchor = host0.querySelector(':scope > .mes_text');
+            const tmp = document.createElement('div');
+            tmp.innerHTML = detHtml.trim();
+            const node = tmp.firstElementChild;
+            node.dataset.sig = detSig;
+            if (anchor) anchor.after(node); else host0.append(node);
+        }
         const old = el.querySelector('.lf-pchips');
         const html = chipsHtml(id);
         if (!html) { old?.remove(); return; }
@@ -970,6 +1090,7 @@ function paintChips() {
         old?.remove();
         host.insertAdjacentHTML('beforeend', html);
     });
+    watchDetails(chatEl);
 }
 
 function decorate() {
@@ -1023,6 +1144,15 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
+    const det = ev.target.closest('.lf-detail');
+    if (det) {
+        const db = ev.target.closest('[data-det]');
+        if (!db) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        onDetailClick(db, det);
+        return;
+    }
     const b = ev.target.closest('.lf-thin, .lf-pchips, .lf-cutcard');
     if (!b) return;
     ev.preventDefault();
@@ -1207,7 +1337,7 @@ function renderScene() {
         <span class="lf-kicker">гл. ${pad2(fch.num)}</span>
     </div>
     <section class="lf-frame${cover ? '' : ' empty'}">
-        <div class="lf-frame-img"${cover ? ` style="background-image:url('${esc(cover)}')"` : ''}></div>
+        <div class="lf-frame-img${cover ? ' lf-fit' : ''}"${fitAttr(cover)}>${cover ? '<i class="lf-fit-i"></i>' : ''}</div>
         <button class="lf-glass" data-act="frame" data-start="${fch.start}" data-loc="${esc(loc)}">${icon('refresh')} ${cover ? 'Обновить кадр' : 'Добавить кадр'}</button>
         <div class="lf-frame-cap">${icon(placeIcon(loc))}<span>${esc(loc ? placeName(locTop(loc)) : 'место не отмечено')}${locParts(loc).length > 1 ? ` · ${esc(locLeaf(loc))}` : ''}${when ? ` <b>·</b> ${esc(when)}` : ''}${weather ? ` <b>·</b> ${esc(weather)}` : ''}</span></div>
     </section>
@@ -1428,7 +1558,7 @@ function renderWardrobe(who, st) {
         : `<div class="lf-chips">${sets.map(x => `<button class="lf-chip${x.id === ui.wset ? ' on' : ''}" data-act="wset" data-v="${esc(x.id)}">${isOn(x) ? icon('check') : ''}${esc(cut(x.name, 22))}</button>`).join('')}</div>`) : '';
     return `<div class="lf-pagehead"><h1>Гардероб</h1><span class="lf-tagpill">${icon('sparkles')} ${esc(cut(canonName(who), 22))}</span></div>
     <section class="lf-wd">
-        <div class="lf-wd-look${drawingNow ? ' drawing' : ''}"${look ? ` style="background-image:url('${esc(look)}')"` : ''}>${look ? '' : icon('user', 'xl')}${drawingNow ? '<span class="lf-spin big"></span>' : ''}</div>
+        <div class="lf-wd-look${drawingNow ? ' drawing' : ''}${look ? ' lf-fit' : ''}"${fitAttr(look)}>${look ? '<i class="lf-fit-i"></i>' : icon('user', 'xl')}${drawingNow ? '<span class="lf-spin big"></span>' : ''}</div>
         <div class="lf-wd-side">
             <h2>${esc(set ? set.name : 'Сейчас')}</h2>
             <p>${esc(cut((pieces.length ? pieces.map(e => e.name).join(', ') : 'Ничего не записано.'), 150))}</p>
@@ -1561,7 +1691,7 @@ function renderRelations(who, st) {
     }
     return `<div class="lf-pagehead"><h1>${icon('rings', 'h')} Отношения</h1></div>
     <div class="lf-chips">${others.map(n => `<button class="lf-chip${sameName(n, other) ? ' on' : ''}" data-act="pair" data-v="${esc(n)}">${esc(shortName(n))}</button>`).join('')}</div>
-    <section class="lf-pairhero"${pairImg ? ` style="background-image:url('${esc(pairImg)}')"` : ''}>
+    <section class="lf-pairhero${pairImg ? ' lf-fit' : ''}"${fitAttr(pairImg)}>${pairImg ? '<i class="lf-fit-i"></i>' : ''}
         ${pairImg ? '' : `<div class="lf-pair-avas">${ava(who, 'xl')}${ava(other, 'xl')}</div>`}
         <button class="lf-glass" data-act="pair-pic">${icon('image')} ${pairImg ? 'Сменить' : 'Кадр пары'}</button>
         <h2>${esc(shortName(canonName(who)))} <i>×</i> ${esc(shortName(canonName(other)))}</h2>
@@ -1648,7 +1778,7 @@ function renderWorld() {
             </button>`;
         }).join('')}</div>` : `<div class="lf-empty small">Horae ещё не записал событий.</div>`}
         ${lc ? `<section class="lf-fromscene">
-            <div class="lf-fs-img"${fsImg ? ` style="background-image:url('${esc(fsImg)}')"` : ''}></div>
+            <div class="lf-fs-img${fsImg ? ' lf-fit' : ''}"${fitAttr(fsImg)}>${fsImg ? '<i class="lf-fit-i"></i>' : ''}</div>
             <div class="lf-fs-body"><span class="lf-badge">Из сцены:</span><h3>${esc(lc.e.chips[0])}</h3>${lc.e.chips.length > 1 ? `<small>${esc(lc.e.chips.slice(1).join(' · '))}</small>` : ''}
             <div class="lf-actions tight"><button class="lf-btn primary" data-act="chron-ok" data-mes="${lc.i}">${icon('check')} Подтвердить</button><button class="lf-btn" data-act="chron" data-mes="${lc.i}">${icon('pencil')} Изменить</button></div></div>
         </section>` : ''}`;
@@ -1656,7 +1786,10 @@ function renderWorld() {
         const list = imgs().slice().reverse();
         const cs = cuts().slice().reverse();
         const shown = list.slice(0, ui.galShow);
+        const dets = [];
+        for (let i = chatArr().length - 1; i >= 0 && dets.length < 40; i--) { const e = chronOf(i); if (e?.detImg && !e.detHidden) dets.push({ src: e.detImg, mes: i, cap: e.det?.caption || '' }); }
         body = `${cs.length ? `${sec('Кат-сцены', String(cs.length))}<div class="lf-strip">${cs.map(cutTile).join('')}</div>` : ''}
+        ${dets.length ? `${sec('Детали', String(dets.length))}<div class="lf-strip">${dets.map(x => `<button class="lf-dettile" data-act="lightbox" data-src="${esc(x.src)}" data-mes="${x.mes}" style="background-image:url('${esc(x.src)}')"><span>${esc(x.cap)}</span></button>`).join('')}</div>` : ''}
         ${sec('Кадры из чата', list.length ? String(list.length) : '')}
         ${list.length ? `<div class="lf-gallery">${shown.map(x => `<button class="lf-gal" data-act="lightbox" data-src="${esc(x.src)}" data-mes="${x.mes}" style="background-image:url('${esc(x.src)}')"></button>`).join('')}</div>
             ${list.length > shown.length ? `<button class="lf-btn ghost full" data-act="gal-more">Ещё ${Math.min(48, list.length - shown.length)}</button>` : ''}`
@@ -1709,6 +1842,9 @@ function renderCfg() {
         ${sw('titles', 'Придумывать названия главам', s.chron, 'chron.titles')}
         ${sw('relations', 'Вести шкалы и моменты отношений', s.chron, 'chron.relations')}
         ${sw('secrets', 'Замечать тайны', s.chron, 'chron.secrets')}
+        ${sw('on', 'Деталь крупным планом к каждому посту', s.detail, 'detail.on')}
+        ${sw('auto', 'Рисовать деталь сразу (иначе — по нажатию)', s.detail, 'detail.auto')}
+        ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
         ${sec('Карты и картинки')}
         <div class="lf-field"><label>Новый район</label><select data-set="autoMaps">
             <option value="ask" ${s.autoMaps === 'ask' ? 'selected' : ''}>сказать мне, рисую по кнопке</option>
@@ -1979,6 +2115,14 @@ function chronSheet(i) {
         ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} × ${esc(r.b)}: ${[r.trust && `доверие ${r.trust > 0 ? '+' : ''}${r.trust}`, r.closeness && `близость ${r.closeness > 0 ? '+' : ''}${r.closeness}`, r.tension && `напряжение ${r.tension > 0 ? '+' : ''}${r.tension}`].filter(Boolean).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
         ${e.sec?.length ? `${sec('Тайны')}<div class="lf-list">${e.sec.map(x => `<div class="lf-row">${icon('lock')}<span>${esc(x.text)} <small>знает: ${esc(x.knows.join(', '))}</small></span></div>`).join('')}</div>` : ''}
         ${e.place ? `<div class="lf-hint">Место: ${esc(e.place.location)}${e.place.region ? ` · район «${esc(e.place.region)}»` : ''}</div>` : ''}
+        ${sec('Деталь крупным планом')}
+        ${e.detImg ? `<div class="lf-detprev" style="background-image:url('${esc(e.detImg)}')"></div>` : ''}
+        ${e.det ? `<div class="lf-hint"><b>${esc(e.det.caption || '')}</b> · движение: ${esc(e.det.motion || 'drift')}<br><small>${esc(e.det.prompt)}</small></div>` : '<div class="lf-hint">Детали к этому посту нет.</div>'}
+        <div class="lf-actions tight">
+            ${e.det && e.detHidden ? `<button class="lf-btn" data-act="det-show" data-mes="${i}">${icon('eye')} Вернуть в чат</button>` : ''}
+            ${e.det ? `<button class="lf-btn" data-act="det-draw" data-mes="${i}">${icon('camera')} ${e.detImg ? 'Перерисовать' : 'Нарисовать'}</button>` : ''}
+            <button class="lf-btn" data-act="det-new" data-mes="${i}">${icon('sparkles')} ${e.det ? 'Другая деталь' : 'Придумать деталь'}</button>
+        </div>
         <div class="lf-actions">
             ${e.undone ? `<button class="lf-btn primary" data-act="chron-redo" data-mes="${i}">${icon('refresh')} Применить снова</button>` : `<button class="lf-btn" data-act="chron-undo" data-mes="${i}">${icon('undo')} Откатить</button>`}
             <button class="lf-btn" data-act="chron-rerun" data-mes="${i}">${icon('refresh')} Перечитать пост</button>
@@ -2513,6 +2657,24 @@ async function onClick(ev) {
             closeSheet(); render(); decorate();
             break;
         }
+        case 'det-show': case 'det-draw': case 'det-new': {
+            const i = Number(el.dataset.mes);
+            const m = chatArr()[i];
+            const key = m ? `${i}:${msgKey(m)}` : '';
+            const e = key && chronStore()[key];
+            if (!e) break;
+            const act = el.dataset.act;
+            if (act === 'det-show') { e.detHidden = false; saveMeta(); paintChips(); closeSheet(); break; }
+            if (act === 'det-new') await withBusy(el, async () => { e.det = await newDetail(i); }, 'Думаю…');
+            if (!e.det) break;
+            e.detHidden = false;
+            delete e.detImg;
+            saveMeta();
+            closeSheet();
+            queueDetail(key);
+            toast('info', 'Рисую деталь…');
+            break;
+        }
         case 'chron-rerun': { const i = Number(el.dataset.mes); closeSheet(); queueChron(i, { force: true }); toast('info', 'Летописец перечитывает…'); break; }
         case 'chron-last': {
             const chat = chatArr();
@@ -2553,6 +2715,7 @@ async function onChange(ev) {
         if (k === 'showFab' || k === 'enabled') syncFab();
         if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
         if (k === 'sceneBg' || k === 'enabled') updateSceneBg();
+        if (path[0] === 'detail') paintChips();
         if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
@@ -2666,7 +2829,7 @@ function renderSettingsDrawer() {
             <div id="lf_cc_btn" class="menu_button"><i class="fa-solid fa-sliders"></i> Пульт</div>
           </div>
           <label class="checkbox_label"><input id="lf_set_edge" type="checkbox" ${s.cc?.on !== false ? 'checked' : ''}> Язычок пульта на краю экрана</label>
-          <label class="checkbox_label"><input id="lf_set_theme" type="checkbox" ${s.cc?.theme !== false ? 'checked' : ''}> Тема «Графит и вино» на всю Таверну</label>
+          <label class="checkbox_label"><input id="lf_set_theme" type="checkbox" ${s.cc?.theme !== false ? 'checked' : ''}> Тема Life на всю Таверну (Графит / Бумага / Луна — в пульте)</label>
           <small>Настройки — в хабе: Мир → ⚙ и в пульте. Команды <code>/life</code>, <code>/life cc</code>, аварийно <code>/life off</code>.</small>
         </div>
       </div>
@@ -2691,13 +2854,20 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; chron — Летописец по последнему посту; theme — тема вкл/выкл; on / off — включить или выключить.',
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; chron — Летописец по последнему посту; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
             unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
-                if (v === 'theme') { const c = settings().cc; c.theme = !c.theme; saveSettings(); applyTheme(); toast('info', c.theme ? 'Тема Life включена' : 'Тема Life выключена'); return ''; }
+                if (v === 'theme' || v.startsWith('theme ')) {
+                    const c = settings().cc;
+                    const arg = { 'графит': 'graphite', 'бумага': 'paper', 'луна': 'moon' }[v.split(/\s+/)[1]] || v.split(/\s+/)[1];
+                    if (['graphite', 'paper', 'moon'].includes(arg)) { c.theme = true; c.palette = arg; } else if (arg === 'off') c.theme = false; else c.theme = !c.theme;
+                    saveSettings(); applyTheme();
+                    toast('info', c.theme ? `Тема Life: ${({ graphite: 'Графит', paper: 'Бумага', moon: 'Луна' })[c.palette] || ''}` : 'Тема Life выключена');
+                    return '';
+                }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
                 openHub(['map', 'person', 'world'].includes(v) ? v : 'scene');
                 return '';
@@ -2739,6 +2909,7 @@ const controlApi = {
     balance: () => { const v = moneyView(); return v ? v.balanceText : ''; },
     openMoney: () => { ui.who = canonName(ctx().name1); ui.pTab = 'money'; openHub('person'); },
     sceneBg: (on) => { if (on !== undefined) { settings().sceneBg = !!on; saveSettings(); updateSceneBg(); } return settings().sceneBg; },
+    detail: (on) => { if (on !== undefined) { settings().detail.on = !!on; saveSettings(); paintChips(); } return settings().detail.on; },
 };
 
 jQuery(async () => {

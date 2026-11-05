@@ -48,8 +48,22 @@ export const CLEAN_SYSTEM = `Ты — Летописец ролевой исто
 {"op":"set","name":"…","holder":"","where":"","note":"","icon":"","kind":""}
 Названия из списка — ТОЧНО как в списке. Одежду, обувь и украшения на теле — drop (их ведёт Гардероб). Ничего не выдумывай.`;
 
-export function chronSystem(askTitle) {
-    return CHRON_SYSTEM.replace('{TITLE_RULE}', askTitle ? TITLE_ASK : TITLE_SKIP);
+const MOTIONS = ['rain', 'snow', 'steam', 'smoke', 'flicker', 'glow', 'pulse', 'heartbeat', 'scan', 'drift'];
+const DETAIL_RULE = `
+
+detail — ещё одна картинка к посту: эстетичная ДЕТАЛЬ крупным планом, как вставной кадр в кино. Верни объект:
+{"prompt":"по-английски, 35–60 слов: один значимый для поста предмет или фрагмент крупно — руки, вещь, ткань, свет, стекло, экран, след, — макро или extreme close-up, малая глубина резкости, свет и погода сцены, без лиц (лицо — только размыто или частично), без текста","motion":"одно из: ${MOTIONS.join(', ')}","caption":"2–5 слов по-русски, как подпись к кадру"}
+motion — какое движение оживит этот кадр: дождь на стекле — rain, пар от кофе — steam, сигаретный дым — smoke, свеча или неон — flicker, тёплый свет — glow, сердцебиение или пульс — heartbeat, экран УЗИ или монитора — scan, снег — snow, всё остальное — drift.
+В интимных, откровенных или жестоких сценах — только символ и атмосфера: запотевшее стекло, капли, силуэты за матовым стеклом, смятые простыни в тени, сплетённые пальцы, дым свечи, огни города не в фокусе. Никакой наготы и ничего откровенного. Если деталь не нужна — null.`;
+
+export function detailSystem() {
+    return `Ты подбираешь к посту ролевой истории на русском один вставной кадр — деталь крупным планом. Ответь только JSON без пояснений: {"detail": {...}}.${DETAIL_RULE}`;
+}
+
+export function chronSystem(askTitle, askDetail = false) {
+    let s = CHRON_SYSTEM.replace('{TITLE_RULE}', askTitle ? TITLE_ASK : TITLE_SKIP);
+    if (askDetail) s = s.replace('  "secrets": [],', '  "secrets": [],\n  "detail": null,') + DETAIL_RULE;
+    return s;
 }
 
 function itemLine(name, it) {
@@ -103,6 +117,11 @@ export function normalizeResult(j) {
         })).filter(r => r.trust || r.closeness || r.tension || r.moment),
         secrets: arr(j?.secrets).filter(s => str(s?.text)).map(s => ({ text: str(s.text), knows: arr(s.knows).map(str).filter(Boolean) })),
         title: str(j?.title).replace(/^[«"']|[»"']$/g, ''),
+        detail: j?.detail && typeof j.detail === 'object' && str(j.detail.prompt).length > 20 ? {
+            prompt: str(j.detail.prompt).slice(0, 700),
+            motion: MOTIONS.includes(str(j.detail.motion).toLowerCase()) ? str(j.detail.motion).toLowerCase() : 'drift',
+            caption: str(j.detail.caption).slice(0, 60),
+        } : null,
     };
 }
 

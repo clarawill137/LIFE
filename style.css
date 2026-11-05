@@ -656,91 +656,155 @@ body.lf-theme #lf-edge { background: rgba(110, 100, 104, .38); }
 .cc-day p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--lf-text2); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cc-day.open p { display: block; }
 
-/* ═════════════ ТЕМА «ГРАФИТ И ВИНО» НА ВСЮ ТАВЕРНУ ═════════════ */
+/* ═════════════ ТЕМА НА ВСЮ ТАВЕРНУ: Графит · Бумага · Луна ═════════════ */
 
 body.lf-theme {
-    --SmartThemeBodyColor: #e6dcd8;
-    --SmartThemeEmColor: #b3a4a0;
-    --SmartThemeUnderlineColor: #d9687b;
-    --SmartThemeQuoteColor: #e7a5b0;
-    --SmartThemeBlurTintColor: rgba(24, 18, 20, .9);
-    --SmartThemeChatTintColor: rgba(22, 17, 19, .5);
-    --SmartThemeUserMesBlurTintColor: rgba(94, 31, 44, .2);
-    --SmartThemeBotMesBlurTintColor: rgba(32, 25, 27, .42);
-    --SmartThemeShadowColor: rgba(0, 0, 0, .45);
-    --SmartThemeBorderColor: rgba(236, 222, 216, .1);
-    --SmartThemeCheckboxTickColor: #fff;
-    --interactable-outline-color: rgba(217, 104, 123, .6);
-    accent-color: #d9687b;
-    scrollbar-color: rgba(217, 104, 123, .3) transparent;
+    --t-bg: #171214; --t-panel: rgba(24, 18, 20, .96); --t-bar: rgba(21, 16, 18, .88); --t-pop: rgba(28, 21, 24, .97);
+    --t-card: rgba(30, 23, 26, .78); --t-card-user: rgba(70, 26, 37, .55); --t-fade: #1e1719; --t-fade-user: #3a1a22; --t-input: rgba(28, 21, 24, .92);
+    --t-text: #e9dfdb; --t-text2: #cbbdb8; --t-dim: #8f817c; --t-em: #b7a8a4; --t-quote: #e7a5b0;
+    --t-accent: #d9687b; --t-accent2: #7b2d3d; --t-name: #f1e7e3; --t-name-user: #eab3bc;
+    --t-line: rgba(236, 222, 216, .1); --t-line2: rgba(236, 222, 216, .2); --t-shadow: rgba(0, 0, 0, .42); --t-field: rgba(8, 5, 6, .28);
+    --t-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --t-bgimg: .55;
 }
-body.lf-theme ::selection { background: rgba(217, 104, 123, .35); color: #fff; }
+body.lf-theme.lf-pal-paper {
+    --t-bg: #f2ebdf; --t-panel: rgba(247, 242, 234, .98); --t-bar: rgba(244, 238, 228, .94); --t-pop: rgba(250, 246, 239, .98);
+    --t-card: rgba(255, 252, 246, .9); --t-card-user: rgba(240, 226, 216, .92); --t-fade: #fdfaf4; --t-fade-user: #f0e2d8; --t-input: rgba(255, 252, 247, .96);
+    --t-text: #2f2724; --t-text2: #4d413b; --t-dim: #8d7d74; --t-em: #6b5a52; --t-quote: #8f3446;
+    --t-accent: #9b3c4d; --t-accent2: #6e2433; --t-name: #2a201d; --t-name-user: #8f3446;
+    --t-line: rgba(80, 52, 40, .13); --t-line2: rgba(80, 52, 40, .24); --t-shadow: rgba(90, 60, 40, .13); --t-field: rgba(255, 255, 255, .7);
+    --t-bgimg: .16;
+}
+body.lf-theme.lf-pal-moon {
+    --t-bg: #0d121c; --t-panel: rgba(14, 20, 31, .96); --t-bar: rgba(12, 17, 27, .88); --t-pop: rgba(17, 24, 37, .97);
+    --t-card: rgba(20, 28, 43, .78); --t-card-user: rgba(38, 52, 84, .6); --t-fade: #161f2f; --t-fade-user: #26344f; --t-input: rgba(17, 24, 37, .92);
+    --t-text: #dfe6f2; --t-text2: #bcc7da; --t-dim: #7d8aa3; --t-em: #a2aec6; --t-quote: #b9cbf5;
+    --t-accent: #9fb6ee; --t-accent2: #3c5589; --t-name: #eef3ff; --t-name-user: #b9c9ff;
+    --t-line: rgba(200, 215, 240, .1); --t-line2: rgba(200, 215, 240, .2); --t-shadow: rgba(0, 0, 0, .45); --t-field: rgba(4, 7, 12, .35);
+    --t-bgimg: .5;
+}
+body.lf-theme {
+    --SmartThemeBodyColor: var(--t-text);
+    --SmartThemeEmColor: var(--t-em);
+    --SmartThemeUnderlineColor: var(--t-accent);
+    --SmartThemeQuoteColor: var(--t-quote);
+    --SmartThemeBlurTintColor: var(--t-panel);
+    --SmartThemeChatTintColor: transparent;
+    --SmartThemeUserMesBlurTintColor: var(--t-card-user);
+    --SmartThemeBotMesBlurTintColor: var(--t-card);
+    --SmartThemeShadowColor: var(--t-shadow);
+    --SmartThemeBorderColor: var(--t-line);
+    --SmartThemeCheckboxTickColor: #fff;
+    --interactable-outline-color: var(--t-accent);
+    --black30a: var(--t-field);
+    accent-color: var(--t-accent);
+    scrollbar-color: var(--t-line2) transparent;
+    background-color: var(--t-bg) !important;
+    color: var(--t-text);
+}
+body.lf-theme ::selection { background: color-mix(in srgb, var(--t-accent) 35%, transparent); }
 
 /* фон */
-body.lf-theme.lf-bg-dim #bg1, body.lf-theme.lf-bg-dim #bg_custom { filter: brightness(.5) saturate(.72) contrast(1.04); }
-body.lf-theme.lf-bg-flat #bg1, body.lf-theme.lf-bg-flat #bg_custom { background-image: radial-gradient(130% 55% at 50% -10%, rgba(123, 45, 61, .3), transparent 62%), linear-gradient(#1a1416, #120d0f) !important; filter: none; }
+body.lf-theme #bg1, body.lf-theme #bg_custom { opacity: var(--t-bgimg); }
+body.lf-theme.lf-bg-dim:not(.lf-pal-paper) #bg1, body.lf-theme.lf-bg-dim:not(.lf-pal-paper) #bg_custom { filter: brightness(.55) saturate(.75); }
+body.lf-theme.lf-bg-flat #bg1, body.lf-theme.lf-bg-flat #bg_custom { opacity: 0 !important; }
+body.lf-theme #lf-bg { opacity: 0; }
+body.lf-theme #lf-bg.on { opacity: var(--t-bgimg); }
+body.lf-theme.lf-pal-paper #lf-bg i { filter: saturate(.55) brightness(1.05); }
+body.lf-theme.lf-has-bg #bg1, body.lf-theme.lf-has-bg #bg_custom { opacity: 0; }
 
 /* верхняя панель */
-body.lf-theme #top-bar { background-color: rgba(21, 16, 18, .86); box-shadow: 0 1px 0 rgba(236, 222, 216, .07), 0 10px 26px rgba(0, 0, 0, .35); }
-body.lf-theme #top-settings-holder .drawer-icon { color: #ede4df; transition: color .25s, opacity .25s, transform .2s; }
-body.lf-theme #top-settings-holder .drawer-icon.closedIcon { opacity: .55; }
-body.lf-theme #top-settings-holder .drawer-icon.openIcon { color: #e8899a; opacity: 1; }
+body.lf-theme #top-bar { background-color: var(--t-bar) !important; box-shadow: 0 1px 0 var(--t-line), 0 10px 26px var(--t-shadow) !important; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+body.lf-theme #top-settings-holder .drawer-icon { color: var(--t-text) !important; transition: color .25s, opacity .25s, transform .2s; }
+body.lf-theme #top-settings-holder .drawer-icon.closedIcon { opacity: .6; }
+body.lf-theme #top-settings-holder .drawer-icon.openIcon { color: var(--t-accent) !important; opacity: 1; }
 body.lf-theme #top-settings-holder .drawer-icon:active { transform: scale(.88); }
-body.lf-theme #API-status-top.fa-plug-circle-exclamation { color: #d9687b; opacity: .95; }
+body.lf-theme #API-status-top.fa-plug-circle-exclamation { color: var(--t-accent) !important; }
 
 /* панели и окна */
-body.lf-theme .drawer-content, body.lf-theme #left-nav-panel, body.lf-theme #right-nav-panel { background-color: rgba(24, 18, 20, .95); border-color: rgba(236, 222, 216, .08); box-shadow: 0 18px 50px rgba(0, 0, 0, .5); }
-body.lf-theme .drawer-content h3, body.lf-theme .popup h3, body.lf-theme #rm_extensions_block h3 { font-family: var(--lf-serif); font-weight: 500; letter-spacing: .01em; }
-body.lf-theme .inline-drawer-header { border-radius: 10px; }
-body.lf-theme .popup { background-color: rgba(26, 20, 22, .97); border: 1px solid rgba(236, 222, 216, .12); border-radius: 20px; box-shadow: 0 24px 70px rgba(0, 0, 0, .6); }
-body.lf-theme .popup::backdrop { background: rgba(8, 5, 6, .55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
-body.lf-theme .options-content, body.lf-theme .list-group { background-color: rgba(28, 21, 24, .97); border-color: rgba(236, 222, 216, .1); border-radius: 16px; box-shadow: 0 14px 40px rgba(0, 0, 0, .5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-body.lf-theme .options-content a, body.lf-theme .list-group-item { border-radius: 10px; transition: background .15s, opacity .15s; }
-body.lf-theme .options-content a:hover, body.lf-theme .list-group-item:hover { background-color: rgba(217, 104, 123, .12); }
+body.lf-theme .drawer-content, body.lf-theme #left-nav-panel, body.lf-theme #right-nav-panel, body.lf-theme #character_popup, body.lf-theme #world_popup { background-color: var(--t-panel) !important; color: var(--t-text); border-color: var(--t-line) !important; box-shadow: 0 18px 50px var(--t-shadow); }
+body.lf-theme .drawer-content h3, body.lf-theme .popup h3, body.lf-theme #rm_extensions_block h3 { font-family: var(--t-serif); font-weight: 500; }
+body.lf-theme .popup { background-color: var(--t-pop) !important; color: var(--t-text); border: 1px solid var(--t-line2) !important; border-radius: 20px; box-shadow: 0 24px 70px var(--t-shadow); }
+body.lf-theme .popup::backdrop { background: rgba(8, 5, 6, .5); }
+body.lf-theme .options-content, body.lf-theme .list-group, body.lf-theme #extensionsMenu { background-color: var(--t-pop) !important; color: var(--t-text); border-color: var(--t-line) !important; border-radius: 16px; box-shadow: 0 14px 40px var(--t-shadow); }
+body.lf-theme .options-content a, body.lf-theme .list-group-item { border-radius: 10px; opacity: .9; }
+body.lf-theme .options-content a:hover, body.lf-theme .list-group-item:hover { background-color: color-mix(in srgb, var(--t-accent) 14%, transparent); opacity: 1; }
 
 /* кнопки и поля */
-body.lf-theme .menu_button { border-radius: 10px; border-color: rgba(236, 222, 216, .12); background-color: rgba(255, 255, 255, .05); transition: background-color .2s, border-color .2s, transform .12s; }
-body.lf-theme .menu_button:hover { background-color: rgba(217, 104, 123, .16); border-color: rgba(217, 104, 123, .42); }
-body.lf-theme .menu_button:active { transform: scale(.97); }
-body.lf-theme .menu_button.active, body.lf-theme .menu_button.toggleEnabled, body.lf-theme .menu_button.redOverlayGlow { background-color: rgba(217, 104, 123, .26); border-color: rgba(217, 104, 123, .6); }
-body.lf-theme .text_pole, body.lf-theme select.text_pole, body.lf-theme textarea.text_pole { border-radius: 10px; border-color: rgba(236, 222, 216, .12); background-color: rgba(8, 5, 6, .28); }
-body.lf-theme .text_pole:focus { border-color: rgba(217, 104, 123, .55); outline: none; box-shadow: 0 0 0 3px rgba(217, 104, 123, .12); }
-body.lf-theme input[type='checkbox'] { border-radius: 5px; background-color: rgba(255, 255, 255, .1); border-color: rgba(236, 222, 216, .2); outline: none; transition: background-color .2s; }
-body.lf-theme input[type='checkbox']:checked { background-color: #d9687b; border-color: #d9687b; }
-body.lf-theme input[type='range'] { accent-color: #d9687b; }
-body.lf-theme a { color: #eab3bc; }
+body.lf-theme .menu_button { border-radius: 10px; border-color: var(--t-line2) !important; background-color: color-mix(in srgb, var(--t-text) 6%, transparent) !important; color: var(--t-text); }
+body.lf-theme .menu_button:hover { background-color: color-mix(in srgb, var(--t-accent) 16%, transparent) !important; border-color: color-mix(in srgb, var(--t-accent) 45%, transparent) !important; }
+body.lf-theme .menu_button.active, body.lf-theme .menu_button.toggleEnabled { background-color: color-mix(in srgb, var(--t-accent) 26%, transparent) !important; }
+body.lf-theme .text_pole, body.lf-theme select.text_pole, body.lf-theme textarea.text_pole { border-radius: 10px; border-color: var(--t-line2) !important; background-color: var(--t-field) !important; color: var(--t-text) !important; }
+body.lf-theme .text_pole:focus { border-color: var(--t-accent) !important; outline: none; }
+body.lf-theme input[type='checkbox'] { border-radius: 5px; background-color: color-mix(in srgb, var(--t-text) 12%, transparent); border-color: var(--t-line2); outline: none; }
+body.lf-theme input[type='checkbox']:checked { background-color: var(--t-accent); border-color: var(--t-accent); }
+body.lf-theme a { color: var(--t-accent); }
 
-/* сообщения */
-body.lf-theme #chat .mes .name_text { font-family: var(--lf-serif); font-weight: 600; font-size: 1.06em; letter-spacing: .01em; color: #f1e7e3; }
-body.lf-theme #chat .mes[is_user="true"] .name_text { color: #eab3bc; }
-body.lf-theme #chat .mes .avatar img { box-shadow: 0 0 0 1.5px rgba(217, 104, 123, .42), 0 4px 12px rgba(0, 0, 0, .4); }
-body.lf-theme #chat .mes .timestamp, body.lf-theme #chat .mesIDDisplay, body.lf-theme #chat .mes_timer, body.lf-theme #chat .tokenCounterDisplay, body.lf-theme #chat .swipes-counter { color: #8a7c78; font-variant-numeric: tabular-nums; }
-body.lf-theme #chat .mes_button, body.lf-theme #chat .swipe_left, body.lf-theme #chat .swipe_right { color: #a3958f; }
-body.lf-theme #chat .mes_text hr { border: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(236, 222, 216, .25), transparent); }
-body.lf-theme #chat .mes_text blockquote { border-left: 2px solid rgba(217, 104, 123, .55); margin-left: 0; padding-left: 12px; }
-body.lf-theme #chat .mes_text code { background: rgba(255, 255, 255, .06); border-radius: 6px; }
-body.lf-theme #chat .mes_reasoning_details { border-radius: 12px; border-color: rgba(236, 222, 216, .1); }
-body.lf-theme #chat .mes.selected { background-color: rgba(94, 31, 44, .45); }
-body.lf-theme #chat { border-color: transparent; scrollbar-width: thin; }
+/* сообщения: карточки поверх фона */
+body.lf-theme #chat { border-color: transparent !important; background: none !important; scrollbar-width: thin; }
+body.lf-theme #chat .mes { width: auto !important; margin: 8px 8px !important; padding: 12px 12px 10px !important; border-radius: 18px !important; border: 1px solid var(--t-line) !important; background: var(--t-card) !important; box-shadow: 0 6px 22px var(--t-shadow) !important; color: var(--t-text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+body.lf-theme #chat .mes[is_user="true"] { background: var(--t-card-user) !important; }
+body.lf-theme #chat .mes.lf-marker { display: none !important; }
+body.lf-theme #chat .mes .name_text { font-family: var(--t-serif) !important; font-weight: 600; font-size: 1.12em; color: var(--t-name) !important; }
+body.lf-theme #chat .mes[is_user="true"] .name_text { color: var(--t-name-user) !important; }
+body.lf-theme #chat .mes .timestamp, body.lf-theme #chat .mesIDDisplay, body.lf-theme #chat .mes_timer, body.lf-theme #chat .tokenCounterDisplay, body.lf-theme #chat .swipes-counter { color: var(--t-dim) !important; }
+body.lf-theme #chat .mes_button, body.lf-theme #chat .swipe_left, body.lf-theme #chat .swipe_right { color: var(--t-dim) !important; }
+body.lf-theme #chat .mes_text { color: var(--t-text); }
+body.lf-theme #chat .mes_text hr { border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--t-line2), transparent); }
+body.lf-theme #chat .mes_text blockquote { border-left: 2px solid var(--t-accent); margin-left: 0; padding-left: 12px; }
+body.lf-theme #chat .mes_reasoning_details { border-radius: 12px; border-color: var(--t-line) !important; }
+body.lf-theme #chat .mes.selected { background: color-mix(in srgb, var(--t-accent) 30%, var(--t-card)) !important; }
+
+/* аватарки: баннер во всю ширину, текст под ним тоже во всю ширину */
+body.lf-theme.lf-ava-wide #chat .mes { --lf-banner: min(52vw, 210px); display: block !important; padding: 0 0 10px !important; overflow: hidden; flex-shrink: 0 !important; }
+body.lf-theme.lf-ava-wide #chat .mes[is_user="true"] { --lf-banner: min(34vw, 136px); }
+/* текст на всю ширину: карточки от края до края, только тонкая черта между постами */
+body.lf-theme.lf-ava-wide #chat { padding-left: 0 !important; padding-right: 0 !important; }
+body.lf-theme.lf-ava-wide #chat .mes { margin: 0 0 6px !important; border-radius: 0 !important; border-width: 0 0 1px !important; box-shadow: none !important; }
+@media (min-width: 900px) { body.lf-theme.lf-ava-wide #chat .mes { margin: 10px auto !important; border-radius: 22px !important; border-width: 1px !important; } }
+body.lf-theme.lf-ava-wide #chat .mes .mesAvatarWrapper { display: block !important; position: relative; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+body.lf-theme.lf-ava-wide #chat .mes .avatar { display: block !important; width: 100% !important; height: var(--lf-banner) !important; border-radius: 0 !important; margin: 0 !important; flex: none; }
+body.lf-theme.lf-ava-wide #chat .mes .avatar img { display: block; width: 100% !important; height: 100% !important; border-radius: 0 !important; border: 0 !important; box-shadow: none !important; object-fit: cover !important; object-position: center 24% !important; }
+body.lf-theme.lf-ava-wide #chat .mes .mesAvatarWrapper::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 75%; background: linear-gradient(180deg, transparent, var(--t-fade)); pointer-events: none; }
+body.lf-theme.lf-ava-wide #chat .mes[is_user="true"] .mesAvatarWrapper::after { background: linear-gradient(180deg, transparent, var(--t-fade-user)); }
+body.lf-theme.lf-ava-wide #chat .mes .mesIDDisplay { position: absolute; top: 8px; left: 10px; z-index: 2; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, .45); color: #fff !important; font-size: 11px; }
+body.lf-theme.lf-ava-wide #chat .mes .mes_timer, body.lf-theme.lf-ava-wide #chat .mes .tokenCounterDisplay { display: none !important; }
+body.lf-theme.lf-ava-wide #chat .last_mes .mesAvatarWrapper { padding-bottom: 0 !important; }
+body.lf-theme.lf-ava-wide #chat .mes .mes_block { position: relative; z-index: 2; width: auto !important; margin-top: -40px; padding: 0 16px !important; }
+body.lf-theme.lf-ava-wide #chat .mes .name_text { font-size: 1.45em; text-shadow: 0 2px 12px var(--t-fade), 0 0 2px var(--t-fade); }
+body.lf-theme.lf-ava-wide #chat .mes .mes_text { padding-top: 4px; }
+body.lf-theme.lf-ava-wide #chat .mes .swipe_left { left: 12px; }
+body.lf-theme.lf-ava-wide.lf-read #chat .mes .mesAvatarWrapper { display: block !important; }
+@media (min-width: 900px) {
+    body.lf-theme.lf-ava-wide #chat .mes { --lf-banner: 260px; }
+    body.lf-theme.lf-ava-wide #chat .mes[is_user="true"] { --lf-banner: 160px; }
+}
+/* крупные портреты сбоку */
+body.lf-theme.lf-ava-big #chat { --avatar-base-width: 64px; --avatar-base-height: 96px; --avatar-base-border-radius-round: 14px; }
+body.lf-theme.lf-ava-big #chat .mes .avatar img { border: 0 !important; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--t-accent) 50%, transparent), 0 8px 20px var(--t-shadow) !important; }
+@media (min-width: 900px) { body.lf-theme.lf-ava-big #chat { --avatar-base-width: 84px; --avatar-base-height: 126px; } }
 
 /* поле ввода */
 body.lf-theme #form_sheld { padding: 4px 8px 8px; }
-body.lf-theme #send_form { border-radius: 22px; border: 1px solid rgba(236, 222, 216, .12); background-color: rgba(28, 21, 24, .9); box-shadow: 0 8px 28px rgba(0, 0, 0, .42); overflow: hidden; }
-body.lf-theme #send_textarea { font-size: max(16px, var(--mainFontSize)); line-height: 1.4; }
-body.lf-theme #send_textarea::placeholder { color: #786b67; font-style: italic; }
-body.lf-theme #rightSendForm > div:not(.mes_stop), body.lf-theme #leftSendForm > div { border: 0; background-color: transparent; box-shadow: none; filter: none; color: #b8aaa5; transform: none; transition: color .2s, opacity .2s, transform .15s; }
-body.lf-theme #rightSendForm > div:active, body.lf-theme #leftSendForm > div:active { transform: scale(.88); }
-body.lf-theme #send_but { color: #fff !important; opacity: 1 !important; background: radial-gradient(circle at 35% 30%, #e07a8b, #7b2d3d 70%) !important; border-radius: 50%; width: calc(var(--bottomFormBlockSize) - 6px) !important; height: calc(var(--bottomFormBlockSize) - 6px) !important; margin: 0 3px; box-shadow: 0 4px 14px rgba(217, 104, 123, .35) !important; font-size: .92em; }
-body.lf-theme #mes_stop { color: #d9687b; }
-body.lf-theme #file_form .file_attached { border-radius: 12px; }
+body.lf-theme #send_form { border-radius: 22px !important; border: 1px solid var(--t-line2) !important; background-color: var(--t-input) !important; box-shadow: 0 8px 28px var(--t-shadow) !important; overflow: hidden; }
+body.lf-theme #send_textarea { color: var(--t-text) !important; font-size: max(16px, var(--mainFontSize)); line-height: 1.4; }
+body.lf-theme #send_textarea::placeholder { color: var(--t-dim); font-style: italic; }
+body.lf-theme #rightSendForm > div:not(.mes_stop), body.lf-theme #leftSendForm > div { border: 0 !important; background-color: transparent !important; box-shadow: none !important; filter: none !important; color: var(--t-text2) !important; transform: none; }
+body.lf-theme #send_but { color: #fff !important; opacity: 1 !important; background: radial-gradient(circle at 35% 30%, var(--t-accent), var(--t-accent2) 75%) !important; border-radius: 50%; width: calc(var(--bottomFormBlockSize) - 6px) !important; height: calc(var(--bottomFormBlockSize) - 6px) !important; margin: 0 3px; box-shadow: 0 4px 14px color-mix(in srgb, var(--t-accent) 40%, transparent) !important; font-size: .92em; }
+body.lf-theme #mes_stop { color: var(--t-accent); }
 
 /* тосты */
-body.lf-theme #toast-container > div { border-radius: 14px; border: 1px solid rgba(236, 222, 216, .12); box-shadow: 0 12px 34px rgba(0, 0, 0, .45); background-color: rgba(30, 23, 26, .96); color: #ede4df; opacity: 1; }
+body.lf-theme #toast-container > div { border-radius: 14px; border: 1px solid var(--t-line2); box-shadow: 0 12px 34px var(--t-shadow); background-color: var(--t-pop) !important; color: var(--t-text) !important; opacity: 1; }
 body.lf-theme #toast-container > .toast-success { border-left: 3px solid #8fbf8a; }
-body.lf-theme #toast-container > .toast-info { border-left: 3px solid #d9687b; }
+body.lf-theme #toast-container > .toast-info { border-left: 3px solid var(--t-accent); }
 body.lf-theme #toast-container > .toast-warning { border-left: 3px solid #e0a95e; }
-body.lf-theme #toast-container > .toast-error { border-left: 3px solid #e0566b; background-color: rgba(58, 18, 27, .97); }
-body.lf-theme #toast-container .toast-title { font-family: var(--lf-serif); font-weight: 600; }
+body.lf-theme #toast-container > .toast-error { border-left: 3px solid #e0566b; }
+body.lf-theme #toast-container .toast-title { font-family: var(--t-serif); font-weight: 600; }
+
+/* плашки Life в чате берут цвета палитры */
+body.lf-theme .mes .lf-pchips { color: var(--t-text2); border-color: var(--t-line2); background: color-mix(in srgb, var(--t-text) 4%, transparent); }
+body.lf-theme #chat > .lf-thin { color: var(--t-dim); }
+body.lf-theme #chat > .lf-thin::before, body.lf-theme #chat > .lf-thin::after { background: var(--t-line2); }
 
 /* скрытые кнопки над вводом (они теперь в пульте) и плавающие кнопки */
 body.lf-qr-hidden #send_form > :not(#nonQRFormItems):not(#file_form) { display: none !important; }
@@ -872,7 +936,7 @@ body.lf-read #chat .swipe_left, body.lf-read #chat .swipe_right, body.lf-read #c
 .lf-cut-x .lf-i { width: 18px; height: 18px; }
 
 /* просмотр картинки */
-#lf-lightbox { position: fixed; inset: 0; z-index: 2147483050; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: rgba(6, 4, 5, .94); opacity: 0; transition: opacity .25s; }
+#lf-lightbox { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: 2147483050; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: rgba(6, 4, 5, .94); opacity: 0; transition: opacity .25s; }
 #lf-lightbox.on { opacity: 1; }
 #lf-lightbox img { max-width: 100vw; max-height: 82vh; object-fit: contain; border-radius: 6px; }
 .lf-lb-bar { display: flex; align-items: center; gap: 10px; width: min(100%, 520px); padding: 12px 16px; color: #d6cac5; font-size: 13px; }
@@ -891,11 +955,127 @@ body.lf-theme.lf-bg-flat #lf-bg i { filter: brightness(.3) saturate(.6); }
 .cc-money { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(234, 179, 188, .3); background: rgba(123, 45, 61, .32); color: #fff; font: 600 13px var(--lf-sans); cursor: pointer; }
 .cc-money .lf-i { width: 15px; height: 15px; color: var(--lf-rose2); }
 
-/* крупные аватарки в чате */
-body.lf-ava-big #chat { --avatar-base-width: 64px; --avatar-base-height: 96px; --avatar-base-border-radius-round: 14px; }
-body.lf-ava-huge #chat { --avatar-base-width: 88px; --avatar-base-height: 132px; --avatar-base-border-radius-round: 16px; }
-body.lf-ava-big #chat .mes .avatar img, body.lf-ava-huge #chat .mes .avatar img { border: 0; box-shadow: 0 0 0 1.5px rgba(217, 104, 123, .45), 0 8px 20px rgba(0, 0, 0, .45); }
-@media (min-width: 900px) {
-    body.lf-ava-big #chat { --avatar-base-width: 84px; --avatar-base-height: 126px; }
-    body.lf-ava-huge #chat { --avatar-base-width: 120px; --avatar-base-height: 180px; }
+
+
+/* ───────────── 0.5: картинки без обрезки ───────────── */
+.lf-fit { position: relative; overflow: hidden; background-color: #151012; isolation: isolate; }
+.lf-fit::before { content: ''; position: absolute; z-index: -1; inset: -24px; background: var(--img) center / cover no-repeat; filter: blur(20px) brightness(.5) saturate(1.15); transform: scale(1.06); }
+.lf-fit > .lf-fit-i { position: absolute; z-index: -1; inset: 0; background: var(--img) center / contain no-repeat; }
+.lf-pairhero { height: auto; aspect-ratio: 16 / 9; min-height: 200px; max-height: 340px; }
+.lf-wd-look.lf-fit { background-image: none; }
+.lf-frame-img.lf-fit { position: absolute; background: none; inset: -3%; }
+.lf-frame-img.lf-fit > .lf-fit-i { background-size: contain; }
+.lf-fs-img.lf-fit { background-image: none; }
+/* мелкие плитки режутся неизбежно — но по лицу, а не по поясу */
+.lf-gal, .lf-strip-i, .lf-cuttile-img, .lf-cutcard-strip i, .lf-ev-img, .lf-thumb { background-position: center 22% !important; }
+
+/* ───────────── 0.5: деталь крупным планом ───────────── */
+#chat .lf-detail { position: relative; display: block; margin: 14px 0 8px; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 9; background: #120d0f; cursor: pointer; isolation: isolate; box-shadow: 0 12px 34px rgba(0, 0, 0, .32); -webkit-tap-highlight-color: transparent; }
+#chat .lf-detail > img { position: absolute; inset: 0; width: 100% !important; height: 100% !important; max-width: none !important; margin: 0 !important; border-radius: 0 !important; object-fit: cover; display: block; transform-origin: 50% 50%; }
+#chat .lf-detail figcaption { position: absolute; left: 14px; bottom: 11px; right: 90px; z-index: 4; color: #fff; font-family: var(--t-serif, var(--lf-serif)); font-style: italic; font-size: 15px; letter-spacing: .02em; line-height: 1.25; text-shadow: 0 1px 10px rgba(0, 0, 0, .85), 0 0 2px rgba(0, 0, 0, .6); pointer-events: none; }
+#chat .lf-detail::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, .55)); box-shadow: inset 0 0 60px rgba(0, 0, 0, .35); }
+#chat .lf-det-btns { position: absolute; top: 8px; right: 8px; z-index: 5; display: flex; gap: 6px; opacity: .55; transition: opacity .2s; }
+#chat .lf-detail:hover .lf-det-btns { opacity: 1; }
+#chat .lf-det-btns button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#chat .lf-det-btns svg { width: 15px; height: 15px; }
+#chat .lf-detail.redraw > img { filter: brightness(.45) blur(2px); }
+#chat .lf-detail.redraw::before { content: ''; position: absolute; inset: 0; z-index: 4; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .14) 50%, transparent 70%) 0 0 / 250% 100%; animation: lf-shimmer 1.6s linear infinite; }
+#chat .lf-detail.wait { aspect-ratio: 16 / 9; display: grid; place-items: center; box-shadow: none; border: 1px dashed var(--t-line2, rgba(234, 179, 188, .3)); background: color-mix(in srgb, var(--t-card, #1a1315) 70%, transparent); color: var(--t-dim, #b9a9ad); }
+#chat .lf-detail.wait.idle { aspect-ratio: auto; padding: 12px 14px; display: flex; justify-content: flex-start; }
+#chat .lf-detail.wait::after { display: none; }
+#chat .lf-detail.wait span { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; font-family: var(--t-serif, var(--lf-serif)); font-style: italic; font-size: 15px; }
+#chat .lf-detail.wait span svg { width: 17px; height: 17px; flex: none; }
+#chat .lf-detail.wait small { font-family: inherit; font-style: normal; font-size: 12px; opacity: .7; margin-left: 6px; }
+#chat .lf-det-sh { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .09) 50%, transparent 70%) 0 0 / 250% 100%; animation: lf-shimmer 1.6s linear infinite; }
+@keyframes lf-shimmer { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+body.lf-theme.lf-ava-wide #chat .lf-detail { margin: 16px -16px 10px; border-radius: 0; }
+body.lf-theme.lf-ava-wide #chat .lf-detail.wait { margin: 16px 0 10px; border-radius: 14px; }
+.lf-detprev { aspect-ratio: 16 / 9; border-radius: 12px; background: #1a1315 center/cover; margin: 4px 0 8px; }
+.lf-dettile { position: relative; flex: none; width: 160px; aspect-ratio: 16 / 9; padding: 0; border: 1px solid var(--lf-line); border-radius: 14px; background: #1a1315 center/cover; cursor: pointer; scroll-snap-align: start; overflow: hidden; }
+.lf-dettile span { position: absolute; left: 8px; right: 8px; bottom: 6px; font: italic 12px/1.2 var(--lf-serif); color: #fff; text-align: left; text-shadow: 0 1px 6px rgba(0, 0, 0, .9); }
+
+/* лайтбокс с движением */
+#lf-lightbox .lf-lb-mo { position: relative; max-width: 100vw; overflow: hidden; border-radius: 6px; line-height: 0; }
+#lf-lightbox .lf-lb-mo img { border-radius: 0; }
+
+/* ───────────── живые детали ───────────── */
+.lf-mo { position: relative; overflow: hidden; }
+.lf-mo > .fx, .lf-mo > .fx2 { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.lf-mo:not(.play) > *, .lf-mo:not(.play) > .fx, .lf-mo:not(.play) > .fx2 { animation-play-state: paused !important; }
+/* по умолчанию — медленный наезд камеры */
+.lf-mo > img { animation: lf-m-drift 26s ease-in-out infinite alternate; }
+@keyframes lf-m-drift { from { transform: scale(1.03) translate(0, 0); } to { transform: scale(1.13) translate(-2%, -1.5%); } }
+
+/* дождь: косые струи + капли на стекле */
+.lf-mo.m-rain > .fx { inset: -30% -10%; transform: rotate(9deg);
+    background-image:
+        radial-gradient(1px 16px at 12px 10px, rgba(225, 235, 255, .55), transparent),
+        radial-gradient(1px 11px at 31px 47px, rgba(225, 235, 255, .4), transparent),
+        radial-gradient(1px 20px at 7px 63px, rgba(225, 235, 255, .35), transparent);
+    background-size: 43px 90px, 57px 110px, 71px 140px;
+    animation: lf-m-rain .55s linear infinite; }
+@keyframes lf-m-rain { from { background-position: 0 0, 0 0, 0 0; } to { background-position: 0 90px, 0 110px, 0 140px; } }
+.lf-mo.m-rain > .fx2 {
+    background-image:
+        radial-gradient(circle 3px at 20px 30px, rgba(255, 255, 255, .32), rgba(255, 255, 255, .06) 60%, transparent 72%),
+        radial-gradient(circle 2px at 70px 12px, rgba(255, 255, 255, .28), transparent 70%),
+        radial-gradient(circle 4px at 46px 80px, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05) 60%, transparent 74%);
+    background-size: 97px 113px, 131px 89px, 151px 167px;
+    animation: lf-m-drops 9s linear infinite; }
+@keyframes lf-m-drops { from { background-position: 0 0, 0 0, 0 0; } to { background-position: 0 113px, 0 178px, 0 167px; } }
+.lf-mo.m-rain > img { filter: saturate(.85) brightness(.92); }
+
+/* снег */
+.lf-mo.m-snow > .fx, .lf-mo.m-snow > .fx2 { inset: -20% -10%;
+    background-image:
+        radial-gradient(circle 1.6px at 10px 14px, rgba(255, 255, 255, .9), transparent),
+        radial-gradient(circle 1.2px at 52px 60px, rgba(255, 255, 255, .7), transparent),
+        radial-gradient(circle 2.2px at 33px 95px, rgba(255, 255, 255, .6), transparent);
+    background-size: 67px 80px, 89px 101px, 113px 131px;
+    animation: lf-m-snow 7s linear infinite; }
+.lf-mo.m-snow > .fx2 { transform: scale(1.8); opacity: .55; filter: blur(1px); animation-duration: 12s; }
+@keyframes lf-m-snow { from { background-position: 0 0, 0 0, 0 0; } to { background-position: 30px 160px, -20px 202px, 40px 262px; } }
+
+/* пар и дым */
+.lf-mo.m-steam > .fx, .lf-mo.m-steam > .fx2, .lf-mo.m-smoke > .fx, .lf-mo.m-smoke > .fx2 {
+    background: radial-gradient(28% 38% at 50% 100%, rgba(255, 255, 255, .34), transparent 70%);
+    filter: blur(14px); mix-blend-mode: screen; opacity: 0;
+    animation: lf-m-rise 5.5s ease-out infinite; }
+.lf-mo.m-steam > .fx2, .lf-mo.m-smoke > .fx2 { animation-delay: 2.75s; background-position: 12% 0; }
+.lf-mo.m-smoke > .fx, .lf-mo.m-smoke > .fx2 { background: radial-gradient(22% 40% at 46% 100%, rgba(200, 200, 210, .3), transparent 70%); animation-duration: 8s; animation-name: lf-m-smoke; }
+.lf-mo.m-smoke > .fx2 { animation-delay: 4s; }
+@keyframes lf-m-rise { 0% { transform: translateY(18%) scale(.8); opacity: 0; } 25% { opacity: .9; } 100% { transform: translateY(-48%) scale(1.5, 1.8); opacity: 0; } }
+@keyframes lf-m-smoke { 0% { transform: translate(0, 20%) scale(.7) skewX(0); opacity: 0; } 30% { opacity: .8; } 60% { transform: translate(6%, -18%) scale(1.2, 1.5) skewX(-8deg); } 100% { transform: translate(-4%, -50%) scale(1.6, 2) skewX(6deg); opacity: 0; } }
+
+/* свеча, неон */
+.lf-mo.m-flicker > img { animation: lf-m-drift 26s ease-in-out infinite alternate, lf-m-flick 3.2s steps(1) infinite; }
+.lf-mo.m-flicker > .fx { background: radial-gradient(60% 55% at 50% 45%, rgba(255, 170, 90, .28), transparent 70%); mix-blend-mode: soft-light; animation: lf-m-flick2 2.3s ease-in-out infinite; }
+@keyframes lf-m-flick { 0%, 100% { filter: brightness(1); } 8% { filter: brightness(.86); } 11% { filter: brightness(1.04); } 37% { filter: brightness(.93); } 40% { filter: brightness(1.02); } 71% { filter: brightness(.88); } 73% { filter: brightness(1); } }
+@keyframes lf-m-flick2 { 0%, 100% { opacity: .55; } 20% { opacity: 1; } 35% { opacity: .4; } 60% { opacity: .9; } 80% { opacity: .5; } }
+
+/* тёплый свет */
+.lf-mo.m-glow > .fx { background: radial-gradient(70% 60% at 50% 40%, rgba(255, 200, 140, .3), transparent 72%); mix-blend-mode: screen; animation: lf-m-glow 5s ease-in-out infinite alternate; }
+@keyframes lf-m-glow { from { opacity: .25; } to { opacity: .95; } }
+
+/* дыхание / пульс */
+.lf-mo.m-pulse > img { animation: lf-m-breathe 4.2s ease-in-out infinite; }
+@keyframes lf-m-breathe { 0%, 100% { transform: scale(1.04); } 50% { transform: scale(1.085); } }
+.lf-mo.m-heartbeat > img { animation: lf-m-beat 1.15s ease-in-out infinite; }
+.lf-mo.m-heartbeat > .fx { box-shadow: inset 0 0 90px rgba(150, 20, 40, .55); animation: lf-m-beatv 1.15s ease-in-out infinite; }
+@keyframes lf-m-beat { 0%, 40%, 100% { transform: scale(1.05); } 9% { transform: scale(1.085); } 18% { transform: scale(1.055); } 27% { transform: scale(1.075); } }
+@keyframes lf-m-beatv { 0%, 40%, 100% { opacity: .25; } 9% { opacity: 1; } 18% { opacity: .45; } 27% { opacity: .85; } }
+
+/* УЗИ: ч/б, шум, бегущая развёртка, мерцание сердца */
+.lf-mo.m-scan > img { filter: grayscale(1) contrast(1.18) brightness(.95); animation: lf-m-scanb 1s ease-in-out infinite; }
+.lf-mo.m-scan > .fx { background:
+        linear-gradient(90deg, transparent, rgba(220, 235, 255, .2) 45%, rgba(255, 255, 255, .32) 50%, transparent 56%) no-repeat,
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, .18) 0 1px, transparent 1px 3px);
+    background-size: 35% 100%, auto; animation: lf-m-sweep 2.8s linear infinite; mix-blend-mode: screen; }
+.lf-mo.m-scan > .fx2 { opacity: .22; mix-blend-mode: overlay; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); animation: lf-m-noise .4s steps(3) infinite; }
+@keyframes lf-m-sweep { from { background-position: -60% 0, 0 0; } to { background-position: 160% 0, 0 0; } }
+@keyframes lf-m-scanb { 0%, 100% { transform: scale(1.02); filter: grayscale(1) contrast(1.18) brightness(.92); } 12% { filter: grayscale(1) contrast(1.22) brightness(1.06); } 24% { filter: grayscale(1) contrast(1.18) brightness(.95); } }
+@keyframes lf-m-noise { 0% { background-position: 0 0; } 33% { background-position: -40px 25px; } 66% { background-position: 30px -50px; } 100% { background-position: 0 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .lf-mo > img, .lf-mo > .fx, .lf-mo > .fx2 { animation: none !important; }
 }
