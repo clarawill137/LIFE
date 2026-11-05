@@ -7,10 +7,11 @@ import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icon
 import { initControl, applyTheme, openCC } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
+import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -617,20 +618,21 @@ function moveNote(mark) {
     return `[Новая глава${mark.title ? `: ${mark.title}` : ''}.${mark.note ? ` ${mark.note}` : ''}]`;
 }
 
-function updateMovePrompt() {
+function updateMovePrompt(type) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
     const dir = settings().enabled ? chatMeta().director : null;
     const parts = [];
     if (p) parts.push(moveNote(p.mark));
     if (dir?.once && dir.text) parts.push(`[Режиссёр: ${dir.text}]`);
+    if (settings().enabled && hasChat()) { try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); } }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
     return text;
 }
 
 globalThis.life_intercept = async function (_chat, _size, _abort, type) {
-    try { if (type !== 'quiet') updateMovePrompt(); } catch (e) { console.warn('[Life] перехват', e); }
+    try { if (type !== 'quiet') updateMovePrompt(type); } catch (e) { console.warn('[Life] перехват', e); }
 };
 
 async function removeMarker(id) {
@@ -759,13 +761,15 @@ async function runChron(i, { force = false } = {}) {
             const hn = horaeName(n, st);
             return [hn, ...(al || []).filter(a => norm(a) !== norm(hn))].slice(0, 4).join(' / ');
         });
+        let so = null;
+        try { so = simChronOpts(); } catch (e) { console.warn('[Life] Жизнь: опции', e); }
         const input = chronInput({
             cast, location: st.scene?.location, when: fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time),
             regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: m.name, prev,
-            chapterTitle: ch?.title,
+            chapterTitle: ch?.title, sim: so?.input,
         });
         const askDetail = !!s.detail.on;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0));
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, so?.flags || {}) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0));
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -791,6 +795,7 @@ async function runChron(i, { force = false } = {}) {
         saveMeta();
         invalidate();
         if (store[key].det && !store[key].detImg && s.detail.auto) queueDetail(key);
+        try { simAfterPost(i, res, m); updateMovePrompt(); } catch (e) { console.warn('[Life] Жизнь после поста', e); }
     } catch (e) {
         console.warn('[Life] Летописец:', e);
         toast('warning', esc(String(e?.message || e)), '✦ Летописец', { timeOut: 6000 });
@@ -1009,8 +1014,9 @@ function lastChron(from = chatArr().length - 1, to = 0) {
 // ───────────── чат: разделители, главы, плашки ─────────────
 
 const ui = {
-    open: false, tab: 'scene', focus: 'last', who: '', pTab: 'items', itemsTab: 'with', item: '', worldTab: 'events',
+    open: false, tab: 'scene', focus: 'last', who: '', pTab: 'life', itemsTab: 'with', item: '', worldTab: 'events',
     mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '', wset: '', galShow: 48,
+    room: '', tracePin: '',
 };
 let observer = null;
 let decorating = false;
@@ -1046,8 +1052,10 @@ function thinHtml(ch) {
 function chipsHtml(i) {
     if (chronBusy.has(i)) return `<div class="lf-pchips busy" data-mes="${i}">${icon('spark')}<span>Летописец читает…</span></div>`;
     const e = chronOf(i);
-    if (!e || e.undone || !e.chips?.length) return '';
-    return `<div class="lf-pchips" data-mes="${i}" role="button">${icon('spark')}<span>${e.chips.map(esc).join(' <i>·</i> ')}</span></div>`;
+    let ini = '';
+    try { ini = initChipFor(i); } catch { /* */ }
+    if (!e || e.undone || (!e.chips?.length && !ini)) return '';
+    return `<div class="lf-pchips" data-mes="${i}" role="button">${icon('spark')}<span>${(e.chips || []).map(esc).join(' <i>·</i> ')}${ini ? `${e.chips?.length ? ' <i>·</i> ' : ''}<b class="lf-ini">${icon('heart')} ${esc(ini)}</b>` : ''}</span></div>`;
 }
 
 function cutCardHtml(i) {
@@ -1262,7 +1270,7 @@ function render() {
         if (on) app.querySelector('.lf-tab-ink').style.transform = `translateX(${i * 100}%)`;
     });
     const me = app.querySelector('.lf-me');
-    if (me) me.innerHTML = ava(ui.tab === 'person' && ui.who ? ui.who : ctx().name1, 'ring');
+    if (me) me.innerHTML = ava(ui.tab === 'person' && ui.who && !String(ui.who).startsWith('pet:') ? ui.who : ctx().name1, 'ring');
     const body = app.querySelector('.lf-body');
     const same = body.dataset.tab === ui.tab;
     const keep = same ? body.scrollTop : 0;
@@ -1354,6 +1362,7 @@ function renderScene() {
         const mood = moodOf(n, st);
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
+    ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
     ${(() => {
         const ci = imagesBetween(imgs(), fch.start, fch.end).slice(-14).reverse();
         const cc = cuts().filter(c => c.mes >= fch.start && c.mes <= fch.end).reverse();
@@ -1417,6 +1426,7 @@ function placeCardHtml(loc, { inline = false } = {}) {
             <div class="lf-pc-foot">
                 ${!here ? `<span>${icon(car ? 'car' : 'walk')} ${car ? `На машине · ${esc(cut(car, 22))}` : 'Пешком'}</span>` : ''}
                 ${inside ? `<button class="lf-link" data-act="inside" data-key="${esc(key)}">${icon('door')} Внутри</button>` : ''}
+                ${roomButton(key)}
                 <button class="lf-link" data-act="place-menu" data-loc="${esc(loc)}">${icon('more')}</button>
             </div>
         </div>
@@ -1440,6 +1450,7 @@ function renderAtlas() {
 
 function renderMap() {
     if (ui.atlas) return renderAtlas();
+    if (ui.room) return renderRoom(ui.room);
     const s = settings();
     const st = worldState();
     const level = mapLevel();
@@ -1525,14 +1536,19 @@ function wardrobeSets(name) {
 function renderPerson() {
     const st = worldState();
     const names = castNames(st);
-    if (!ui.who || !names.some(n => sameName(n, ui.who))) ui.who = (st.scene?.characters_present || []).map(canonName).find(n => !sameName(n, ctx().name1)) || names.find(n => !sameName(n, ctx().name1)) || names[0] || '';
+    const petMode = String(ui.who || '').startsWith('pet:');
+    if (!petMode && (!ui.who || !names.some(n => sameName(n, ui.who)))) ui.who = (st.scene?.characters_present || []).map(canonName).find(n => !sameName(n, ctx().name1)) || names.find(n => !sameName(n, ctx().name1)) || names[0] || '';
     const who = ui.who;
     if (!who) return `<div class="lf-empty">${icon('users', 'xl')}В этом чате пока никого.</div>`;
-    const people = `<div class="lf-people">${names.map(n => `<button class="lf-pers${sameName(n, who) ? ' on' : ''}" data-act="who" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span></button>`).join('')}</div>`;
+    let petsRow = '';
+    try { petsRow = petsRowHtml(who); } catch (e) { console.warn('[Life] питомцы', e); }
+    const people = `<div class="lf-people">${names.map(n => `<button class="lf-pers${!petMode && sameName(n, who) ? ' on' : ''}" data-act="who" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span></button>`).join('')}${petsRow}</div>`;
+    if (petMode) return `${people}${renderPet(who.slice(4))}`;
     const me = sameName(who, ctx().name1);
-    if (ui.pTab === 'money' && !me) ui.pTab = 'wardrobe';
-    const tabs = seg([['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', me ? 'Связи' : 'Отношения'], ...(me ? [['money', 'Деньги']] : [])], ui.pTab, 'p-tab');
-    const body = ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
+    if (ui.pTab === 'money' && !me) ui.pTab = 'life';
+    const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(me ? [['money', 'Деньги']] : [])];
+    const tabs = seg(tabList, ui.pTab, 'p-tab').replace('lf-seg', `lf-seg${tabList.length > 5 ? ' many' : ''}`);
+    const body = ui.pTab === 'life' ? renderLife(who) : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -1617,6 +1633,7 @@ function itemCard(name, it) {
             ${it.location ? `<div class="lf-ic-row">${icon('pin')}<span>${esc(it.location)}</span></div>` : ''}
             ${it.description ? `<div class="lf-ic-row">${icon('file')}<span>${esc(cut(it.description, 160))}</span></div>` : ''}
             ${when ? `<div class="lf-ic-row line" data-act="jump" data-mes="${org.i}">${icon('clock')}<span>${esc(when)}</span></div>` : ''}
+            ${(() => { try { return itemHistoryHtml(name); } catch { return ''; } })()}
         </div>
         <div class="lf-ic-actions">
             <button class="lf-btn primary serif" data-act="item-give" data-name="${esc(name)}">Передать</button>
@@ -1809,6 +1826,8 @@ function renderWorld() {
         </div>
         <div class="lf-list">${rows.join('') || '<div class="lf-empty small">Летописец ещё ничего не записал.</div>'}</div>
         ${ag.length ? `${sec('Планы')}<div class="lf-list">${ag.map(a => `<button class="lf-row" data-act="jump" data-mes="${a.messageIndex}">${icon('calendar')}<span>${a.date ? `<b>${esc(a.date)}</b> · ` : ''}${esc(a.text)}</span>${icon('chevR', 'dim')}</button>`).join('')}</div>` : ''}`;
+    } else if (tab === 'rumors') {
+        body = renderRumors();
     } else if (tab === 'time') {
         body = `<section class="lf-clock">
             <span class="lf-clock-d">${esc([weekday(st.timestamp?.story_date), st.timestamp?.story_date].filter(Boolean).join(', ') || 'дата не записана')}</span>
@@ -1820,7 +1839,7 @@ function renderWorld() {
         <div class="lf-hint">Скачок времени — это новая глава со строчкой для модели. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['events', 'События'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg')}
+    ${seg([['events', 'События'], ['rumors', 'Слухи'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -1845,6 +1864,13 @@ function renderCfg() {
         ${sw('on', 'Деталь крупным планом к каждому посту', s.detail, 'detail.on')}
         ${sw('auto', 'Рисовать деталь сразу (иначе — по нажатию)', s.detail, 'detail.auto')}
         ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
+        ${sec('Жизнь вокруг')}
+        ${sw('on', 'Персонажи проявляют инициативу сами', simCfg(), 'sim.on')}
+        ${sw('tease', 'Их задумки — сюрприз (размыто)', simCfg(), 'sim.tease')}
+        ${sw('prefs', 'Запоминать вкусы (для подарков)', simCfg(), 'sim.prefs')}
+        ${sw('traces', 'Следы сцен в местах (бокалы, записки…)', simCfg(), 'sim.traces')}
+        ${sw('pets', 'Питомцы с потребностями', simCfg(), 'sim.pets')}
+        ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
         ${sec('Карты и картинки')}
         <div class="lf-field"><label>Новый район</label><select data-set="autoMaps">
             <option value="ask" ${s.autoMaps === 'ask' ? 'selected' : ''}>сказать мне, рисую по кнопке</option>
@@ -2304,10 +2330,14 @@ async function onClick(ev) {
     const loc = el.dataset.loc;
     const val = (sel) => (box || document.getElementById('lf-app'))?.querySelector(sel)?.value?.trim() || '';
 
+    if (act.startsWith('sim-')) {
+        try { await simClick(act, el, ev); } catch (e) { console.warn('[Life] Жизнь', e); toast('warning', esc(String(e?.message || e)), '✦ Life'); }
+        return;
+    }
     switch (act) {
         case 'close': if (Date.now() - openedAt > 350) closeHub(); break;
         case 'sheet-close': closeSheet(); break;
-        case 'tab': ui.tab = el.dataset.tab; ui.editPins = false; ui.atlas = false; closeSheet(); render(); break;
+        case 'tab': ui.tab = el.dataset.tab; ui.editPins = false; ui.atlas = false; ui.room = ''; ui.tracePin = ''; closeSheet(); render(); break;
         case 'person': case 'who': ui.who = el.dataset.name; ui.tab = 'person'; ui.item = ''; ui.pair = ''; ui.wset = ''; render(); break;
         case 'p-tab': ui.pTab = el.dataset.v; if (ui.pTab === 'money') bank().then(() => { if (ui.open && ui.pTab === 'money') render(); }); render(); break;
         case 'items-tab': ui.itemsTab = el.dataset.v; ui.item = ''; render(); break;
@@ -2737,13 +2767,14 @@ async function onChange(ev) {
         const file = el.files[0];
         const kind = el.dataset.file;
         await withBusy(el.closest('label'), async () => {
-            const max = kind === 'map' || kind === 'plan' ? 2200 : kind === 'item' ? 900 : 1600;
+            const max = kind === 'map' || kind === 'plan' ? 2200 : kind === 'item' || kind === 'pet' ? 1100 : 1600;
             const path = await uploadImage(await fileToJpeg(file, max), `life_${kind}`);
             if (kind === 'map') { const r = (ui.region && regionById(ui.region)) || currentRegion(); r.map = path; delete r.needsMap; }
             else if (kind === 'plan') { const key = el.dataset.key || mapLevel()?.key; const p = s.places[key] || getPlace(key, true); p.plan = path; }
             else if (kind === 'place') getPlace(el.dataset.loc, true).img = path;
             else if (kind === 'item') setItemInfo(el.dataset.name, { img: path });
             else if (kind === 'pair') s.pairs[el.dataset.name] = path;
+            else if (kind === 'pet') simSetPetImg(el.dataset.id, path);
             else if (kind === 'frame') { const cm = chatMeta(); cm.frames = cm.frames || {}; cm.frames[el.dataset.start] = path; saveMeta(); }
             saveSettings();
             closeSheet(); render(); decorate();
@@ -2912,8 +2943,16 @@ const controlApi = {
     detail: (on) => { if (on !== undefined) { settings().detail.on = !!on; saveSettings(); paintChips(); } return settings().detail.on; },
 };
 
+const simApi = {
+    settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
+    castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
+    fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
+    lastAiIndex, chatArr, chronStore, relationsState, secretsState, horaeEvents, ui, updatePrompt: () => updateMovePrompt(),
+};
+
 jQuery(async () => {
     settings();
+    initSim(simApi);
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
     registerSlash();

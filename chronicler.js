@@ -60,10 +60,54 @@ export function detailSystem() {
     return `Ты подбираешь к посту ролевой истории на русском один вставной кадр — деталь крупным планом. Ответь только JSON без пояснений: {"detail": {...}}.${DETAIL_RULE}`;
 }
 
-export function chronSystem(askTitle, askDetail = false) {
+// ───── Жизнь: вкусы, инициатива персонажей, следы в местах, питомцы, память вещей ─────
+
+export const IDEA_KINDS = {
+    care: 'забота', court: 'ухаживание', flirt: 'подкат', gift: 'подарок', own: 'свои дела', talk: 'разговор', plot: 'сюжет',
+};
+
+const ITEM_STORY_RULE = `
+У операций set/merge можно добавить "from" — кто подарил или отдал вещь в ЭТОМ посте, и "story" — 3–10 слов, что с вещью случилось в этом посте («накинул ей на плечи под дождём», «нашла в кармане его куртки»). Только если правда было.`;
+
+const PREFS_RULE = `
+
+prefs — что в этом посте стало ясно про вкусы персонажей: [{"who":"имя","text":"что именно, 1–5 слов","kind":"like|dislike"}]. Любимый кофе, еда, цветы, музыка, книги, привычки, что раздражает, что пугает. Только сказанное или явно показанное, не догадки. Нечего — [].`;
+
+const IDEAS_RULE = `
+
+ideas — 0–2 новые идеи, что персонаж мог бы сделать САМ, по своей инициативе, в ближайших сценах — чтобы он жил своей жизнью и проявлял себя, а не только отвечал игроку. Только для персонажей из строки «Инициатива». Формат: [{"who":"имя","kind":"care|court|flirt|gift|own|talk|plot","text":"8–20 слов, конкретно и в его характере","when":"scene|later|offscreen","where":"место, если важно"}].
+kind: care — забота (принести кофе, укрыть пледом, заметить усталость); court — ухаживание, романтический жест; flirt — подкат, флирт, дразнит, поцелуй невпопад; gift — подарок, конкретный, с учётом её вкусов; own — свои дела, независимость (тренировка, работа, друзья, хобби, личные планы — он не сидит и не ждёт); talk — сам начинает важный или трудный разговор; plot — сюжетный ход по его линии.
+court/flirt — только если между ними и правда есть романтика или к ней идёт. Опирайся на характер, отношения, вкусы и то, что сейчас происходит. Не повторяй уже задуманное.
+when: scene — можно прямо в текущей сцене; later — в другой раз; offscreen — сделает, пока игрока нет рядом (оставит записку, приготовит ужин, купит и спрячет подарок).
+text для scene и later — что он сделает («принести ей кофе с корицей, как она любит»); для offscreen — как уже сделанное («приготовил ужин и оставил записку на холодильнике»).
+
+done — номера идей из списка «Уже задумано», которые в ЭТОМ посте сбылись: [3, 7]. Нет — [].`;
+
+const TRACES_RULE = `
+
+traces — следы в местах, которые переживут эту сцену: [{"op":"add|remove","where":"место так, как пишет Horae, можно с комнатой через ·","text":"что осталось, 3–10 слов","kind":"trace|note|food|gift"}]. Бокалы после вечеринки, разбитое зеркало после драки, его футболка после ночёвки, записка на холодильнике (в text — суть записки), ужин в духовке, цветы на столе. remove — если следа больше нет (убрали, съели, выкинули), text — как в списке «Следы». Мелочи, которые завтра никто не вспомнит, не пиши. Нечего — [].`;
+
+const PETS_RULE = `
+
+pets — что в этом посте случилось с питомцами (и с новыми животными в доме): [{"name":"кличка","fed":false,"played":false,"petted":false,"hurt":"","with":"кто был с ним","moment":"3–8 слов, если был милый или важный момент","new":false,"kind":"кошка|собака|…","look":"как выглядит"}]. new — true, только если в истории появился новый питомец героев. Ничего — [].`;
+
+export function chronSystem(askTitle, askDetail = false, sim = {}) {
     let s = CHRON_SYSTEM.replace('{TITLE_RULE}', askTitle ? TITLE_ASK : TITLE_SKIP);
-    if (askDetail) s = s.replace('  "secrets": [],', '  "secrets": [],\n  "detail": null,') + DETAIL_RULE;
-    return s;
+    const keys = [];
+    let rules = '';
+    if (askDetail) { keys.push('"detail": null'); rules += DETAIL_RULE; }
+    if (sim.prefs) { keys.push('"prefs": []'); rules += PREFS_RULE; }
+    if (sim.ideas) { keys.push('"ideas": []', '"done": []'); rules += IDEAS_RULE; }
+    if (sim.traces) { keys.push('"traces": []'); rules += TRACES_RULE; }
+    if (sim.pets) { keys.push('"pets": []'); rules += PETS_RULE; }
+    if (sim.itemStory) s = s.replace('Если список и так чистый', `${ITEM_STORY_RULE.trim()}\nЕсли список и так чистый`);
+    if (keys.length) s = s.replace('  "secrets": [],', `  "secrets": [],\n  ${keys.join(',\n  ')},`);
+    return s + rules;
+}
+
+/** Отдельный запрос: только идеи инициативы (кнопка «Придумать»). */
+export function ideasSystem() {
+    return `Ты — сценарист ролевой истории на русском. Придумай, что персонаж может сделать сам, по своей инициативе. Ответь только JSON: {"ideas": [...]}, 3–4 идеи разных видов.${IDEAS_RULE.split('done —')[0]}`;
 }
 
 function itemLine(name, it) {
@@ -74,10 +118,17 @@ function itemLine(name, it) {
     return `- ${name}${bits.length ? ` — ${bits.join('; ')}` : ''}`;
 }
 
-export function chronInput({ cast, location, when, regions, items, post, speaker, prev, chapterTitle }) {
+export function chronInput({ cast, location, when, regions, items, post, speaker, prev, chapterTitle, sim = null }) {
     const list = Object.entries(items || {});
     return [
         `Персонажи (так их и называй): ${cast.join('; ') || '—'}`,
+        sim?.user ? `Игрок пишет за: ${sim.user}` : '',
+        sim?.prefs ? `Известные вкусы: ${sim.prefs}` : '',
+        sim?.init ? `Инициатива: ${sim.init}` : '',
+        sim?.sched ? `Сейчас по распорядку: ${sim.sched}` : '',
+        sim?.ideas ? `Уже задумано:\n${sim.ideas}` : '',
+        sim?.traces ? `Следы в этом месте: ${sim.traces}` : '',
+        sim?.pets ? `Питомцы: ${sim.pets}` : '',
         `Место по Horae: ${location || 'не записано'}${when ? `. Время: ${when}` : ''}`,
         `Известные районы карты: ${regions.length ? regions.join(', ') : 'пока нет'}`,
         chapterTitle ? `Текущее название главы: ${chapterTitle}` : '',
@@ -117,6 +168,20 @@ export function normalizeResult(j) {
         })).filter(r => r.trust || r.closeness || r.tension || r.moment),
         secrets: arr(j?.secrets).filter(s => str(s?.text)).map(s => ({ text: str(s.text), knows: arr(s.knows).map(str).filter(Boolean) })),
         title: str(j?.title).replace(/^[«"']|[»"']$/g, ''),
+        prefs: arr(j?.prefs).filter(x => str(x?.who) && str(x?.text)).map(x => ({ who: str(x.who), text: str(x.text).slice(0, 60), kind: str(x.kind) === 'dislike' ? 'dislike' : 'like' })).slice(0, 6),
+        ideas: arr(j?.ideas).filter(x => str(x?.who) && str(x?.text).length > 5).map(x => ({
+            who: str(x.who), kind: IDEA_KINDS[str(x.kind)] ? str(x.kind) : 'care', text: str(x.text).slice(0, 200),
+            when: ['scene', 'later', 'offscreen'].includes(str(x.when)) ? str(x.when) : 'later', where: str(x.where).slice(0, 80),
+        })).slice(0, 4),
+        done: arr(j?.done).map(Number).filter(Number.isFinite),
+        traces: arr(j?.traces).filter(x => str(x?.text)).map(x => ({
+            op: str(x.op) === 'remove' ? 'remove' : 'add', where: str(x.where).slice(0, 80), text: str(x.text).slice(0, 120),
+            kind: ['trace', 'note', 'food', 'gift'].includes(str(x.kind)) ? str(x.kind) : 'trace',
+        })).slice(0, 8),
+        pets: arr(j?.pets).filter(x => str(x?.name)).map(x => ({
+            name: str(x.name).slice(0, 40), fed: !!x.fed, played: !!x.played, petted: !!x.petted, hurt: str(x.hurt).slice(0, 80),
+            with: str(x.with), moment: str(x.moment).slice(0, 80), new: !!x.new, kind: str(x.kind).slice(0, 30), look: str(x.look).slice(0, 160),
+        })).slice(0, 4),
         detail: j?.detail && typeof j.detail === 'object' && str(j.detail.prompt).length > 20 ? {
             prompt: str(j.detail.prompt).slice(0, 700),
             motion: MOTIONS.includes(str(j.detail.motion).toLowerCase()) ? str(j.detail.motion).toLowerCase() : 'drift',
