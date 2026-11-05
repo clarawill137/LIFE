@@ -184,12 +184,13 @@
 .lf-chip.icon { width: 40px; height: 40px; justify-content: center; padding: 0; }
 .lf-chip.icon .lf-i { width: 19px; height: 19px; }
 
-.lf-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--lf-line2); border-radius: 12px; overflow: hidden; margin: 12px 0; }
+.lf-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid var(--lf-line2); border-radius: 12px; overflow: hidden; margin: 12px 0; }
 .lf-seg button { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 6px; border: 0; border-left: 1px solid var(--lf-line); background: none; font-size: 13px; color: var(--lf-text2); cursor: pointer; white-space: nowrap; transition: background .25s, color .25s; }
 .lf-seg button:first-child { border-left: 0; }
 .lf-seg button .lf-i { width: 16px; height: 16px; }
 .lf-seg button.on { background: linear-gradient(180deg, var(--lf-wine2), var(--lf-wine)); color: #fff; }
-.lf-seg.cfg { grid-auto-flow: unset; grid-template-columns: 1fr 1.25fr 1fr 46px; }
+.lf-seg.cfg { grid-auto-flow: unset; grid-template-columns: minmax(0, 1.05fr) minmax(0, .9fr) minmax(0, 1.2fr) minmax(0, .85fr) 40px; }
+.lf-seg:has(> button:nth-child(5)) button { font-size: 12.5px; padding-left: 2px; padding-right: 2px; letter-spacing: -.01em; }
 .lf-seg.mini { margin: 0; flex: none; }
 .lf-seg.mini button { padding: 6px 12px; font-family: var(--lf-serif); font-size: 14px; }
 
@@ -230,7 +231,7 @@
 .lf-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
 .lf-ava i { font-style: normal; font-family: var(--lf-serif); font-weight: 600; color: var(--lf-rose2); }
 .lf-ava.xs { width: 20px; height: 20px; border-width: 1px; font-size: 10px; margin-right: -5px; }
-.lf-ava.md { width: 56px; height: 56px; font-size: 20px; }
+.lf-ava.md { width: 64px; height: 64px; font-size: 22px; }
 .lf-ava.xl { width: 84px; height: 84px; font-size: 30px; border-width: 2px; }
 .lf-ava.post { width: 50px; height: 50px; font-size: 18px; border-color: rgba(217, 104, 123, .7); }
 .lf-ava.ring { width: 46px; height: 46px; font-size: 18px; border: 2px solid var(--lf-wine3); box-shadow: 0 0 0 3px rgba(94, 31, 44, .35); }
@@ -260,7 +261,7 @@
 .lf-present, .lf-people { display: flex; gap: 14px; overflow-x: auto; padding: 10px 2px 4px; scrollbar-width: none; }
 .lf-present::-webkit-scrollbar, .lf-people::-webkit-scrollbar { display: none; }
 .lf-people.wrap { flex-wrap: wrap; overflow: visible; }
-.lf-pers { flex: none; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 66px; background: none; border: 0; padding: 0; cursor: pointer; transition: transform .18s var(--lf-ease), opacity .2s; }
+.lf-pers { flex: none; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 74px; background: none; border: 0; padding: 0; cursor: pointer; transition: transform .18s var(--lf-ease), opacity .2s; }
 .lf-pers:active { transform: scale(.92); }
 .lf-pers-n { font-size: 12.5px; color: var(--lf-text2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lf-pers-m { font-size: 11px; color: var(--lf-dim); font-style: italic; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -3px; }
@@ -754,3 +755,147 @@ body.lf-read #chat .mes_text > p { text-indent: 1.4em; margin: 0 0 .55em; }
 body.lf-read #chat .mes[is_user="true"] .mes_text { border-left: 2px solid #d9687b; padding-left: 12px; }
 body.lf-read #chat .mes[is_user="true"] .mes_text > p { text-indent: 0; }
 body.lf-read #chat .swipe_left, body.lf-read #chat .swipe_right, body.lf-read #chat .swipes-counter { opacity: .35; }
+
+
+/* ═════════════ 0.4: деньги, картинки, кат-сцены, фон, музыка ═════════════ */
+
+.lf-btn.small { padding: 7px 12px; font-size: 12.5px; min-height: 0; flex: none; }
+.lf-iconbtn.big { width: 46px; height: 46px; background: linear-gradient(155deg, #e07a8b, var(--lf-wine2)); color: #fff; box-shadow: 0 6px 16px rgba(217, 104, 123, .3); }
+.lf-iconbtn.big .lf-i { width: 20px; height: 20px; stroke-width: 1.8; }
+.lf-iconbtn[disabled] { opacity: .35; }
+
+/* деньги */
+.lf-bank { position: relative; margin: 12px 0 4px; padding: 18px 18px 16px; border-radius: 22px; overflow: hidden; background: radial-gradient(120% 120% at 100% 0%, rgba(150, 64, 79, .55), transparent 55%), linear-gradient(150deg, #2c1e23, #171214); border: 1px solid rgba(234, 179, 188, .2); box-shadow: 0 14px 34px rgba(0, 0, 0, .35); }
+.lf-bank::after { content: ''; position: absolute; right: -40px; bottom: -60px; width: 180px; height: 180px; border-radius: 50%; border: 1px solid rgba(234, 179, 188, .12); box-shadow: 0 0 0 26px rgba(234, 179, 188, .04); }
+.lf-bank-k { display: block; padding-right: 118px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--lf-rose2); }
+.lf-bank-sum { display: block; margin: 6px 0 10px; font-family: var(--lf-serif); font-weight: 500; font-size: 40px; line-height: 1; color: #fff; }
+.lf-bank.neg .lf-bank-sum { color: #ff8a98; }
+.lf-bank-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--lf-text2); }
+.lf-bank-row span { display: inline-flex; align-items: center; gap: 5px; }
+.lf-bank-row .lf-i { width: 14px; height: 14px; }
+.lf-bank .lf-glass { position: absolute; top: 14px; right: 14px; z-index: 2; }
+.lf-bills { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.lf-bill { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--lf-card); border: 1px solid var(--lf-line); }
+.lf-bill-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(123, 45, 61, .32); color: var(--lf-rose2); }
+.lf-bill-ic .lf-i { width: 19px; height: 19px; }
+.lf-bill-t { flex: 1; min-width: 0; }
+.lf-bill-t b { display: block; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-bill-t small { display: block; margin-top: 2px; font-size: 12px; color: var(--lf-dim); }
+.lf-bill-s { flex: none; font-family: var(--lf-serif); font-size: 15px; color: var(--lf-text); }
+.lf-bill.paid { opacity: .55; }
+.lf-bill.paid .lf-bill-t small { color: #9ccf9a; }
+.lf-bill.due { border-color: rgba(224, 169, 94, .5); }
+.lf-bill.due .lf-bill-t small { color: #e8b56c; }
+.lf-bill.overdue { border-color: rgba(255, 107, 121, .55); background: linear-gradient(90deg, rgba(94, 31, 44, .4), var(--lf-card)); }
+.lf-bill.overdue .lf-bill-t small { color: #ff8a98; }
+.lf-tx { display: flex; flex-direction: column; }
+.lf-tx-r { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--lf-line); }
+.lf-tx-t { flex: 1; min-width: 0; }
+.lf-tx-t b { display: block; font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-tx-t small { font-size: 11px; color: var(--lf-dim); }
+.lf-tx-s { flex: none; font-variant-numeric: tabular-nums; font-size: 14px; color: var(--lf-text); }
+.lf-tx-s.plus { color: #9ccf9a; }
+
+/* полоска кадров, галерея, кат-сцены */
+.lf-strip { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -18px 6px; padding: 2px 18px 6px; scroll-snap-type: x proximity; }
+.lf-strip::-webkit-scrollbar { display: none; }
+.lf-strip-i { position: relative; flex: none; width: 128px; height: 90px; border-radius: 14px; border: 1px solid var(--lf-line); background: #241b1e center/cover; cursor: pointer; scroll-snap-align: start; transition: transform .16s var(--lf-ease); }
+.lf-strip-i:active { transform: scale(.95); }
+.lf-strip-i small { position: absolute; left: 8px; bottom: 6px; font-size: 11px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+.lf-variants { display: flex; gap: 8px; margin: 0 0 10px; }
+.lf-variants .lf-strip-i { flex: 1; width: auto; height: 74px; }
+.lf-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 0 -10px 12px; }
+.lf-gal { aspect-ratio: 3 / 4; border: 0; border-radius: 10px; background: #241b1e center/cover; cursor: pointer; transition: transform .16s var(--lf-ease), filter .2s; }
+.lf-gal:active { transform: scale(.96); filter: brightness(1.15); }
+.lf-cuttile { position: relative; flex: none; width: 150px; height: 92px; padding: 0; border: 1px solid rgba(234, 179, 188, .3); border-radius: 14px; overflow: hidden; background: #1a1315; cursor: pointer; text-align: left; scroll-snap-align: start; }
+.lf-cuttile-img { position: absolute; inset: 0; background: center/cover; filter: brightness(.7); }
+.lf-cuttile-play { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px; margin: -24px 0 0 -17px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .9); color: #2a1a1e; }
+.lf-cuttile-play .lf-i { width: 16px; height: 16px; margin-left: 2px; }
+.lf-cuttile small { position: absolute; left: 9px; right: 9px; bottom: 7px; font-family: var(--lf-serif); font-size: 13px; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-progress { margin: 6px 0 10px; padding: 12px 14px; border-radius: 16px; background: var(--lf-card); border: 1px solid var(--lf-line); font-size: 13px; }
+.lf-progress span { display: flex; align-items: center; gap: 8px; color: var(--lf-text2); }
+.lf-progress i { display: block; height: 6px; margin-top: 9px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.lf-progress b { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--lf-wine2), var(--lf-rose)); transition: width .6s var(--lf-ease); animation: lf-shimmer 1.6s linear infinite; background-size: 200% 100%; }
+
+/* музыка */
+.lf-music { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 8px 8px 8px 14px; border-radius: 18px; background: var(--lf-card); border: 1px solid var(--lf-line); }
+.lf-music select { flex: 1; min-width: 0; background: none; border: 0; color: var(--lf-text); font: 15px var(--lf-serif); -webkit-appearance: none; appearance: none; }
+.lf-eq { display: flex; align-items: flex-end; gap: 2px; height: 18px; opacity: .35; }
+.lf-eq i { width: 3px; height: 30%; border-radius: 2px; background: var(--lf-rose); }
+.lf-music.on .lf-eq { opacity: 1; }
+.lf-music.on .lf-eq i { animation: lf-eq 1s ease-in-out infinite alternate; }
+.lf-music.on .lf-eq i:nth-child(2) { animation-delay: .2s; } .lf-music.on .lf-eq i:nth-child(3) { animation-delay: .45s; } .lf-music.on .lf-eq i:nth-child(4) { animation-delay: .1s; } .lf-music.on .lf-eq i:nth-child(5) { animation-delay: .3s; }
+@keyframes lf-eq { from { height: 20%; } to { height: 100%; } }
+
+/* карточка кат-сцены в чате */
+.mes .lf-cutcards { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px; }
+.mes .lf-cutcard { position: relative; display: block; max-width: 460px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(234, 179, 188, .28); background: #120d0f; cursor: pointer; box-shadow: 0 10px 26px rgba(0, 0, 0, .4); animation: lf-rise .45s cubic-bezier(.2, .8, .2, 1) both; }
+.mes .lf-cutcard-strip { display: flex; height: 112px; }
+.mes .lf-cutcard-strip i { flex: 1; background: center/cover; filter: brightness(.82); }
+.mes .lf-cutcard-strip i + i { border-left: 2px solid #120d0f; }
+.mes .lf-cutcard-t { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 26px 14px 10px; background: linear-gradient(180deg, transparent, rgba(10, 7, 8, .92)); font-family: 'Playfair Display', Georgia, serif; color: #fff; }
+.mes .lf-cutcard-t .lf-i { flex: none; width: 30px; height: 30px; padding: 7px 6px 7px 8px; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #2a1a1e; }
+.mes .lf-cutcard-t b { font-weight: 500; font-size: 16px; }
+.mes .lf-cutcard-t small { margin-left: auto; font-family: -apple-system, system-ui, sans-serif; font-size: 11px; color: rgba(255, 255, 255, .65); }
+
+/* плеер кат-сцены */
+#lf-cut { position: fixed; inset: 0; z-index: 2147483100; width: 100vw; height: 100vh; height: 100dvh; background: #000; opacity: 0; transition: opacity .5s ease; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+#lf-cut.on { opacity: 1; }
+.lf-cut-stage { position: absolute; inset: 0; }
+.lf-cut-f { position: absolute; inset: 0; background-size: 0 0; opacity: 0; transition: opacity 1.4s ease; transform-origin: 50% 50%; }
+/* на вертикальном экране кадр целиком, а под ним он же, размытый */
+.lf-cut-f > i { position: absolute; inset: 0; background: inherit; background-size: cover; background-position: center; }
+.lf-cut-f > i.bl { display: none; }
+@media (orientation: portrait) {
+    .lf-cut-f > i.bl { display: block; inset: -12%; filter: blur(30px) brightness(.36) saturate(1.2); }
+    .lf-cut-f > i.im { background-size: 100% auto; background-repeat: no-repeat; }
+    .lf-cut-cap { top: calc(50% + 28.2vw + 20px); bottom: auto; }
+}
+
+.lf-cut-f.on { opacity: 1; animation: lf-kb0 9s ease-out both; }
+.lf-cut-f.k1.on { animation-name: lf-kb1; } .lf-cut-f.k2.on { animation-name: lf-kb2; } .lf-cut-f.k3.on { animation-name: lf-kb3; }
+@keyframes lf-kb0 { from { transform: scale(1.12) translate(2%, 1%); } to { transform: scale(1.02) translate(0, 0); } }
+@keyframes lf-kb1 { from { transform: scale(1.02) translate(-1%, 0); } to { transform: scale(1.14) translate(1.5%, -1%); } }
+@keyframes lf-kb2 { from { transform: scale(1.15) translate(-2%, -1%); } to { transform: scale(1.04) translate(1%, 1%); } }
+@keyframes lf-kb3 { from { transform: scale(1.04) translate(1%, 2%); } to { transform: scale(1.13) translate(-1%, -1%); } }
+.lf-cut-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; z-index: 2; transition: transform .9s cubic-bezier(.2, .8, .2, 1); }
+.lf-cut-bar.top { top: 0; transform: translateY(-100%); } .lf-cut-bar.bot { bottom: 0; transform: translateY(100%); }
+#lf-cut.on .lf-cut-bar { transform: none; }
+.lf-cut-cap { position: absolute; left: 7%; right: 7%; bottom: calc(11vh + 18px); z-index: 3; text-align: center; color: #fff; opacity: 0; transform: translateY(8px); transition: opacity .9s ease, transform .9s ease; text-shadow: 0 2px 14px rgba(0, 0, 0, .95), 0 0 2px rgba(0, 0, 0, .9); }
+.lf-cut-cap.on { opacity: 1; transform: none; }
+.lf-cut-cap small { display: block; margin-bottom: 6px; font: 11px -apple-system, system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; color: rgba(234, 179, 188, .9); }
+.lf-cut-cap span { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: clamp(17px, 4.6vw, 26px); line-height: 1.35; }
+.lf-cut-dots { position: absolute; left: 0; right: 0; bottom: calc(11vh - 22px); z-index: 4; display: flex; justify-content: center; gap: 6px; }
+.lf-cut-dots b { width: 22px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .25); transition: background .4s; }
+.lf-cut-dots b.on { background: rgba(255, 255, 255, .85); }
+.lf-cut-x { position: absolute; top: calc(env(safe-area-inset-top) + 14px); right: 14px; z-index: 5; width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(255, 255, 255, .14); color: #fff; }
+.lf-cut-x .lf-i { width: 18px; height: 18px; }
+
+/* просмотр картинки */
+#lf-lightbox { position: fixed; inset: 0; z-index: 2147483050; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: rgba(6, 4, 5, .94); opacity: 0; transition: opacity .25s; }
+#lf-lightbox.on { opacity: 1; }
+#lf-lightbox img { max-width: 100vw; max-height: 82vh; object-fit: contain; border-radius: 6px; }
+.lf-lb-bar { display: flex; align-items: center; gap: 10px; width: min(100%, 520px); padding: 12px 16px; color: #d6cac5; font-size: 13px; }
+.lf-lb-bar span { flex: 1; }
+.lf-lb-bar button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .08); color: #fff; font: 13px -apple-system, system-ui, sans-serif; }
+.lf-lb-bar .lf-i { width: 15px; height: 15px; }
+
+/* фон сцены за чатом */
+#lf-bg { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: -1; opacity: 0; transition: opacity 1.5s ease; pointer-events: none; }
+#lf-bg.on { opacity: 1; }
+#lf-bg i { position: absolute; inset: -2%; background: center/cover no-repeat; opacity: 0; transition: opacity 2.6s ease; filter: brightness(.5) saturate(.82); }
+#lf-bg i.show { opacity: 1; }
+body.lf-theme.lf-bg-flat #lf-bg i { filter: brightness(.3) saturate(.6); }
+
+/* пульт: деньги в шапке */
+.cc-money { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(234, 179, 188, .3); background: rgba(123, 45, 61, .32); color: #fff; font: 600 13px var(--lf-sans); cursor: pointer; }
+.cc-money .lf-i { width: 15px; height: 15px; color: var(--lf-rose2); }
+
+/* крупные аватарки в чате */
+body.lf-ava-big #chat { --avatar-base-width: 64px; --avatar-base-height: 96px; --avatar-base-border-radius-round: 14px; }
+body.lf-ava-huge #chat { --avatar-base-width: 88px; --avatar-base-height: 132px; --avatar-base-border-radius-round: 16px; }
+body.lf-ava-big #chat .mes .avatar img, body.lf-ava-huge #chat .mes .avatar img { border: 0; box-shadow: 0 0 0 1.5px rgba(217, 104, 123, .45), 0 8px 20px rgba(0, 0, 0, .45); }
+@media (min-width: 900px) {
+    body.lf-ava-big #chat { --avatar-base-width: 84px; --avatar-base-height: 126px; }
+    body.lf-ava-huge #chat { --avatar-base-width: 120px; --avatar-base-height: 180px; }
+}

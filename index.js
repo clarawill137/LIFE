@@ -5,10 +5,12 @@
 
 import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icons.js';
 import { initControl, applyTheme, openCC } from './control.js';
+import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
+import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { chronSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -27,6 +29,9 @@ const DEFAULTS = {
     pairs: {},
     autoMaps: 'ask',
     chron: { on: true, profile: '', effort: 'low', tokens: 2000, timeoutSec: 75, titles: true, relations: true, secrets: true },
+    money: { autopay: true },
+    music: { tracks: [], auto: true, vol: 0.6 },
+    sceneBg: true,
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -38,6 +43,8 @@ function settings() {
     const s = ext[MODULE];
     for (const [k, v] of Object.entries(DEFAULTS)) if (s[k] === undefined) s[k] = clone(v);
     for (const [k, v] of Object.entries(DEFAULTS.chron)) if (s.chron[k] === undefined) s.chron[k] = v;
+    for (const [k, v] of Object.entries(DEFAULTS.money)) if (s.money[k] === undefined) s.money[k] = v;
+    for (const [k, v] of Object.entries(DEFAULTS.music)) if (s.music[k] === undefined) s.music[k] = clone(v);
     if (!s.migr02) migrate01(s);
     if (!s.migr03) { s.chatMarks = 'off'; delete s.dividers; delete s.focusDefault; s.migr03 = true; }
     if (!Array.isArray(s.regions)) s.regions = [];
@@ -896,7 +903,7 @@ function lastChron(from = chatArr().length - 1, to = 0) {
 
 const ui = {
     open: false, tab: 'scene', focus: 'last', who: '', pTab: 'items', itemsTab: 'with', item: '', worldTab: 'events',
-    mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '', wset: '',
+    mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '', wset: '', galShow: 48,
 };
 let observer = null;
 let decorating = false;
@@ -913,7 +920,15 @@ function firstShownId(chatEl) {
     return first ? Number(first.getAttribute('mesid')) : Infinity;
 }
 
-function chapterCover(ch) { return (chatMeta().frames || {})[ch.start] || placeCover(ch.loc); }
+const imgs = () => chatImages(chatArr());
+function chapterCover(ch) { return (chatMeta().frames || {})[ch.start] || placeCover(ch.loc) || (ch.start != null ? imagesBetween(imgs(), ch.start, ch.end ?? ch.start)[0]?.src || '' : ''); }
+/** Все имена, под которыми человек может стоять в промпте картинки. */
+function nameKeys(n) { const c = canonName(n); return [n, c, ...(aliasTable()[c] || [])].filter(Boolean); }
+const cuts = () => (Array.isArray(chatMeta().cuts) ? chatMeta().cuts : []);
+function cutTile(c) {
+    const f = (c.frames || []).find(x => x.img);
+    return `<button class="lf-cuttile" data-act="cut-play" data-id="${esc(c.id)}">${f ? `<span class="lf-cuttile-img" style="background-image:url('${esc(f.img)}')"></span>` : '<span class="lf-cuttile-img"></span>'}<span class="lf-cuttile-play">${icon('play')}</span><small>${esc(cut(c.title || 'Кат-сцена', 26))}</small></button>`;
+}
 
 function thinHtml(ch) {
     const where = ch.loc ? placeName(locTop(ch.loc)) : '';
@@ -928,11 +943,25 @@ function chipsHtml(i) {
     return `<div class="lf-pchips" data-mes="${i}" role="button">${icon('spark')}<span>${e.chips.map(esc).join(' <i>·</i> ')}</span></div>`;
 }
 
+function cutCardHtml(i) {
+    const cs = cuts().filter(c => c.mes === i && c.frames?.some(f => f.img));
+    if (!cs.length) return '';
+    return cs.map(c => `<div class="lf-cutcard" data-cut="${esc(c.id)}" role="button">
+        <span class="lf-cutcard-strip">${c.frames.filter(f => f.img).map(f => `<i style="background-image:url('${esc(f.img)}')"></i>`).join('')}</span>
+        <span class="lf-cutcard-t">${icon('play')}<b>${esc(c.title || 'Кат-сцена')}</b><small>кат-сцена · ${c.frames.length} ${plural(c.frames.length, 'кадр', 'кадра', 'кадров')}</small></span>
+    </div>`).join('');
+}
+
 function paintChips() {
     const chatEl = document.getElementById('chat');
     if (!chatEl || !settings().enabled) return;
     chatEl.querySelectorAll(':scope > .mes[mesid]').forEach(el => {
         const id = Number(el.getAttribute('mesid'));
+        const host0 = el.querySelector('.mes_block') || el;
+        const oldCut = host0.querySelector(':scope > .lf-cutcards');
+        const cutHtml = cutCardHtml(id);
+        if (!cutHtml) oldCut?.remove();
+        else if (!oldCut || oldCut.dataset.sig !== String(cutHtml.length)) { oldCut?.remove(); host0.insertAdjacentHTML('beforeend', `<div class="lf-cutcards" data-sig="${cutHtml.length}">${cutHtml}</div>`); }
         const old = el.querySelector('.lf-pchips');
         const html = chipsHtml(id);
         if (!html) { old?.remove(); return; }
@@ -994,10 +1023,11 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
-    const b = ev.target.closest('.lf-thin, .lf-pchips');
+    const b = ev.target.closest('.lf-thin, .lf-pchips, .lf-cutcard');
     if (!b) return;
     ev.preventDefault();
     ev.stopPropagation();
+    if (b.classList.contains('lf-cutcard')) { const c = cuts().find(x => x.id === b.dataset.cut); if (c) playCut(c, { music: cutMusic(c) }); return; }
     if (b.classList.contains('lf-pchips')) { if (!b.classList.contains('busy')) { openHub('world'); chronSheet(Number(b.dataset.mes)); } return; }
     ui.focus = Number(b.dataset.start);
     openHub('scene');
@@ -1194,6 +1224,11 @@ function renderScene() {
         const mood = moodOf(n, st);
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
+    ${(() => {
+        const ci = imagesBetween(imgs(), fch.start, fch.end).slice(-14).reverse();
+        const cc = cuts().filter(c => c.mes >= fch.start && c.mes <= fch.end).reverse();
+        return ci.length || cc.length ? `${sec('Кадры главы', String(ci.length + cc.length))}<div class="lf-strip">${cc.map(cutTile).join('')}${ci.map(x => `<button class="lf-strip-i" data-act="lightbox" data-src="${esc(x.src)}" data-mes="${x.mes}" style="background-image:url('${esc(x.src)}')"></button>`).join('')}</div>` : '';
+    })()}
     <div class="lf-actions">
         <button class="lf-btn primary serif" data-act="read" data-start="${fch.start}">${isCur ? 'Вернуться в сцену' : 'Читать главу'}</button>
         <button class="lf-btn" data-act="new-chapter">${icon('feather')} Новая глава</button>
@@ -1364,8 +1399,10 @@ function renderPerson() {
     const who = ui.who;
     if (!who) return `<div class="lf-empty">${icon('users', 'xl')}В этом чате пока никого.</div>`;
     const people = `<div class="lf-people">${names.map(n => `<button class="lf-pers${sameName(n, who) ? ' on' : ''}" data-act="who" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span></button>`).join('')}</div>`;
-    const tabs = seg([['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Отношения']], ui.pTab, 'p-tab');
-    const body = ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : renderItems(who, st);
+    const me = sameName(who, ctx().name1);
+    if (ui.pTab === 'money' && !me) ui.pTab = 'wardrobe';
+    const tabs = seg([['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', me ? 'Связи' : 'Отношения'], ...(me ? [['money', 'Деньги']] : [])], ui.pTab, 'p-tab');
+    const body = ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -1501,7 +1538,7 @@ function renderRelations(who, st) {
     const other = ui.pair;
     if (!other) return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
     const p = pairs[pairKey(who, other)] || { trust: 50, closeness: 50, tension: 25, moments: [] };
-    const pairImg = settings().pairs[pairKey(who, other)];
+    const pairImg = settings().pairs[pairKey(who, other)] || imagesWith(imgs(), [nameKeys(who), nameKeys(other)]).slice(-1)[0]?.src || '';
     const hrel = horaeRelationships().filter(r => (sameName(r.from, who) && sameName(r.to, other)) || (sameName(r.from, other) && sameName(r.to, who)));
     const secrets = secretsState().filter(x => x.knows.some(k => sameName(k, who) || sameName(k, other)));
     const events = horaeEvents().filter(e => { const t = norm(e.event?.summary); return [who, other].every(n => [canonName(n), ...(aliasTable()[canonName(n)] || [])].some(a => t.includes(norm(a).split(' ')[0]))); }).slice(-20).reverse();
@@ -1538,6 +1575,58 @@ function renderRelations(who, st) {
     ${body}`;
 }
 
+// ───── Деньги (банк Телефона) ─────
+
+function renderMoney() {
+    const v = moneyView();
+    if (!v) {
+        const stt = bankState();
+        if (stt === 'wait') bank().then(() => { if (ui.open && ui.pTab === 'money') render(); });
+        return `<div class="lf-empty small">${icon('smartphone', 'xl')}Банк живёт в Телефоне (Phone-ST). ${stt === 'none' ? 'Телефон не найден — без него денег нет.' : 'Ищу его…'}</div>`;
+    }
+    const s = settings();
+    const billIc = (c) => /аренд|кварт|жиль/i.test(c) ? 'home' : /свет|газ|вод|коммун|счета/i.test(c) ? 'zap' : /связ|телефон|интернет/i.test(c) ? 'smartphone' : /подпис/i.test(c) ? 'music' : /машин|авто|страх/i.test(c) ? 'car' : 'calendar';
+    const stTxt = (b) => b.state === 'paid' ? 'оплачено' : b.state === 'overdue' ? 'просрочено' : b.state === 'due' ? 'пора платить' : b.left != null ? `через ${b.left} ${plural(b.left, 'день', 'дня', 'дней')}` : `${b.day}-го`;
+    return `<section class="lf-bank${v.balance < 0 ? ' neg' : ''}">
+        <span class="lf-bank-k">Счёт ${esc(shortName(canonName(ctx().name1)))}${v.date ? ` · на ${esc(v.date)}` : ''}</span>
+        <b class="lf-bank-sum">${esc(v.balanceText)}</b>
+        <div class="lf-bank-row"><span>${icon('plus')} ${esc(v.income)}</span><span>${icon('activity')} ${esc(v.expense)}</span>${v.debt ? `<span>${icon('lock')} долг ${esc(v.debt)}</span>` : ''}</div>
+        <button class="lf-glass" data-act="money-phone">${icon('smartphone')} В телефоне</button>
+    </section>
+    ${sec('Обязательные платежи', v.bills.length ? `${esc(v.monthly)} в месяц` : '')}
+    ${v.bills.length ? `<div class="lf-bills">${v.bills.map(b => `<div class="lf-bill ${b.state}">
+        <span class="lf-bill-ic">${icon(billIc(`${b.category} ${b.name}`))}</span>
+        <span class="lf-bill-t"><b>${esc(b.name)}</b><small>${b.day}-го числа · ${stTxt(b)}</small></span>
+        <span class="lf-bill-s">${esc(b.sum)}</span>
+        ${b.state === 'due' || b.state === 'overdue' ? `<button class="lf-btn small primary" data-act="bill-pay" data-id="${esc(b.id)}">Оплатить</button>` : `<button class="lf-iconbtn" data-act="bill-del" data-id="${esc(b.id)}" title="Убрать">${icon('x')}</button>`}
+    </div>`).join('')}</div>` : '<div class="lf-empty small">Счетов пока нет: аренда, свет, связь, страховка — добавь, и они будут списываться сами.</div>'}
+    <button class="lf-btn full" data-act="bill-add">${icon('plus')} Добавить платёж</button>
+    ${v.loans.length ? `${sec('Кредиты')}<div class="lf-bills">${v.loans.map(l => `<div class="lf-bill ${l.state}"><span class="lf-bill-ic">${icon('lock')}</span><span class="lf-bill-t"><b>${esc(l.name)}</b><small>осталось ${esc(l.remaining)} · ${esc(l.monthly)} ${l.day}-го</small></span>${l.state === 'due' || l.state === 'overdue' ? `<button class="lf-btn small primary" data-act="loan-pay" data-id="${esc(l.id)}">Платёж</button>` : `<span class="lf-bill-s">${l.state === 'paid' ? 'оплачено' : ''}</span>`}</div>`).join('')}</div>` : ''}
+    <label class="lf-switch"><input type="checkbox" data-set="money.autopay" ${s.money.autopay ? 'checked' : ''}><span></span>Списывать сами в день оплаты ${v.hasDate ? '' : '<small>(нет даты истории — ждём её)</small>'}</label>
+    ${sec('Операции')}
+    ${v.tx.length ? `<div class="lf-tx">${v.tx.map(t => `<div class="lf-tx-r"><span class="lf-tx-t"><b>${esc(t.label)}</b><small>${esc(t.category)}</small></span><span class="lf-tx-s${t.plus ? ' plus' : ''}">${esc(t.sum)}</span></div>`).join('')}</div>` : '<div class="lf-empty small">Операций пока нет. Траты из истории приходят сюда сами, когда модель отмечает их для телефона.</div>'}`;
+}
+
+function billSheet() {
+    openSheet(`${icon('calendar')} Обязательный платёж`, `
+        <div class="lf-field"><label>Что</label><div class="lf-chips wrap">${['Аренда', 'Коммуналка', 'Связь и интернет', 'Страховка машины', 'Подписки', 'Спортзал'].map(t => `<button class="lf-chip" data-act="fill-bill" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+            <input type="text" data-in="bname" placeholder="например: Аренда квартиры"></div>
+        <div class="lf-field"><label>Сумма</label><input type="number" inputmode="decimal" data-in="bsum" placeholder="1200"></div>
+        <div class="lf-field"><label>Какого числа</label><input type="number" inputmode="numeric" min="1" max="31" data-in="bday" value="1"></div>
+        <button class="lf-btn primary serif full big" data-act="bill-save">${icon('check')} Добавить</button>
+        <div class="lf-hint">Платёж живёт в банке Телефона. В этот день по дате истории он спишется сам (выключается во вкладке Деньги).</div>`);
+}
+
+async function runAutopay() {
+    if (!settings().money.autopay || !settings().enabled || !hasChat()) return;
+    if (!(await bank())) return;
+    const paid = autopay();
+    if (paid.length) {
+        toast('info', paid.map(p => `${esc(p.name)} ${esc(p.sum)}`).join('<br>'), '✦ Списано по счетам', { timeOut: 6000 });
+        if (ui.open) renderSoon();
+    }
+}
+
 // ───── Мир ─────
 
 function renderWorld() {
@@ -1547,9 +1636,10 @@ function renderWorld() {
     if (tab === 'events') {
         const ev = horaeEvents().slice(-60).reverse();
         const lc = lastChron();
+        const fsImg = lc ? (imageNear(imgs(), lc.i)?.src || chapterCover(chapterOf(lc.i) || {})) : '';
         body = `${ev.length ? `<div class="lf-events">${ev.map(e => {
             const ch = chapterOf(e.messageIndex);
-            const cover = ch ? chapterCover(ch) : '';
+            const cover = imageNear(imgs(), e.messageIndex)?.src || (ch ? chapterCover(ch) : '');
             return `<button class="lf-ev" data-act="jump" data-mes="${e.messageIndex}">
                 <span class="lf-ev-dot"></span>
                 <span class="lf-ev-img"${cover ? ` style="background-image:url('${esc(cover)}')"` : ''}></span>
@@ -1558,10 +1648,19 @@ function renderWorld() {
             </button>`;
         }).join('')}</div>` : `<div class="lf-empty small">Horae ещё не записал событий.</div>`}
         ${lc ? `<section class="lf-fromscene">
-            <div class="lf-fs-img"${chapterCover(chapterOf(lc.i) || {}) ? ` style="background-image:url('${esc(chapterCover(chapterOf(lc.i)))}')"` : ''}></div>
+            <div class="lf-fs-img"${fsImg ? ` style="background-image:url('${esc(fsImg)}')"` : ''}></div>
             <div class="lf-fs-body"><span class="lf-badge">Из сцены:</span><h3>${esc(lc.e.chips[0])}</h3>${lc.e.chips.length > 1 ? `<small>${esc(lc.e.chips.slice(1).join(' · '))}</small>` : ''}
             <div class="lf-actions tight"><button class="lf-btn primary" data-act="chron-ok" data-mes="${lc.i}">${icon('check')} Подтвердить</button><button class="lf-btn" data-act="chron" data-mes="${lc.i}">${icon('pencil')} Изменить</button></div></div>
         </section>` : ''}`;
+    } else if (tab === 'gallery') {
+        const list = imgs().slice().reverse();
+        const cs = cuts().slice().reverse();
+        const shown = list.slice(0, ui.galShow);
+        body = `${cs.length ? `${sec('Кат-сцены', String(cs.length))}<div class="lf-strip">${cs.map(cutTile).join('')}</div>` : ''}
+        ${sec('Кадры из чата', list.length ? String(list.length) : '')}
+        ${list.length ? `<div class="lf-gallery">${shown.map(x => `<button class="lf-gal" data-act="lightbox" data-src="${esc(x.src)}" data-mes="${x.mes}" style="background-image:url('${esc(x.src)}')"></button>`).join('')}</div>
+            ${list.length > shown.length ? `<button class="lf-btn ghost full" data-act="gal-more">Ещё ${Math.min(48, list.length - shown.length)}</button>` : ''}`
+            : '<div class="lf-empty small">В чате пока нет картинок. Как только SLAY что-нибудь нарисует, оно будет здесь.</div>'}`;
     } else if (tab === 'state') {
         const chat = chatArr();
         const rows = [];
@@ -1588,7 +1687,7 @@ function renderWorld() {
         <div class="lf-hint">Скачок времени — это новая глава со строчкой для модели. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['events', 'События'], ['state', 'Состояние'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg')}
+    ${seg([['events', 'События'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg')}
     ${body}`;
 }
 
@@ -1696,7 +1795,11 @@ function newChapterSheet({ note = '', title = '' } = {}) {
 
 function directorSheet() {
     const d = chatMeta().director || {};
+    const s = settings();
     const opt = (k, list) => `<div class="lf-chips wrap" data-dir="${k}">${list.map(v => `<button class="lf-chip${d[k] === v ? ' on' : ''}" data-act="dir-pick" data-k="${k}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+    const playing = Music.now();
+    const cs = cuts().slice(-6).reverse();
+    const busyCut = cutBusy ? `<div class="lf-progress"><span>${icon('image')} ${esc(cutBusy)}</span><i><b style="width:${Math.round((cutStep / 4) * 100)}%"></b></i></div>` : '';
     openSheet(`${icon('scene')} Режиссёр сцены`, `
         <div class="lf-field"><label>${icon('moon')} Время</label>${opt('time', ['Утро', 'День', 'Вечер', 'Ночь', 'Рассвет'])}</div>
         <div class="lf-field"><label>${icon('rain')} Погода</label>${opt('weather', ['Ясно', 'Дождь', 'Снег', 'Туман', 'Гроза', 'Метель'])}</div>
@@ -1704,7 +1807,130 @@ function directorSheet() {
         <div class="lf-field"><label>Своими словами <small>(необязательно)</small></label><input type="text" data-in="dir-text" value="${esc(d.free || '')}" placeholder="например: за окном впервые за зиму пошёл снег"></div>
         <button class="lf-btn primary serif full big" data-act="dir-go">${icon('sparkles')} Задать для следующего ответа</button>
         ${d.once ? `<button class="lf-btn ghost full" data-act="dir-clear">Снять: «${esc(cut(d.text, 60))}»</button>` : ''}
-        <div class="lf-hint">Уходит модели одной строкой и только на следующий ответ, потом сбрасывается. Кадры и музыка — в следующем обновлении.</div>`);
+        ${sec(`${icon('music')} Музыка`, playing ? esc(playing.name) : '')}
+        <div class="lf-music${playing ? ' on' : ''}">
+            <select data-in="mus">${s.music.tracks.length ? s.music.tracks.map(t => `<option value="${esc(t.id)}" ${playing?.id === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('') : '<option value="">— треков нет, загрузи свой —</option>'}</select>
+            <span class="lf-eq"><i></i><i></i><i></i><i></i><i></i></span>
+            <button class="lf-iconbtn big" data-act="mus-play" ${s.music.tracks.length ? '' : 'disabled'}>${icon(playing ? 'pause' : 'play')}</button>
+        </div>
+        <div class="lf-actions tight">
+            <label class="lf-btn">${icon('upload')} Добавить трек<input type="file" accept="audio/*" data-file="track" hidden></label>
+            ${playing ? `<button class="lf-btn" data-act="mus-del" data-id="${esc(playing.id)}">${icon('trash')} Убрать этот</button>` : ''}
+        </div>
+        <label class="lf-switch"><input type="checkbox" data-set="music.auto" ${s.music.auto ? 'checked' : ''}><span></span>Месту — свой трек <small>(задаётся в меню места, играет, если музыка уже включена)</small></label>
+        ${sec(`${icon('image')} Кат-сцена`, 'ключевые кадры в стиле истории')}
+        ${cs.length ? `<div class="lf-strip">${cs.map(cutTile).join('')}</div>` : ''}
+        ${busyCut || `<button class="lf-btn primary serif full big" data-act="cut-make">${icon('sparkles')} Снять по последнему посту</button>`}
+        <div class="lf-hint">Три кадра через SLAY: общий план и два крупных — по последнему посту. Модель кат-сцену не видит, она только для тебя. Играет на весь экран с музыкой.</div>
+        ${cs.length ? `<div class="lf-actions tight">${cs.slice(0, 3).map(c => `<button class="lf-btn small ghost" data-act="cut-del" data-id="${esc(c.id)}">${icon('trash')} ${esc(cut(c.title || 'кат-сцена', 18))}</button>`).join('')}</div>` : ''}`);
+}
+
+// ───── кат-сцены ─────
+
+let cutBusy = '';
+let cutStep = 0;
+const CUT_SYSTEM = `You are a film director's storyboard assistant. From one roleplay post you pick 3 key frames for a short cutscene and write image prompts.
+Return ONLY JSON: {"title":"short Russian title of the moment, 2-4 words","frames":[{"title":"Общий план","who":["exact names in frame"],"caption":"one short Russian line from or about the post, max 90 chars","prompt":"English image prompt, 45-70 words: shot type and angle, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), pose, expression, clothing, setting, light, mood; cinematic film still"}]}
+Frame 1 is a wide establishing shot of the place and the people. Frames 2 and 3 are close-ups or medium shots of the two most important reactions or gestures. Follow the post exactly: same place, time of day, weather, clothes. Never explicit.`;
+
+async function makeCut(btn) {
+    if (cutBusy) return;
+    const i = lastAiIndex();
+    if (i < 0) { toast('info', 'Нет поста, по которому снимать'); return; }
+    const m = chatArr()[i];
+    const st = worldState();
+    const cast = castNames(st);
+    cutBusy = 'Раскадровка…'; cutStep = 0.4; directorSheet();
+    try {
+        const raw = await askModel([{ role: 'system', content: CUT_SYSTEM }, { role: 'user', content: `Place: ${st.scene?.location || '?'}. Time: ${st.timestamp?.story_time || '?'}, ${st.timestamp?.story_date || ''}. Weather: ${st.scene?.atmosphere || '?'}.\nPeople in the story: ${cast.join(', ')}.\nClothes now: ${Object.entries(st.costumes || {}).map(([k, v]) => `${k}: ${v}`).join('; ') || '?'}\n\nPOST by ${m.name}:\n${cut(plainText(m.mes), 4000)}` }], 1600);
+        const j = extractJson(raw);
+        const frames = (j?.frames || []).filter(f => f?.prompt).slice(0, 3);
+        if (!frames.length) throw new Error('раскадровка не вышла');
+        const cutObj = { id: uid(), mes: i, title: String(j.title || 'Кат-сцена').slice(0, 40), at: Date.now(), frames: [] };
+        for (let k = 0; k < frames.length; k++) {
+            cutBusy = `Кадр ${k + 1} из ${frames.length} · генерация…`; cutStep = k + 1; directorSheet();
+            const f = frames[k];
+            const who = (Array.isArray(f.who) ? f.who : []).map(canonName).filter(Boolean);
+            const refs = [];
+            for (const n of who.slice(0, 2)) { try { const r = await faceRef(n); if (r) refs.push(r); } catch { /* без лица */ } }
+            const img = await drawPicture(`${f.prompt}\nStyle: ${style()}. Cinematic 16:9 film still, shallow depth of field, no text, no letterbox.`, { aspect: '16:9', refs, prefix: 'life_cut', max: 1600 });
+            cutObj.frames.push({ title: String(f.title || '').slice(0, 30), caption: String(f.caption || '').slice(0, 120), img, prompt: f.prompt });
+        }
+        const cm = chatMeta();
+        cm.cuts = [...cuts(), cutObj].slice(-40);
+        saveMeta();
+        cutBusy = ''; cutStep = 0;
+        paintChips();
+        directorSheet();
+        playCut(cutObj, { music: cutMusic(cutObj) });
+    } catch (e) {
+        cutBusy = ''; cutStep = 0;
+        directorSheet();
+        toast('error', esc(e?.message || e), '✦ Кат-сцена');
+    }
+}
+
+function trackById(id) { return settings().music.tracks.find(t => t.id === id) || null; }
+/** Музыка для кат-сцены: что играет сейчас, иначе трек места, иначе первый загруженный. */
+function cutMusic(c) {
+    const s = settings();
+    if (!s.music.tracks.length) return null;
+    const now = Music.now();
+    if (now) return null;
+    const loc = c ? (chatArr()[c.mes]?.horae_meta?.scene?.location || worldState().scene?.location) : worldState().scene?.location;
+    const p = loc ? getPlace(loc) : null;
+    return trackById(p?.track) || s.music.tracks[0];
+}
+
+// ───── фон сцены ─────
+
+const VARIANT_LIGHT = {
+    evening: 'in the evening at golden hour turning to dusk: warm low sun, long shadows, first lamps switched on',
+    night: 'at night: dark sky, practical lights and lamps on, streetlight and neon glow through windows, deep shadows',
+};
+async function drawVariants(loc) {
+    const p = getPlace(loc, true);
+    const base = placeCover(loc);
+    if (!base) throw new Error('Сначала нужна картинка места');
+    const ref = await refData(base, 1280);
+    p.imgs = p.imgs || {};
+    for (const k of ['evening', 'night']) {
+        p.imgs[k] = await drawPicture(`The SAME place as in the reference image, same composition, same camera angle, same furniture and objects, ${VARIANT_LIGHT[k]}. ${placeLine(p)}. Style: ${style()}. No people, no text.`, { aspect: '16:9', refs: [ref], prefix: 'life_place' });
+        saveSettings();
+    }
+}
+
+/** Картинка места под нужное время суток (рассвет берёт вечер, день — основу). */
+function placeBg(loc, period) {
+    const parts = locParts(loc);
+    for (let n = parts.length; n > 0; n--) {
+        const p = getPlace(parts.slice(0, n).join('·'));
+        if (!p) continue;
+        const v = p.imgs || {};
+        const pick = period === 'night' ? v.night : period === 'evening' || period === 'dawn' ? v.evening : '';
+        if (pick) return pick;
+        if (p.img) return p.img;
+    }
+    return '';
+}
+
+let lastBgLoc = '';
+function updateSceneBg() {
+    const s = settings();
+    if (!s.enabled || !s.sceneBg || !hasChat()) { setSceneBg(''); return; }
+    const st = worldState();
+    const loc = st.scene?.location || '';
+    const period = periodOf(st.timestamp?.story_time);
+    const list = chapters();
+    const ch = list[list.length - 1];
+    const url = placeBg(loc, period) || (ch ? imagesBetween(imgs(), ch.start, ch.end).slice(-1)[0]?.src : '') || '';
+    setSceneBg(url);
+    // трек места: сменить, только если музыка уже играет (браузер не даст включить звук без тапа)
+    if (s.music.auto && loc && loc !== lastBgLoc && Music.now()) {
+        const t = trackById(getPlace(loc)?.track);
+        if (t) Music.play(t);
+    }
+    lastBgLoc = loc;
 }
 
 function placeMenu(loc) {
@@ -1720,6 +1946,10 @@ function placeMenu(loc) {
             <label class="lf-btn">${icon('upload')} Своя<input type="file" accept="image/*" data-file="place" data-loc="${esc(loc)}" hidden></label>
             ${p?.img ? `<button class="lf-btn icon" data-act="place-noimg" data-loc="${esc(loc)}">${icon('trash')}</button>` : ''}
         </div>
+        ${p?.img ? `<div class="lf-actions">
+            <button class="lf-btn" data-act="place-variants" data-loc="${esc(loc)}">${icon('moon')} ${p.imgs?.night ? 'Перерисовать вечер и ночь' : 'Вечер и ночь для фона'}</button>
+        </div>${p.imgs?.night ? `<div class="lf-variants">${['img', 'evening', 'night'].map(k => { const u = k === 'img' ? p.img : p.imgs?.[k]; return u ? `<button class="lf-strip-i" data-act="lightbox" data-src="${esc(u)}" style="background-image:url('${esc(u)}')"><small>${k === 'img' ? 'день' : k === 'evening' ? 'вечер' : 'ночь'}</small></button>` : ''; }).join('')}</div>` : ''}` : ''}
+        ${s.music.tracks.length ? `${sec('Музыка места')}<div class="lf-chips wrap">${s.music.tracks.map(t => `<button class="lf-chip${p?.track === t.id ? ' on' : ''}" data-act="place-track" data-id="${esc(t.id)}" data-loc="${esc(loc)}">${icon('music')} ${esc(t.name)}</button>`).join('')}</div>` : ''}
         ${sec('План внутри', `комнаты — «${esc(locTop(loc))}·Кухня»`)}
         <div class="lf-actions">
             <label class="lf-btn">${icon('upload')} ${p?.plan ? 'Сменить план' : 'Загрузить план'}<input type="file" accept="image/*" data-file="plan" data-key="${esc(key)}" hidden></label>
@@ -1935,7 +2165,7 @@ async function onClick(ev) {
         case 'sheet-close': closeSheet(); break;
         case 'tab': ui.tab = el.dataset.tab; ui.editPins = false; ui.atlas = false; closeSheet(); render(); break;
         case 'person': case 'who': ui.who = el.dataset.name; ui.tab = 'person'; ui.item = ''; ui.pair = ''; ui.wset = ''; render(); break;
-        case 'p-tab': ui.pTab = el.dataset.v; render(); break;
+        case 'p-tab': ui.pTab = el.dataset.v; if (ui.pTab === 'money') bank().then(() => { if (ui.open && ui.pTab === 'money') render(); }); render(); break;
         case 'items-tab': ui.itemsTab = el.dataset.v; ui.item = ''; render(); break;
         case 'world-tab': ui.worldTab = el.dataset.v; render(); break;
         case 'rel-tab': ui.relTab = el.dataset.v; render(); break;
@@ -1989,6 +2219,33 @@ async function onClick(ev) {
             break;
         }
         case 'director': directorSheet(); break;
+        case 'bill-add': billSheet(); break;
+        case 'fill-bill': { const i = box?.querySelector('[data-in="bname"]'); if (i) i.value = el.dataset.text; break; }
+        case 'bill-save': {
+            const name = val('[data-in="bname"]'), amount = Math.abs(Number(String(val('[data-in="bsum"]')).replace(',', '.')) || 0), day = Number(val('[data-in="bday"]')) || 1;
+            if (!name || !amount) { toast('info', 'Нужны название и сумма'); break; }
+            if (!(await bank())) { toast('warning', 'Телефон (Phone-ST) не найден'); break; }
+            addBill({ name, amount, day, category: name });
+            closeSheet(); render(); runAutopay();
+            break;
+        }
+        case 'bill-pay': if (payBill(el.dataset.id)) { toast('success', 'Оплачено', '✦ Деньги', { timeOut: 1500 }); render(); } break;
+        case 'loan-pay': if (payLoan(el.dataset.id)) { toast('success', 'Платёж внесён', '✦ Деньги', { timeOut: 1500 }); render(); } break;
+        case 'bill-del': if (confirm('Убрать этот платёж?')) { delBill(el.dataset.id); render(); } break;
+        case 'money-phone': closeHub(); setTimeout(async () => { try { (await import('/scripts/extensions/third-party/Phone-ST/ui.js')).openPhone(); } catch { document.getElementById('gp-fab')?.click(); } }, 340); break;
+        case 'lightbox': {
+            const mes = el.dataset.mes != null ? Number(el.dataset.mes) : null;
+            lightbox(el.dataset.src, mes != null ? `#${mes}` : '', mes != null ? async () => { closeHub(); await jumpTo(mes); } : null);
+            break;
+        }
+        case 'gal-more': ui.galShow += 48; render(); break;
+        case 'cut-play': { const c = cuts().find(x => x.id === el.dataset.id); if (c) playCut(c, { music: cutMusic(c) }); break; }
+        case 'cut-make': await makeCut(el); break;
+        case 'cut-del': if (confirm('Удалить кат-сцену?')) { chatMeta().cuts = cuts().filter(x => x.id !== el.dataset.id); saveMeta(); paintChips(); directorSheet(); } break;
+        case 'mus-play': { const t = trackById(el.dataset.id || box?.querySelector('[data-in="mus"]')?.value); if (t) { Music.toggle(t); setTimeout(() => directorSheet(), 60); } break; }
+        case 'mus-del': { const s2 = settings(); s2.music.tracks = s2.music.tracks.filter(t => t.id !== el.dataset.id); saveSettings(); directorSheet(); break; }
+        case 'place-track': { const p = getPlace(loc, true); p.track = el.dataset.id === p.track ? '' : el.dataset.id; saveSettings(); placeMenu(loc); break; }
+        case 'place-variants': await withBusy(el, async () => { await drawVariants(loc); closeSheet(); render(); updateSceneBg(); toast('success', 'Вечер и ночь готовы — фон сам сменится по времени'); }); break;
         case 'dir-pick': {
             const on = !el.classList.contains('on');
             el.parentElement.querySelectorAll('.lf-chip').forEach(x => x.classList.remove('on'));
@@ -2295,8 +2552,22 @@ async function onChange(ev) {
         saveSettings();
         if (k === 'showFab' || k === 'enabled') syncFab();
         if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
+        if (k === 'sceneBg' || k === 'enabled') updateSceneBg();
+        if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
+        return;
+    }
+    if (el.dataset.file === 'track' && el.files?.[0]) {
+        const file = el.files[0];
+        await withBusy(el.closest('label'), async () => {
+            const url = await uploadTrack(file);
+            const t = { id: uid(), name: cut(file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Трек', 40), url };
+            s.music.tracks.push(t);
+            saveSettings();
+            Music.play(t);
+            directorSheet();
+        }, 'Загружаю…');
         return;
     }
     if (el.dataset.file && el.files?.[0]) {
@@ -2410,7 +2681,7 @@ function renderSettingsDrawer() {
 function setEnabled(on) {
     const s = settings();
     s.enabled = !!on;
-    saveSettings(); syncFab(); invalidate(); decorate(); updateMovePrompt(); applyTheme();
+    saveSettings(); syncFab(); invalidate(); decorate(); updateMovePrompt(); applyTheme(); updateSceneBg();
     const cb = document.getElementById('lf_set_enabled');
     if (cb) cb.checked = s.enabled;
 }
@@ -2443,13 +2714,17 @@ window.addEventListener('error', (e) => {
 
 function onChatChanged() {
     ui.focus = 'last';
-    Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '' });
+    Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '', galShow: 48 });
+    resetImages();
     chronQueue.length = 0;
     invalidate();
     hookChat();
     decorateSoon(200);
     updateMovePrompt();
     if (ui.open) closeHub();
+    lastBgLoc = '';
+    setTimeout(updateSceneBg, 900);
+    setTimeout(runAutopay, 2500);
 }
 
 function lastAiIndex() {
@@ -2461,6 +2736,9 @@ function lastAiIndex() {
 const controlApi = {
     settings, saveSettings, esc, toast, worldState, chapters, focusChapter, chapterCover,
     weekday, weatherWord, placeName, locTop, openHub, directorSheet, newChapterSheet, version: VERSION,
+    balance: () => { const v = moneyView(); return v ? v.balanceText : ''; },
+    openMoney: () => { ui.who = canonName(ctx().name1); ui.pTab = 'money'; openHub('person'); },
+    sceneBg: (on) => { if (on !== undefined) { settings().sceneBg = !!on; saveSettings(); updateSceneBg(); } return settings().sceneBg; },
 };
 
 jQuery(async () => {
@@ -2481,6 +2759,7 @@ jQuery(async () => {
         if (type === 'impersonate') return;
         const i = Number(id);
         if (Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
+        setTimeout(() => { updateSceneBg(); runAutopay(); }, 2200);
     };
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
@@ -2494,5 +2773,7 @@ jQuery(async () => {
     if (E.APP_READY) eventSource.on(E.APP_READY, () => { addWandButton(); hookChat(); decorateSoon(); updateMovePrompt(); });
     decorateSoon(300);
     updateMovePrompt();
+    setTimeout(updateSceneBg, 1500);
+    bank().then(() => setTimeout(runAutopay, 3000));
     console.log(`[Life] загружен ${VERSION}`);
 });

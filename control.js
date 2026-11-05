@@ -9,7 +9,7 @@ let api = null;
 
 const CC_DEFAULTS = {
     on: true, side: 'left', top: 50, hideFabs: true, qrHidden: true,
-    theme: true, killMoonlit: true, bg: 'dim', read: false, fs: 17, lh: 1.7, width: 760,
+    theme: true, killMoonlit: true, bg: 'dim', read: false, fs: 17, lh: 1.7, width: 760, ava: 'big',
 };
 
 const AGENTS = [
@@ -64,6 +64,8 @@ export function applyTheme() {
     b.classList.toggle('lf-bg-dim', on && c.theme && c.bg === 'dim');
     b.classList.toggle('lf-bg-flat', on && c.theme && c.bg === 'flat');
     b.classList.toggle('lf-read', on && c.read);
+    b.classList.toggle('lf-ava-big', on && c.ava === 'big');
+    b.classList.toggle('lf-ava-huge', on && c.ava === 'huge');
     b.classList.toggle('lf-qr-hidden', on && c.on && c.qrHidden);
     b.classList.toggle('lf-hide-fabs', on && c.on && c.hideFabs);
     b.style.setProperty('--lf-read-fs', `${c.fs}px`);
@@ -281,6 +283,7 @@ function renderCC() {
     const { list: profs, selected } = profilesInfo();
     const qbs = quickButtons();
     const blocks = extBlocks();
+    const bal = api.balance?.() || '';
     const wand = wandItems();
     const fabs = c.hideFabs ? fabItems() : [];
     host.innerHTML = `
@@ -289,6 +292,7 @@ function renderCC() {
             <b>${esc(time || '—:—')}</b>
             <span>${esc(date || 'дата не записана')}</span>
             ${st.scene?.atmosphere || loc ? `<small>${esc([api.weatherWord(st.scene?.atmosphere), loc ? api.placeName(api.locTop(loc)) : ''].filter(Boolean).join(' · '))}</small>` : ''}
+            ${bal ? `<button class="cc-money" data-cc="money">${icon('wallet')} ${esc(bal)}</button>` : ''}
         </div>
         <button class="cc-x" data-cc="close">${icon('x')}</button>
     </div>
@@ -329,6 +333,8 @@ function renderCC() {
     <div class="cc-row">
         ${toggleTile('cc.theme', 'Тема', 'palette', c.theme)}
         ${toggleTile('cc.bg', c.bg === 'flat' ? 'Без фона' : c.bg === 'dim' ? 'Фон тише' : 'Фон как есть', 'image', c.bg !== 'off')}
+        ${toggleTile('cc.scene', 'Фон сцены', 'film', !!api.sceneBg?.())}
+        ${toggleTile('cc.ava', c.ava === 'huge' ? 'Аватарки XL' : c.ava === 'big' ? 'Аватарки' : 'Аватарки мелко', 'user', c.ava !== 'off')}
         ${toggleTile('cc.read', 'Чтение', 'book', c.read)}
         ${toggleTile('cc.qrShown', 'Над вводом', 'keyboard', !c.qrHidden)}
         ${toggleTile('cc.fabs', 'Плавающие', 'pointer', !c.hideFabs)}
@@ -367,6 +373,7 @@ async function onCCClick(ev) {
     const goLife = (tab, after) => { closeCC(); setTimeout(() => { api.openHub(tab); if (after) setTimeout(after, 380); }, 280); };
     switch (act) {
         case 'close': closeCC(); break;
+        case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
         case 'sheet-close': closeSheet(); break;
         case 'scene': goLife('scene'); break;
         case 'map': goLife('map'); break;
@@ -394,6 +401,8 @@ async function onCCClick(ev) {
             if (a) { const on = !agentOn(a); el.classList.toggle('on', on); await setAgent(a, on); setTimeout(renderCC, 400); break; }
             if (k === 'cc.theme') c.theme = !c.theme;
             else if (k === 'cc.bg') c.bg = c.bg === 'dim' ? 'flat' : c.bg === 'flat' ? 'off' : 'dim';
+            else if (k === 'cc.scene') api.sceneBg?.(!api.sceneBg?.());
+            else if (k === 'cc.ava') c.ava = c.ava === 'big' ? 'huge' : c.ava === 'huge' ? 'off' : 'big';
             else if (k === 'cc.read') c.read = !c.read;
             else if (k === 'cc.qrShown') c.qrHidden = !c.qrHidden;
             else if (k === 'cc.fabs') c.hideFabs = !c.hideFabs;
