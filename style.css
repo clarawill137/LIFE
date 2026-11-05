@@ -332,6 +332,11 @@
 
 .lf-wd { display: flex; gap: 14px; }
 .lf-wd-look { flex: none; width: 47%; aspect-ratio: 3 / 6; border-radius: 13px; background: #2a1d21 center/cover; border: 1px solid var(--lf-line); display: grid; place-items: center; color: var(--lf-rose); }
+.lf-wd-look { position: relative; }
+.lf-wd-look.drawing { filter: brightness(.6); }
+.lf-spin.big { position: absolute; width: 34px; height: 34px; border-width: 3px; }
+.lf-seg.sets button { font-family: var(--lf-serif); font-size: 14px; padding: 9px 4px; overflow: hidden; text-overflow: ellipsis; }
+.lf-btn:disabled { opacity: .85; cursor: default; }
 .lf-wd-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
 .lf-wd-side h2 { font-family: var(--lf-serif); font-size: 24px; font-weight: 500; line-height: 1.1; margin: 4px 0 0; }
 .lf-wd-side p { margin: 0; font-size: 13px; color: var(--lf-text2); line-height: 1.4; }

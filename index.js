@@ -7,7 +7,7 @@ import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icon
 import { chronSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -895,7 +895,7 @@ function lastChron(from = chatArr().length - 1, to = 0) {
 
 const ui = {
     open: false, tab: 'scene', focus: 'last', who: '', pTab: 'items', itemsTab: 'with', item: '', worldTab: 'events',
-    mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '',
+    mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '', wset: '',
 };
 let observer = null;
 let decorating = false;
@@ -1423,28 +1423,44 @@ function renderPerson() {
     return `${people}${tabs}${body}`;
 }
 
+function wardrobeItem(id) { return (ctx().extensionSettings?.wardrobe?.items || []).find(x => x.id === id) || null; }
+function setImg(set) { return set?.img || (set?.itemIds || []).map(wardrobeItem).find(it => it?.img)?.img || ''; }
+
 function renderWardrobe(who, st) {
     const worn = wardrobeWorn(who) || [];
-    const costume = Object.entries(st.costumes || {}).find(([k]) => sameName(k, who))?.[1] || '';
-    const look = settings().looks[norm(canonName(who))];
+    const wornIds = new Set(worn.map(e => e.itemId).filter(Boolean));
     const sets = wardrobeSets(who);
-    const img = look?.img || avatarUrl(who, true);
-    const mood = moodOf(who, st);
-    const title = look?.name || (worn.length ? 'Сейчас' : 'Образ');
+    const isOn = (set) => set.itemIds?.length && set.itemIds.every(id => wornIds.has(id));
+    const current = sets.find(isOn);
+    if (!sets.some(x => x.id === ui.wset)) ui.wset = (current || sets.find(x => setImg(x)) || sets[0])?.id || '';
+    const set = sets.find(x => x.id === ui.wset) || null;
+    const on = !!set && isOn(set);
+    const img = set?.img || '';
+    const look = img || avatarUrl(who, true);
+    const pieces = set ? set.itemIds.map(wardrobeItem).filter(Boolean) : worn;
+    const drawingNow = !!set && !!window.Wardrobe?.isDrawing?.(set.id);
+    const hasApi = !!window.Wardrobe?.wearSets;
+    const tabs = sets.length ? (sets.length <= 3
+        ? `<div class="lf-seg sets">${sets.map(x => `<button class="${x.id === ui.wset ? 'on' : ''}" data-act="wset" data-v="${esc(x.id)}">${esc(cut(x.name, 18))}</button>`).join('')}</div>`
+        : `<div class="lf-chips">${sets.map(x => `<button class="lf-chip${x.id === ui.wset ? ' on' : ''}" data-act="wset" data-v="${esc(x.id)}">${isOn(x) ? icon('check') : ''}${esc(cut(x.name, 22))}</button>`).join('')}</div>`) : '';
     return `<div class="lf-pagehead"><h1>Гардероб</h1><span class="lf-tagpill">${icon('sparkles')} ${esc(cut(canonName(who), 22))}</span></div>
     <section class="lf-wd">
-        <div class="lf-wd-look${look?.img ? ' drawn' : ''}"${img ? ` style="background-image:url('${esc(img)}')"` : ''}>${img ? '' : icon('user', 'xl')}</div>
+        <div class="lf-wd-look${drawingNow ? ' drawing' : ''}"${look ? ` style="background-image:url('${esc(look)}')"` : ''}>${look ? '' : icon('user', 'xl')}${drawingNow ? '<span class="lf-spin big"></span>' : ''}</div>
         <div class="lf-wd-side">
-            <h2>${esc(title)}</h2>
-            <p>${esc(worn.length ? cut(worn.map(e => e.name).join(', '), 140) : (costume ? cut(costume, 140) : 'Ничего не записано.'))}</p>
-            <button class="lf-btn primary serif full" data-act="wardrobe">Гардероб</button>
-            <button class="lf-btn full" data-act="look" data-name="${esc(who)}">${icon('sparkles')} Примерить образ</button>
-            <span class="lf-hint-i">${mood ? esc(cut(mood, 50)) : 'Образ учитывается в сцене'}</span>
-            <div class="lf-wd-grid">${worn.slice(0, 4).map(e => `<button class="lf-tile sm" data-act="wardrobe">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 22))}</span></button>`).join('')}</div>
+            <h2>${esc(set ? set.name : 'Сейчас')}</h2>
+            <p>${esc(cut((pieces.length ? pieces.map(e => e.name).join(', ') : 'Ничего не записано.'), 150))}</p>
+            ${set ? (on ? `<button class="lf-btn primary serif full" disabled>${icon('check')} Надето</button>`
+                : `<button class="lf-btn primary serif full" data-act="wset-wear" data-v="${esc(set.id)}" ${hasApi ? '' : 'disabled'}>Надеть</button>`)
+                : `<button class="lf-btn primary serif full" data-act="wardrobe" data-tab="sets">Собрать комплект</button>`}
+            ${set && !img ? `<button class="lf-btn full" data-act="wset-draw" data-v="${esc(set.id)}">${icon('sparkles')} Нарисовать образ</button>`
+                : `<button class="lf-btn full" data-act="wardrobe" data-tab="${set ? 'sets' : 'worn'}">${icon('shirt')} Гардероб</button>`}
+            <span class="lf-hint-i">${on ? 'Образ учитывается в сцене' : set ? 'Сейчас надето другое' : 'Образ учитывается в сцене'}</span>
+            <div class="lf-wd-grid">${pieces.slice(0, 4).map(e => `<button class="lf-tile sm" data-act="wardrobe" data-tab="${set ? 'sets' : 'worn'}">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 22))}</span></button>`).join('')}</div>
         </div>
     </section>
-    ${worn.length > 4 ? `<div class="lf-grid">${worn.slice(4, 16).map(e => `<button class="lf-tile" data-act="wardrobe">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 26))}</span></button>`).join('')}</div>` : ''}
-    ${sets.length ? `${sec('Комплекты', 'из Гардероба')}<div class="lf-chips">${sets.slice(0, 20).map(x => `<button class="lf-chip" data-act="wardrobe">${esc(cut(x.name, 28))}</button>`).join('')}</div>` : ''}`;
+    ${tabs}
+    ${set && worn.length && !on ? `${sec('Сейчас надето')}<div class="lf-grid">${worn.slice(0, 12).map(e => `<button class="lf-tile" data-act="wardrobe" data-tab="worn">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 26))}</span></button>`).join('')}</div>` : ''}
+    ${hasApi ? '' : '<div class="lf-hint">Обнови Гардероб (git pull) — тогда «Надеть» заработает прямо отсюда.</div>'}`;
 }
 
 function renderItems(who, st) {
@@ -1898,27 +1914,6 @@ async function drawFrame(start) {
     saveMeta();
 }
 
-async function drawLook(name) {
-    const n = canonName(name);
-    const worn = wardrobeWorn(n) || [];
-    const st = worldState();
-    const costume = Object.entries(st.costumes || {}).find(([k]) => sameName(k, n))?.[1] || '';
-    const refs = [];
-    const face = await faceRef(n);
-    if (face) refs.push(face);
-    for (const e of worn.filter(x => x.img).slice(0, 3)) { const r = await refData(e.img, 640); if (r) refs.push(r); }
-    const outfit = worn.length ? worn.map(e => `${e.name}${e.desc ? ` (${cut(e.desc, 60)})` : ''}`).join('; ') : costume;
-    if (!outfit) throw new Error('на персонаже ничего не записано — открой Гардероб');
-    const prompt = `Full-body fashion lookbook portrait of one person standing, head to toe, neutral dark studio background.`
-        + `\nWearing: ${outfit}.`
-        + (face ? '\nImage 1 is this person — keep the face, hair and body exactly.' : '')
-        + (refs.length > 1 ? '\nThe other images show the actual clothing pieces — keep their colors and details.' : '')
-        + `\nStyle: ${style()}. Vertical framing, no text.`;
-    const path = await drawPicture(prompt, { aspect: '3:4', max: 1400, refs, prefix: 'life_look' });
-    settings().looks[norm(n)] = { img: path, at: Date.now(), name: 'Сейчас', items: worn.map(e => e.name) };
-    saveSettings();
-}
-
 // ───── обработчики ─────
 
 let pinDrag = null;
@@ -1993,7 +1988,7 @@ async function onClick(ev) {
         case 'close': if (Date.now() - openedAt > 350) closeHub(); break;
         case 'sheet-close': closeSheet(); break;
         case 'tab': ui.tab = el.dataset.tab; ui.editPins = false; ui.atlas = false; closeSheet(); render(); break;
-        case 'person': case 'who': ui.who = el.dataset.name; ui.tab = 'person'; ui.item = ''; ui.pair = ''; render(); break;
+        case 'person': case 'who': ui.who = el.dataset.name; ui.tab = 'person'; ui.item = ''; ui.pair = ''; ui.wset = ''; render(); break;
         case 'p-tab': ui.pTab = el.dataset.v; render(); break;
         case 'items-tab': ui.itemsTab = el.dataset.v; ui.item = ''; render(); break;
         case 'world-tab': ui.worldTab = el.dataset.v; render(); break;
@@ -2262,9 +2257,18 @@ async function onClick(ev) {
             ui.focus = 'last'; decorate(); scrollChatBottom();
             break;
         }
-        case 'look': await withBusy(el, async () => { await drawLook(el.dataset.name); render(); toast('success', 'Образ готов'); }, 'Примеряю…'); break;
+        case 'wset': ui.wset = el.dataset.v; render(); break;
+        case 'wset-wear': {
+            try { if (window.Wardrobe?.wearSets(ui.who, [el.dataset.v])) { toast('success', 'Надето', '👗 Гардероб', { timeOut: 1500 }); render(); } } catch (e) { toast('warning', esc(String(e?.message || e))); }
+            break;
+        }
+        case 'wset-draw': {
+            try { window.Wardrobe?.drawSet(el.dataset.v); toast('info', 'Гардероб рисует образ…'); render(); const id = el.dataset.v; const iv = setInterval(() => { if (!window.Wardrobe?.isDrawing?.(id)) { clearInterval(iv); render(); } }, 2500); } catch (e) { toast('warning', esc(String(e?.message || e))); }
+            break;
+        }
         case 'wardrobe': {
             closeHub();
+            if (window.Wardrobe?.open) { setTimeout(() => window.Wardrobe.open(el.dataset.tab || 'worn', ui.who ? (castNames().find(n => sameName(n, ui.who)) || ui.who) : ''), 340); break; }
             try { await ctx().executeSlashCommandsWithOptions?.('/wardrobe'); } catch { toast('info', 'Гардероб не найден'); }
             break;
         }
@@ -2481,7 +2485,7 @@ window.addEventListener('error', (e) => {
 
 function onChatChanged() {
     ui.focus = settings().focusDefault ? 'last' : null;
-    Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '' });
+    Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '' });
     chronQueue.length = 0;
     invalidate();
     hookChat();
