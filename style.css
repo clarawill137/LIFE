@@ -770,6 +770,8 @@ body.lf-theme.lf-ava-wide #chat .mes[is_user="true"] .mesAvatarWrapper::after { 
 body.lf-theme.lf-ava-wide #chat .mes .mesIDDisplay { position: absolute; top: 8px; left: 10px; z-index: 2; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, .45); color: #fff !important; font-size: 11px; }
 body.lf-theme.lf-ava-wide #chat .mes .mes_timer, body.lf-theme.lf-ava-wide #chat .mes .tokenCounterDisplay { display: none !important; }
 body.lf-theme.lf-ava-wide #chat .last_mes .mesAvatarWrapper { padding-bottom: 0 !important; }
+/* таверна держит место под стрелки свайпа отступом у аватарки последнего поста; баннер его убирает — возвращаем место снизу карточки, иначе стрелки налезают на низ поста */
+body.lf-theme.lf-ava-wide #chat .mes.last_mes { padding-bottom: 46px !important; }
 body.lf-theme.lf-ava-wide #chat .mes .mes_block { position: relative; z-index: 2; width: auto !important; margin-top: -40px; padding: 0 16px !important; }
 body.lf-theme.lf-ava-wide #chat .mes .name_text { font-size: 1.45em; text-shadow: 0 2px 12px var(--t-fade), 0 0 2px var(--t-fade); }
 body.lf-theme.lf-ava-wide #chat .mes .mes_text { padding-top: 4px; }
