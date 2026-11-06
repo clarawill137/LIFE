@@ -16,7 +16,7 @@ import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, sync
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.12.3';
+const VERSION = '0.12.4';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1776,13 +1776,25 @@ function renderWardrobe(who, st) {
     ${hasApi ? '' : '<div class="lf-hint">Обнови Гардероб (git pull) — тогда «Надеть» заработает прямо отсюда.</div>'}`;
 }
 
+// что точно не носят с собой: недвижимость, брони, мебель, домашняя техника, запасы и упаковки
+const STAY_RE = /квартир|апартамент|\bдом\b|домик|вилл|особняк|коттедж|бронь|брониров|участ|недвиж|кофевар|зеркал|мебел|диван|кроват|шкаф|холодил|плит[аы]\b|продукт|запас|аптечк|коробк|переноск|скотч|сейф|пианино|телевиз|ков[её]р|картин|постер|тест на берем|лубрикант|смазк|упаков|пачк|\(\d+\s*(шт|pack)/i;
+// где «при себе»: карман, сумка, руки, шея, палец
+const CARRY_RE = /карман|при себе|на себе|в руке|в руках|на шее|на пальц|на руке|запясть|сумк|рюкзак|кошел|бумажник|кобур|за пояс|на поясе|в куртк|в пальто/i;
+const ownerOf = (it) => it?.owner || it?.holder || '';
+/** Вещь при персонаже прямо сейчас (а не просто его). */
+function onPerson(name, it, who) {
+    if (!sameName(it?.holder, who)) return false;
+    if (it.location && !CARRY_RE.test(it.location)) return false;
+    return CARRY_RE.test(it.location || '') || !STAY_RE.test(`${name} ${it.description || ''}`.slice(0, 160));
+}
+
 function renderItems(who, st) {
     const items = Object.entries(st.items || {}).filter(([n, it]) => !isVehicle(n, it));
-    const mine = items.filter(([, it]) => sameName(it?.holder, who));
-    const lying = items.filter(([, it]) => !it?.holder);
-    const list = ui.itemsTab === 'with' ? mine : ui.itemsTab === 'home' ? lying : items;
+    const mine = items.filter(([n, it]) => onPerson(n, it, who));
+    const away = items.filter(([n, it]) => !onPerson(n, it, who) && sameName(ownerOf(it), who));
+    const list = ui.itemsTab === 'with' ? mine : ui.itemsTab === 'home' ? away : items;
     if (!list.some(([n]) => n === ui.item)) ui.item = list[0]?.[0] || '';
-    const tabs = seg([['with', `С собой (${mine.length})`], ['home', `Не при себе (${lying.length})`], ['all', `Всё (${items.length})`]], ui.itemsTab, 'items-tab');
+    const tabs = seg([['with', `При себе (${mine.length})`], ['home', `Дома и не при себе (${away.length})`], ['all', `Всё (${items.length})`]], ui.itemsTab, 'items-tab');
     const sel = ui.item ? st.items[ui.item] : null;
     return `<div class="lf-pagehead"><h1>Инвентарь</h1><span class="lf-subtitle">Вещи, детали, следы истории</span></div>
     ${tabs}
@@ -1813,7 +1825,8 @@ function itemCard(name, it) {
             <button class="lf-ic-draw" data-act="item-pic" data-name="${esc(name)}" title="Картинка">${icon('camera')}</button></div>
         <div class="lf-ic-body">
             <h3>${esc(name)}${it.importance ? ` <span class="lf-gold">${icon('sparkles')}</span>` : ''}</h3>
-            ${it.holder ? `<div class="lf-ic-row">${icon('user')}<span>Владелец: ${esc(it.holder)}</span></div>` : ''}
+            ${ownerOf(it) ? `<div class="lf-ic-row">${icon('user')}<span>Чьё: ${esc(ownerOf(it))}</span></div>` : ''}
+            ${it.holder && !sameName(it.holder, ownerOf(it)) ? `<div class="lf-ic-row">${icon('handshake')}<span>Сейчас у: ${esc(it.holder)}</span></div>` : ''}
             ${it.location ? `<div class="lf-ic-row">${icon('pin')}<span>${esc(it.location)}</span></div>` : ''}
             ${it.description ? `<div class="lf-ic-row">${icon('file')}<span>${esc(cut(it.description, 160))}</span></div>` : ''}
             ${when ? `<div class="lf-ic-row line" data-act="jump" data-mes="${org.i}">${icon('clock')}<span>${esc(when)}</span></div>` : ''}

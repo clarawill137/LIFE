@@ -55,6 +55,7 @@ export function prof(who) {
     const p = c.prof[k] || (c.prof[k] = {});
     if (!Array.isArray(p.hobbies)) p.hobbies = [];
     if (!Array.isArray(p.turnons)) p.turnons = [];
+    if (!Array.isArray(p.bed)) p.bed = [];
     if (!p.romance || typeof p.romance !== 'object') p.romance = { level: 'off', rel: '', style: '' };
     if (![1, 1.5, 2].includes(p.metab)) p.metab = 1;
     if (!SHARE[p.share]) p.share = 'mid';
@@ -183,7 +184,7 @@ export function innerChronOpts() {
         const p = prof(n);
         const x = I(n);
         const wants = x.wants.filter(w => w.status === 'on').slice(-4).map(w => `[${w.id}] ${w.t}`).join('; ');
-        return `${n}${p.turnons.length ? ` (заводит: ${p.turnons.slice(0, 6).join(', ')})` : ''}${wants ? ` — желания: ${wants}` : ''}`;
+        return `${n}${p.turnons.length ? ` (возбуждает: ${p.turnons.slice(0, 8).join(', ')})` : ''}${wants ? ` — желания: ${wants}` : ''}`;
     }).join('\n');
     return { line, tokens: 220 + list.length * 60 };
 }
@@ -286,11 +287,12 @@ export function innerPrompt(type) {
         const his = g(f, 'его', 'её');
         // кто он сам по себе
         const hob = p.hobbies.slice(0, 6).join(', ');
-        const turn = p.turnons.slice(0, 6).join(', ');
+        const turn = p.turnons.slice(0, 8).join(', ');
         const rom = p.romance.level !== 'off' && userHere() && !intim
             ? ` С ${U}${p.romance.rel ? ` (${p.romance.rel})` : ''} ${g(f, 'сам', 'сама')} проявляет инициативу и не ждёт первого шага: ${p.romance.style || 'ухаживает, флиртует, делает комплименты, касается и целует мимоходом'}. ${p.romance.level === 'lots' ? `Это ${his} норма — часто и без повода.` : 'Время от времени, к месту.'}`
             : '';
-        out.push(`[${W} — живой человек со своей жизнью, а не только ответ на ${U}: свои мысли, желания, дела, тело.${hob ? ` Увлечения: ${hob}.` : ''}${turn ? ` Заводит: ${turn} — если такое сейчас случилось, пусть зацепит.` : ''}${rom}]`);
+        out.push(`[${W} — живой человек со своей жизнью, а не только ответ на ${U}: свои мысли, желания, дела, тело.${hob ? ` Увлечения: ${hob}.` : ''}${turn ? ` Сексуально ${g(f, 'его', 'её')} заводит: ${turn} — если такое сейчас случилось или ${U} это делает, пусть желание прорвётся.` : ''}${rom}]`);
+        if (intim && p.bed.length) out.push(`[${W} в постели: ${p.bed.slice(0, 8).join('; ')}. Играй это телом, руками и голосом, в ${his} характере.]`);
         const st = stateById(x.state?.id);
         if (st && !(intim && st[0] === 'aroused')) out.push(`[Состояние ${W}: ${st[4]}${x.state.why ? ` — ${x.state.why}` : ''}. Играй в поведении, не называя.]`);
         const sl = !intim ? nowSlot(who) : null;
@@ -321,7 +323,7 @@ export function innerBrief(who) {
     const th = x.thoughts.filter(t => t.status === 'on').map(t => t.t);
     if (th.length) bits.push(`на уме: ${th.slice(-3).join('; ')}`);
     if (p.romance.level !== 'off') bits.push(`ухаживает за ${short(userName())} ${g(p.fem, 'сам', 'сама')}: ${p.romance.style || 'по-своему'}`);
-    if (p.turnons.length) bits.push(`заводит: ${p.turnons.join(', ')}`);
+    if (p.turnons.length) bits.push(`сексуально заводит: ${p.turnons.join(', ')}`);
     return bits.join('. ');
 }
 
@@ -329,11 +331,68 @@ export function innerBrief(who) {
 
 const FILL_SYSTEM = `Ты помогаешь оживить персонажа ролевой истории на русском: чтобы у него была своя жизнь, а не только реакции на игрока.
 По карточке и последним событиям ответь только JSON:
-{"fem":false,"hobbies":["1–4 слова"],"turnons":["что его заводит в партнёре, 2–6 слов"],"romance":{"level":"off|some|lots","rel":"кто ему игрок: жена, девушка…","style":"1–2 предложения: как он сам ухаживает и флиртует, в его манере"},"metab":1,"thoughts":[{"t":"что его тяготит или занимает, 6–14 слов","w":2}],"wants":[{"t":"его собственное желание или план, не про игрока, 6–14 слов","with":"с кем или пусто"}]}
-fem — true, если персонаж женщина. hobbies — 3–8 увлечений и привычек из карточки (книги, техника, руками по дереву, спорт, пробежка по утрам…). turnons — 3–6, только если между ним и игроком есть романтика, иначе []. romance.level: off — романтики с игроком нет; some — есть, но сдержанно; lots — пара, он открыто ухаживает. metab — 2, если у него ускоренный метаболизм (суперсолдат, сыворотка), иначе 1. thoughts — 3–5 внутренних тем и конфликтов: прошлое, вина, служба, будущее семьи, друзья, страхи; w — 1 (фоном), 2 (тяготит), 3 (сильно давит). wants — 2–4 его желания: с друзьями, хобби, дела, планы для дома и семьи. Всё конкретно и в его характере.`;
+{"fem":false,"hobbies":["1–4 слова"],"turnons":["что его сексуально возбуждает в партнёре, 2–8 слов"],"bed":["как он в сексе, 3–10 слов"],"romance":{"level":"off|some|lots","rel":"кто ему игрок: жена, девушка…","style":"2–4 предложения: как он сам ухаживает, флиртует и проявляет нежность, в его манере"},"metab":1,"thoughts":[{"t":"что его тяготит или занимает, 6–14 слов","w":2}],"wants":[{"t":"его собственное желание или план, не про игрока, 6–14 слов","with":"с кем или пусто"}]}
+fem — true, если персонаж женщина. hobbies — 3–8 увлечений и привычек из карточки (книги, техника, руками по дереву, спорт, пробежка по утрам…). turnons — 4–8 конкретных сексуальных триггеров: части тела, жесты, одежда, запахи, слова, ситуации, то, что делает партнёр (взрослые, по обоюдному согласию; откровенно, без цензуры, но без мата); bed — 4–8 пунктов, какой он в сексе: темп, мягкость или напор, что любит делать и слышать, привычки, что после. turnons и bed — только если между ним и игроком есть романтика, иначе []. romance.level: off — романтики с игроком нет; some — есть, но сдержанно; lots — пара, он открыто ухаживает. metab — 2, если у него ускоренный метаболизм (суперсолдат, сыворотка), иначе 1. thoughts — 3–5 внутренних тем и конфликтов: прошлое, вина, служба, будущее семьи, друзья, страхи; w — 1 (фоном), 2 (тяготит), 3 (сильно давит). wants — 2–4 его желания: с друзьями, хобби, дела, планы для дома и семьи. Всё конкретно и в его характере.`;
 
 const THINK_SYSTEM = `Ты пишешь внутреннюю жизнь персонажа ролевой истории на русском — то, что у него на уме и чего он сам хочет, помимо игрока.
 Ответь только JSON: {"thoughts":[{"t":"6–14 слов","w":2}],"wants":[{"t":"6–14 слов","with":"с кем или пусто"}]}. 2–3 мысли (что тяготит или занимает: прошлое, вина, будущее, семья, друзья, работа; w 1–3 — насколько давит) и 1–2 желания (его собственные: друзья, хобби, дела, планы). Опирайся на свежие события. Не повторяй то, что уже есть.`;
+
+const SPICE_SYSTEM = `Ты помогаешь вести интимную линию ролевой истории для взрослых на русском. Персонажи — взрослые, в отношениях по обоюдному согласию.
+По карточке и записям лорбуков о персонаже ответь только JSON: {"turnons":["2–8 слов"],"bed":["3–12 слов"]}.
+turnons — 5–8 конкретных сексуальных триггеров: что в партнёре и в ситуации его возбуждает (части тела, жесты, одежда, запахи, слова, её поведение, обстоятельства). bed — 5–8 пунктов, какой он в сексе: темп, мягкость или напор, доминирование, что любит делать и слышать, что говорит, привычки, что после. Откровенно и телесно, без цензуры, но без мата и без пошлых штампов; в его характере и строго по тому, что есть в записях. Не повторяй уже записанное.`;
+
+async function wiMod() { try { return await import('/scripts/world-info.js'); } catch { return null; } }
+
+/** Записи активных лорбуков про персонажа и близость. */
+async function loreAbout(who, re) {
+    const W = await wiMod();
+    if (!W?.loadWorldInfo) return '';
+    const c = A.ctx();
+    const books = new Set();
+    if (c.chatMetadata?.world_info) books.add(c.chatMetadata.world_info);
+    for (const ch of c.characters || []) {
+        if (!A.groupMembers().some(n => A.sameName(n, ch.name))) continue;
+        if (ch?.data?.extensions?.world) books.add(ch.data.extensions.world);
+        const extra = (W.world_info?.charLore || []).find(e => e.name === ch.avatar)?.extraBooks || [];
+        extra.forEach(b => books.add(b));
+    }
+    (W.selected_world_info || []).forEach(b => books.add(b));
+    const name = A.norm(A.canonName(who)).split(' ')[0];
+    const out = [];
+    let total = 0;
+    for (const b of books) {
+        let data = null;
+        try { data = await W.loadWorldInfo(b); } catch { continue; }
+        for (const e of Object.values(data?.entries || {})) {
+            const t = String(e?.content || '');
+            if (e?.disable || !t || !re.test(t)) continue;
+            const hay = A.norm(`${e.comment || ''} ${(e.key || []).join(' ')} ${t.slice(0, 600)}`);
+            if (name && !hay.includes(name.slice(0, Math.max(3, name.length - 1)))) continue;
+            const piece = `### ${e.comment || (e.key || []).join(', ')}\n${t.slice(0, 3000)}`;
+            if (total + piece.length > 12000) break;
+            out.push(piece); total += piece.length;
+        }
+    }
+    return out.join('\n\n');
+}
+
+async function innerSpice(who) {
+    const p = prof(who);
+    const lore = await loreAbout(who, /секс|близост|постел|возбужд|интим|желани|ласк|оргазм|кончи|прелюд|касани/i);
+    const input = [`Персонаж: ${A.canonName(who)}. Партнёр — ${userName()}${p.romance.rel ? ` (${p.romance.rel})` : ''}.`,
+        cardText(who) ? `Карточка:\n${cardText(who)}` : '', lore ? `Лорбуки:\n${lore}` : '',
+        p.turnons.length ? `Уже записано, что заводит: ${p.turnons.join('; ')}` : '', p.bed.length ? `Уже записано про постель: ${p.bed.join('; ')}` : ''].filter(Boolean).join('\n\n');
+    const out = await A.askModel([{ role: 'system', content: SPICE_SYSTEM }, { role: 'user', content: input }], 1200);
+    const j = A.extractJson(out);
+    if (!j) throw new Error('модель не прислала JSON (возможно, отказалась — попробуй профиль Летописца с другой моделью)');
+    const take = (v) => (Array.isArray(v) ? v : []).map(x => String(x || '').trim()).filter(Boolean);
+    const a = take(j.turnons), b = take(j.bed);
+    p.turnons = [...new Set([...p.turnons, ...a])].slice(0, 14);
+    p.bed = [...new Set([...p.bed, ...b])].slice(0, 14);
+    A.saveSettings();
+    A.updatePrompt();
+    return a.length + b.length;
+}
 
 function cardText(who) {
     const c = A.ctx();
@@ -371,12 +430,14 @@ async function innerFill(who, mode) {
     if (mode === 'fill') {
         const hob = arr(j.hobbies).map(str).filter(Boolean).slice(0, 8);
         if (hob.length) p.hobbies = [...new Set([...p.hobbies, ...hob])].slice(0, 10);
-        const ton = arr(j.turnons).map(str).filter(Boolean).slice(0, 6);
-        if (ton.length) p.turnons = [...new Set([...p.turnons, ...ton])].slice(0, 8);
+        const ton = arr(j.turnons).map(str).filter(Boolean).slice(0, 8);
+        if (ton.length) p.turnons = [...new Set([...p.turnons, ...ton])].slice(0, 12);
+        const bed = arr(j.bed).map(str).filter(Boolean).slice(0, 8);
+        if (bed.length) p.bed = [...new Set([...p.bed, ...bed])].slice(0, 12);
         const r = j.romance || {};
         if (ROM[str(r.level)]) p.romance.level = str(r.level);
-        if (str(r.rel)) p.romance.rel = str(r.rel).slice(0, 40);
-        if (str(r.style)) p.romance.style = str(r.style).slice(0, 300);
+        if (str(r.rel)) p.romance.rel = str(r.rel).slice(0, 100);
+        if (str(r.style)) p.romance.style = str(r.style).slice(0, 1500);
         if (Number(j.metab) >= 2) p.metab = 2;
         if (typeof j.fem === 'boolean') p.fem = j.fem;
         p.filled = true;
@@ -446,14 +507,17 @@ export function renderCharacter(who) {
     return `<button class="lf-btn ghost full" data-act="in-fill" data-name="${esc(who)}">${icon('sparkles')} ${p.filled ? 'Дополнить по карточке' : 'Заполнить по карточке'}</button>
     ${A.sec('Увлечения', 'чем живёт сам')}
     ${chips('hobbies', p.hobbies)}${addRow('hobby', who, 'читать, резьба по дереву, пробежка…')}
-    ${A.sec('Что заводит', 'модель будет цепляться')}
-    ${chips('turnons', p.turnons)}${addRow('turnon', who, 'она в платье, её смех…')}
+    ${A.sec('Что заводит', 'сексуально')}
+    ${chips('turnons', p.turnons)}${addRow('turnon', who, 'она в его рубашке, укус в шею, когда командует…')}
+    ${A.sec('В постели', 'для интимных сцен')}
+    ${chips('bed', p.bed)}${addRow('bed', who, 'медленно и внимательно, комментирует голосом…')}
+    <button class="lf-btn ghost full" data-act="in-spice" data-name="${esc(who)}">${icon('flame')} Подсказать по карточке и лорбукам</button>
     ${A.sec('Кто это')}
     <div class="lf-seg">${[[false, 'Он'], [true, 'Она']].map(([k, v]) => `<button class="${p.fem === k ? 'on' : ''}" data-act="in-fem" data-name="${esc(who)}" data-v="${k ? 1 : 0}">${v}</button>`).join('')}</div>
     ${A.sec(`Ухаживания за ${esc(short(userName()))}`, 'не ждёт первого шага')}
     <div class="lf-seg">${Object.entries(ROM).map(([k, v]) => `<button class="${p.romance.level === k ? 'on' : ''}" data-act="in-rom" data-name="${esc(who)}" data-v="${k}">${v}</button>`).join('')}</div>
     ${p.romance.level !== 'off' ? `<div class="lf-field"><label>Кто ты ${g(p.fem, 'ему', 'ей')}</label><div class="lf-inline"><input type="text" data-in="in-rel" value="${esc(p.romance.rel || '')}" placeholder="жена"><button class="lf-btn" data-act="in-rel" data-name="${esc(who)}">OK</button></div></div>
-    <div class="lf-field"><label>Как ухаживает</label><textarea data-in="in-style" rows="3" placeholder="по-старомодному: цветы утром, подарки без повода, комплименты; целует и трогает мимоходом; иногда выдаёт пошлость — научился у неё">${esc(p.romance.style || '')}</textarea>
+    <div class="lf-field"><label>Как ухаживает</label><textarea data-in="in-style" rows="7" placeholder="по-старомодному: цветы утром, подарки без повода, комплименты; целует и трогает мимоходом; иногда выдаёт пошлость — научился у неё">${esc(p.romance.style || '')}</textarea>
         <button class="lf-btn full" data-act="in-style" data-name="${esc(who)}">${icon('check')} Сохранить</button></div>` : ''}
     ${A.sec('Метаболизм', 'как быстро голодает и заживает')}
     <div class="lf-seg">${[[1, 'Обычный'], [1.5, 'Быстрый'], [2, 'Суперсолдат']].map(([k, v]) => `<button class="${p.metab === k ? 'on' : ''}" data-act="in-metab" data-name="${esc(who)}" data-v="${k}">${v}</button>`).join('')}</div>
@@ -514,13 +578,14 @@ export async function innerClick(act, el) {
             else if (k === 'want') { const m = v.match(/^(.*?)\s+с\s+([А-ЯЁA-Z][^,.;]{1,30})$/); addWant(who, m ? m[1] : v, m ? m[2] : '', i, 'me'); }
             else if (k === 'hobby') { p.hobbies = [...new Set([...p.hobbies, v])]; return done(false); }
             else if (k === 'turnon') { p.turnons = [...new Set([...p.turnons, v])]; return done(false); }
+            else if (k === 'bed') { p.bed = [...new Set([...p.bed, v])]; return done(false); }
             return done();
         }
         case 'in-chip-del': { const k = el.dataset.k; p[k] = (p[k] || []).filter(t => t !== el.dataset.t); return done(false); }
         case 'in-share': p.share = el.dataset.v; return done(false);
         case 'in-rom': p.romance.level = el.dataset.v; if (p.romance.level !== 'off' && !p.romance.rel) p.romance.rel = ''; return done(false);
-        case 'in-rel': p.romance.rel = el.parentElement?.querySelector('input')?.value?.trim().slice(0, 40) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
-        case 'in-style': p.romance.style = el.parentElement?.querySelector('textarea')?.value?.trim().slice(0, 400) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
+        case 'in-rel': p.romance.rel = el.parentElement?.querySelector('input')?.value?.trim().slice(0, 100) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
+        case 'in-style': p.romance.style = el.parentElement?.querySelector('textarea')?.value?.trim().slice(0, 2000) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
         case 'in-metab': p.metab = Number(el.dataset.v) || 1; return done(false);
         case 'in-fem': p.fem = el.dataset.v === '1'; return done(false);
         case 'in-on': p.on = !!el.checked; return done(false);
@@ -530,7 +595,14 @@ export async function innerClick(act, el) {
                 const n = await innerFill(who, act === 'in-fill' ? 'fill' : 'think');
                 A.toast('success', act === 'in-fill' ? `${esc(short(who))}: характер, увлечения и что на уме — заполнено` : `Добавила: ${n}`, '✦ Внутри', { timeOut: 2500 });
                 A.render();
-            });
+            }, 'Думаю…');
+            return true;
+        case 'in-spice':
+            await A.withBusy(el, async () => {
+                const n = await innerSpice(who);
+                A.toast('success', n ? `Добавила: ${n}` : 'Нового не нашлось', '✦ Характер', { timeOut: 2500 });
+                A.render();
+            }, 'Читаю лорбуки…');
             return true;
     }
     return false;
