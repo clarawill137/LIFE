@@ -9,11 +9,11 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
 import { initErrors } from './errors.js';
-import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow } from './mood.js';
+import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -970,21 +970,30 @@ async function cleanInventory() {
 }
 
 // отношения и тайны — свёртка записей Летописца по чату (ветки и свайпы учитываются сами)
+// Отношения направленные: «Баки → Хеди» и «Хеди → Баки» — две разные строки шкал.
 function pairKey(a, b) { return [canonName(a), canonName(b)].map(norm).sort().join('|'); }
+function dirKey(from, to) { return `${norm(canonName(from))}>${norm(canonName(to))}`; }
 
-const SCALES = [['trust', 'Доверие', 'handshake', 50], ['closeness', 'Близость', 'heart', 50], ['desire', 'Влечение', 'flame', 30], ['jealousy', 'Ревность', 'eye', 10], ['tension', 'Напряжение', 'zap', 25]];
+const SCALES = [['trust', 'Доверие', 'handshake', 50], ['closeness', 'Близость', 'heart', 50], ['desire', 'Влечение', 'flame', 30], ['jealousy', 'Ревность', 'eye', 10], ['tension', 'Напряжение', 'zap', 25], ['guilt', 'Вина', 'moon', 5]];
 const scaleBase = () => Object.fromEntries(SCALES.map(([k, , , v]) => [k, v]));
+
+/** Шкалы «from → to» внутри пары. */
+function relSide(p, from) { return sameName(from, p.a) ? p.ab : p.ba; }
 
 function relationsState() {
     const chat = chatArr();
-    const base = chatMeta().pairBase || {};
+    const cm = chatMeta();
+    const oldBase = cm.pairBase || {};
+    const base = cm.relBase || {};
     const pairs = {};
     const get = (a, b) => {
         const k = pairKey(a, b);
         if (!pairs[k]) {
-            const b0 = base[k] || {};
-            pairs[k] = { key: k, a: canonName(a), b: canonName(b), moments: [] };
-            for (const [f, , , v] of SCALES) pairs[k][f] = b0[f] ?? v;
+            const p = pairs[k] = { key: k, a: canonName(a), b: canonName(b), moments: [] };
+            const b0 = oldBase[k] || {};
+            const bab = base[dirKey(p.a, p.b)] || {}, bba = base[dirKey(p.b, p.a)] || {};
+            p.ab = {}; p.ba = {};
+            for (const [f, , , v] of SCALES) { p.ab[f] = bab[f] ?? b0[f] ?? v; p.ba[f] = bba[f] ?? b0[f] ?? v; }
         }
         return pairs[k];
     };
@@ -995,35 +1004,128 @@ function relationsState() {
         for (const r of e.rel || []) {
             if (sameName(r.a, r.b)) continue;
             const p = get(r.a, r.b);
-            for (const [f] of SCALES) p[f] = clamp(p[f] + (r[f] || 0));
-            if (r.moment) p.moments.push({ text: r.moment, mes: i, ts: chat[i]?.horae_meta?.timestamp });
+            // старые записи (до 0.8) были общими на пару — двигают обе стороны
+            const sides = r.dir ? [relSide(p, r.a)] : [p.ab, p.ba];
+            for (const sd of sides) for (const [f] of SCALES) sd[f] = clamp(sd[f] + (r[f] || 0));
+            if (r.moment && !p.moments.some(x => norm(x.text) === norm(r.moment))) p.moments.push({ text: r.moment, mes: i, ts: chat[i]?.horae_meta?.timestamp });
         }
     }
-    for (const k of Object.keys(base)) if (!pairs[k]) { const [a, b] = k.split('|'); get(a, b); }
+    for (const k of Object.keys(oldBase)) if (!pairs[k]) { const [a, b] = k.split('|'); get(a, b); }
+    for (const k of Object.keys(base)) { const [a, b] = k.split('>'); if (a && b && !pairs[pairKey(a, b)]) get(a, b); }
+    // плоские поля — среднее двух сторон (для старых мест, где хватает общей картины)
+    for (const p of Object.values(pairs)) for (const [f] of SCALES) p[f] = Math.round((p.ab[f] + p.ba[f]) / 2);
     return pairs;
+}
+
+/** Чувства from к to: { trust, closeness, … } или null. */
+function relOf(from, to) {
+    const p = relationsState()[pairKey(from, to)];
+    return p ? { ...relSide(p, from), moments: p.moments } : null;
 }
 
 // как отношения выглядят в поведении — чтобы модель играла чувства, а не читала цифры
 const REL_HINT = {
-    trust: ['не верит ни слову', 'держится настороже', '', 'верит, открывается', 'верит на слово, без оглядки'],
-    closeness: ['чужие друг другу', 'на расстоянии', '', 'тянутся друг к другу, дорожат', 'не представляют себя друг без друга'],
-    desire: ['физически не тянет', '', 'лёгкий физический интерес', 'физически тянет, возбуждение рядом', 'сильное желание, физический голод'],
-    jealousy: ['', '', 'тревога за своё место', 'ревнует, следит за соперниками', 'жгучая ревность, собственничество'],
-    tension: ['легко и спокойно', '', 'что-то висит в воздухе', 'искрит, колкости, обиды', 'на грани взрыва'],
+    trust: ['не верит ни слову', 'настороже', '', 'доверяет, открывается', 'верит без оглядки'],
+    closeness: ['чужой человек', 'держит дистанцию', '', 'дорожит, тянется', 'не представляет себя без другого'],
+    desire: ['физически не тянет', '', 'лёгкий физический интерес', 'физически тянет, заводится рядом', 'сильное желание, физический голод'],
+    jealousy: ['', '', 'тревога за своё место', 'ревнует, следит за соперниками', 'жгучая ревность'],
+    tension: ['', '', 'что-то копится', 'колется, обижается', 'на грани взрыва'],
+    guilt: ['', '', 'лёгкое чувство вины', 'вина давит, пытается загладить', 'вина съедает изнутри'],
 };
+const relLvl = (v) => v < 15 ? 0 : v < 35 ? 1 : v < 60 ? 2 : v < 80 ? 3 : 4;
+const relBits = (sd) => SCALES.map(([f]) => REL_HINT[f][relLvl(sd[f])]).filter(Boolean);
+
+function scenePresent() {
+    const st = worldState();
+    return [ctx().name1, ...(st.scene?.characters_present || [])].map(canonName).filter(Boolean);
+}
+
 function relPrompt() {
     if (!settings().chron.relations) return '';
-    const st = worldState();
-    const here = [ctx().name1, ...(st.scene?.characters_present || [])].map(canonName).filter(Boolean);
-    if (here.length < 2) return '';
-    const pairs = Object.values(relationsState()).filter(p => here.some(n => sameName(n, p.a)) && here.some(n => sameName(n, p.b)));
-    const lvl = (v) => v < 15 ? 0 : v < 35 ? 1 : v < 60 ? 2 : v < 80 ? 3 : 4;
-    const lines = pairs.slice(0, 4).map(p => {
-        const bits = SCALES.map(([f]) => REL_HINT[f][lvl(p[f])]).filter(Boolean);
-        const last = p.moments.slice(-2).map(x => `«${x.text}»`).join(', ');
-        return bits.length || last ? `${shortName(p.a)} и ${shortName(p.b)}: ${bits.join('; ')}${last ? `. Недавно: ${last}` : ''}` : '';
-    }).filter(Boolean);
-    return lines.length ? `[Отношения сейчас — играй их в поведении, не называя: ${lines.join('. ')}.]` : '';
+    const here = scenePresent();
+    const out = [];
+    if (here.length >= 2) {
+        const pairs = Object.values(relationsState()).filter(p => here.some(n => sameName(n, p.a)) && here.some(n => sameName(n, p.b)));
+        const lines = pairs.slice(0, 4).map(p => {
+            const x = relBits(p.ab), y = relBits(p.ba);
+            const last = p.moments.slice(-2).map(m => `«${m.text}»`).join(', ');
+            const A = shortName(p.a), B = shortName(p.b);
+            let body;
+            if (x.join() === y.join()) body = x.length ? `${A} и ${B}: ${x.join('; ')}` : '';
+            else body = [x.length ? `${A} → ${B}: ${x.join('; ')}` : '', y.length ? `${B} → ${A}: ${y.join('; ')}` : ''].filter(Boolean).join('. ');
+            if (!body && !last) return '';
+            return `${body || `${A} и ${B}`}${last ? `. Недавно: ${last}` : ''}`;
+        }).filter(Boolean);
+        if (lines.length) out.push(`[Отношения сейчас — чувства не всегда взаимны (→ — кто к кому), играй их в поведении, не называя: ${lines.join('. ')}.]`);
+    }
+    try { const t = triPrompt(here); if (t) out.push(t); } catch (e) { console.warn('[Life] треугольники: заметка', e); }
+    return out.join('\n');
+}
+
+// ───── треугольники: трое, у которых чувства к одному влияют на другого ─────
+
+const TRI_KINDS = [
+    ['jeal', 'Ревность', 'eye', '{c} в центре: один ревнует к другому, а тот дразнит, флиртует или просто существует — и этого хватает'],
+    ['loyal', 'Верность', 'handshake', '{c} между двумя, которые друг другу не доверяют: каждый тянет на себя, перемирие держится на {c}'],
+    ['rival', 'Соперники', 'zap', 'двое меряются — за внимание, правоту, место рядом с {c}; {c} — то приз, то судья'],
+    ['secret', 'Тайна', 'lock', 'между ними троими есть недосказанное: один знает то, чего не знает другой, и {c} это чувствует'],
+];
+const TRI_ENDS = [
+    ['hold', 'Держать', 'тлеет и не решается: искры, взгляды, колкости — без развязки'],
+    ['never', 'Не за грань', 'искры и ревность да, но без измены и без разрыва — никогда за грань'],
+    ['blow', 'Взорвать', 'постепенно к открытому столкновению: каждая сцена чуть острее, но не взрывай в одном посте'],
+    ['fade', 'Помирить', 'напряжение постепенно гаснет: шаги навстречу, уважение, перемирие'],
+];
+const triKind = (id) => TRI_KINDS.find(k => k[0] === id) || TRI_KINDS[0];
+const triEnd = (id) => TRI_ENDS.find(k => k[0] === id) || TRI_ENDS[0];
+
+function triangles() {
+    const cm = chatMeta();
+    if (!Array.isArray(cm.triangles)) cm.triangles = [];
+    return cm.triangles;
+}
+
+/** Накал треугольника — из направленных шкал ревности и напряжения между тремя. */
+function triHeat(t, rs = relationsState()) {
+    const [x, y, z] = t.who;
+    const vals = [];
+    for (const [a, b] of [[x, y], [y, z], [x, z]]) {
+        const p = rs[pairKey(a, b)];
+        if (!p) continue;
+        for (const sd of [p.ab, p.ba]) vals.push(Math.max(sd.jealousy, sd.tension, t.kind === 'secret' ? sd.guilt : 0));
+    }
+    if (!vals.length) return 0;
+    vals.sort((a, b) => b - a);
+    return Math.round((vals[0] + (vals[1] ?? vals[0])) / 2);
+}
+
+function triLine(t, mode) {
+    const c = shortName(t.center);
+    const sides = t.who.filter(n => !sameName(n, t.center)).map(shortName);
+    const k = triKind(t.kind), e = triEnd(t.end);
+    const heat = triHeat(t);
+    const head = `Треугольник ${sides[0]} — ${c} — ${sides[1]}`;
+    const what = k[3].replaceAll('{c}', c);
+    const note = t.note ? ` ${t.note}.` : '';
+    if (mode === 'all') return `${head}: ${what}. Накал ${heat < 35 ? 'низкий' : heat < 65 ? 'заметный' : 'высокий'}. Куда идёт: ${e[2]}.${note} Держи эту ось в поведении всех троих, не проговаривай её и не решай в одном посте.`;
+    return `${head}: ${what}.${note} Третьего упомянули — пусть это отзовётся в реакции, но не втаскивай его в сцену.`;
+}
+
+function triPrompt(here) {
+    const list = triangles().filter(t => t.on !== false && t.who?.length === 3);
+    if (!list.length) return '';
+    const userText = (() => { const ch = chatArr(); for (let i = ch.length - 1; i >= 0 && i >= ch.length - 3; i--) if (ch[i]?.is_user) return norm(ch[i].mes || ''); return ''; })();
+    const mentions = (n) => [canonName(n), ...(aliasTable()[canonName(n)] || [])].some(a => { const w = norm(a).split(' ')[0]; if (w.length < 3) return false; const stem = w.length <= 4 ? w : w.slice(0, -1); return new RegExp(`(^|[^a-zа-яё])${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(userText); });
+    const lines = [];
+    for (const t of list) {
+        const inScene = t.who.filter(n => here.some(h => sameName(h, n)));
+        if (inScene.length === 3) lines.push(triLine(t, 'all'));
+        else if (inScene.length === 2) {
+            const third = t.who.find(n => !inScene.some(h => sameName(h, n)));
+            if (third && mentions(third)) lines.push(triLine(t, 'shadow'));
+        }
+    }
+    return lines.length ? `[${lines.slice(0, 2).join(' ')}]` : '';
 }
 
 function secretsState() {
@@ -1722,16 +1824,26 @@ function renderRelations(who, st) {
         ui.pair = best ? (sameName(best.a, who) ? best.b : best.a) : others[0] || '';
     }
     const other = ui.pair;
-    if (!other) return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
-    const p = pairs[pairKey(who, other)] || { ...scaleBase(), moments: [] };
+    const tab = ui.relTab;
+    if (!other && tab !== 'tri') return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
+    const pp = pairs[pairKey(who, other)];
+    const mine = pp ? relSide(pp, who) : scaleBase(), theirs = pp ? relSide(pp, other) : scaleBase();
+    const p = { moments: pp?.moments || [] };
     const pairImg = settings().pairs[pairKey(who, other)] || imagesWith(imgs(), [nameKeys(who), nameKeys(other)]).slice(-1)[0]?.src || '';
     const hrel = horaeRelationships().filter(r => (sameName(r.from, who) && sameName(r.to, other)) || (sameName(r.from, other) && sameName(r.to, who)));
     const secrets = secretsState().filter(x => x.knows.some(k => sameName(k, who) || sameName(k, other)));
     const events = horaeEvents().filter(e => { const t = norm(e.event?.summary); return [who, other].every(n => [canonName(n), ...(aliasTable()[canonName(n)] || [])].some(a => t.includes(norm(a).split(' ')[0]))); }).slice(-20).reverse();
-    const bar = (ic, label, v, k) => `<div class="lf-bar-row" data-act="pair-edit">${icon(ic)}<span>${label}</span><i class="lf-meter"><b style="width:${v}%"></b></i><small>${v}</small></div>`;
-    const tab = ui.relTab;
+    const A = shortName(canonName(who)), B = shortName(canonName(other));
+    const meter = (v) => `<i class="lf-meter"><b style="width:${v}%"></b></i><small>${v}</small>`;
+    const bars = `<div class="lf-bars2" data-act="pair-edit">
+        <div class="lf-b2-head"><span></span><span></span><b>${esc(A)} → ${esc(B)}</b><b>${esc(B)} → ${esc(A)}</b></div>
+        ${SCALES.map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f])}</span><span class="lf-b2-m">${meter(theirs[f])}</span></div>`).join('')}
+        <div class="lf-hint-i">Чувства не всегда взаимны: слева — что ${esc(A)} чувствует к ${esc(B)}, справа — наоборот. Нажми, чтобы поправить.</div>
+    </div>`;
     let body = '';
-    if (tab === 'secrets') {
+    if (tab === 'tri') {
+        body = triListHtml(who, other);
+    } else if (tab === 'secrets') {
         body = secrets.length ? secrets.map(x => `<button class="lf-secret" data-act="jump" data-mes="${x.mes}">${icon('lock')}<span><b>Знает ${esc(x.knows.map(n => shortName(canonName(n))).join(', ') || '—')}</b>${esc(x.text)}</span></button>`).join('')
             : `<div class="lf-empty small">Тайн между ними пока нет.</div>`;
     } else if (tab === 'history') {
@@ -1745,18 +1857,87 @@ function renderRelations(who, st) {
         const own = secrets.filter(x => x.knows.length === 1)[0];
         if (own) body += `<button class="lf-secret big" data-act="jump" data-mes="${own.mes}">${icon('lock')}<span><b>Знает только ${esc(shortName(canonName(own.knows[0])))}</b>${esc(own.text)}</span></button>`;
     }
+    const nTri = triangles().filter(t => t.who?.some(n => sameName(n, who))).length;
     return `<div class="lf-pagehead"><h1>${icon('rings', 'h')} Отношения</h1></div>
-    <div class="lf-chips">${others.map(n => `<button class="lf-chip${sameName(n, other) ? ' on' : ''}" data-act="pair" data-v="${esc(n)}">${esc(shortName(n))}</button>`).join('')}</div>
-    <section class="lf-pairhero${pairImg ? ' lf-fit' : ''}"${fitAttr(pairImg)}>${pairImg ? '<i class="lf-fit-i"></i>' : ''}
+    ${others.length ? `<div class="lf-chips">${others.map(n => `<button class="lf-chip${sameName(n, other) ? ' on' : ''}" data-act="pair" data-v="${esc(n)}">${esc(shortName(n))}</button>`).join('')}</div>` : ''}
+    ${other ? `<section class="lf-pairhero${pairImg ? ' lf-fit' : ''}"${fitAttr(pairImg)}>${pairImg ? '<i class="lf-fit-i"></i>' : ''}
         ${pairImg ? '' : `<div class="lf-pair-avas">${ava(who, 'xl')}${ava(other, 'xl')}</div>`}
         <button class="lf-glass" data-act="pair-pic">${icon('image')} ${pairImg ? 'Сменить' : 'Кадр пары'}</button>
-        <h2>${esc(shortName(canonName(who)))} <i>×</i> ${esc(shortName(canonName(other)))}</h2>
+        <h2>${esc(A)} <i>×</i> ${esc(B)}</h2>
     </section>
-    <div class="lf-bars">
-        ${SCALES.map(([f, label, ic]) => bar(ic, label, p[f])).join('')}
-    </div>
-    ${seg([['common', 'Общее'], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab')}
+    ${bars}` : ''}
+    ${seg([['common', 'Общее'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab')}
     ${body}`;
+}
+
+// треугольники: список и лист правки
+function triFig(t) {
+    const sides = t.who.filter(n => !sameName(n, t.center));
+    return `<span class="lf-tri-fig"><svg viewBox="0 0 80 70" aria-hidden="true"><path d="M40 14 L13 56 L67 56 Z"/></svg>
+        <span class="v c">${ava(t.center)}</span><span class="v l">${ava(sides[0] || '')}</span><span class="v r">${ava(sides[1] || '')}</span></span>`;
+}
+
+function triCard(t, rs) {
+    const k = triKind(t.kind), e = triEnd(t.end);
+    const heat = triHeat(t, rs);
+    const sides = t.who.filter(n => !sameName(n, t.center)).map(n => shortName(canonName(n)));
+    return `<button class="lf-tri${t.on === false ? ' off' : ''}" data-act="tri-edit" data-id="${esc(t.id)}">
+        ${triFig(t)}
+        <span class="lf-tri-t">
+            <b>${esc(sides[0] || '?')} — ${esc(shortName(canonName(t.center)))} — ${esc(sides[1] || '?')}</b>
+            <small>${icon(k[2])} ${k[1]} · ${e[1]}${t.on === false ? ' · выключен' : ''}</small>
+            <span class="lf-tri-heat"><span>Накал</span><i class="lf-meter"><b style="width:${heat}%"></b></i><small>${heat}</small></span>
+            ${t.note ? `<span class="lf-tri-note">${esc(cut(t.note, 120))}</span>` : ''}
+        </span>
+    </button>`;
+}
+
+function triListHtml(who, other) {
+    const rs = relationsState();
+    const list = triangles().filter(t => t.who?.some(n => sameName(n, who)))
+        .sort((a, b) => (b.who.some(n => sameName(n, other)) ? 1 : 0) - (a.who.some(n => sameName(n, other)) ? 1 : 0));
+    return `<div class="lf-hint-i">Трое, где чувства к одному влияют на другого. Когда все трое в сцене (или третьего упомянули), модель держит эту ось и ведёт её туда, куда ты скажешь.</div>
+    ${list.length ? list.map(t => triCard(t, rs)).join('') : `<div class="lf-empty small">Треугольников с ${esc(shortName(canonName(who)))} пока нет.</div>`}
+    <button class="lf-btn full" data-act="tri-new">${icon('plus')} Новый треугольник</button>`;
+}
+
+function triPool() {
+    const st = worldState();
+    const names = [...castNames(st)];
+    const add = (n) => { const k = canonName(n); if (k && !names.some(x => sameName(x, k))) names.push(k); };
+    Object.keys(st.npcs || {}).forEach(add);
+    Object.values(relationsState()).forEach(p => { add(p.a); add(p.b); });
+    triangles().forEach(t => t.who?.forEach(add));
+    (ui.tri?.who || []).forEach(add);
+    return names;
+}
+
+function triSheetHtml() {
+    const d = ui.tri;
+    const pool = triPool();
+    const chip = (act, v, on, label) => `<button class="lf-chip${on ? ' on' : ''}" data-act="${act}" data-v="${esc(v)}">${label}</button>`;
+    const k = triKind(d.kind), e = triEnd(d.end);
+    return `<div class="lf-field"><label>Кто (трое)</label><div class="lf-chips wrap">${pool.map(n => chip('tri-who', n, d.who.some(x => sameName(x, n)), esc(shortName(n)))).join('')}</div>
+        <div class="lf-inline"><input type="text" data-f="triadd" placeholder="Ещё имя (например, Земо)"><button class="lf-btn" data-act="tri-add">${icon('plus')}</button></div></div>
+    ${d.who.length === 3 ? `<div class="lf-field"><label>Кто в центре — между двумя другими</label><div class="lf-chips wrap">${d.who.map(n => chip('tri-center', n, sameName(n, d.center), esc(shortName(n)))).join('')}</div></div>` : `<div class="lf-hint">Выбери троих — осталось ${3 - d.who.length}.</div>`}
+    <div class="lf-field"><label>Ось</label><div class="lf-chips wrap">${TRI_KINDS.map(([id, label, ic]) => chip('tri-kind', id, d.kind === id, `${icon(ic)} ${label}`)).join('')}</div>
+        <div class="lf-hint">${esc(k[3].replaceAll('{c}', d.center ? shortName(d.center) : 'центр'))}</div></div>
+    <div class="lf-field"><label>Куда ведём</label><div class="lf-chips wrap">${TRI_ENDS.map(([id, label]) => chip('tri-end', id, d.end === id, label)).join('')}</div>
+        <div class="lf-hint">${esc(e[2])}</div></div>
+    <div class="lf-field"><label>Заметка для модели (по желанию)</label><textarea data-f="trinote" rows="2" placeholder="Например: Баки не боится, что она уйдёт, — бесится, что Земо видит его насквозь">${esc(d.note || '')}</textarea></div>
+    <button class="lf-btn primary serif full big" data-act="tri-save"${d.who.length === 3 && d.center ? '' : ' disabled'}>${icon('check')} Сохранить</button>
+    ${d.id ? `<div class="lf-actions"><button class="lf-btn ghost" data-act="tri-onoff">${icon('power')} ${d.on === false ? 'Включить' : 'Выключить'}</button><button class="lf-btn ghost" data-act="tri-del">${icon('trash')} Удалить</button></div>` : ''}`;
+}
+
+function triSheet() {
+    const box = document.querySelector('#lf-app .lf-sheet');
+    if (box?.dataset.k === 'tri') { box.querySelector('.lf-sheet-body').innerHTML = triSheetHtml(); return; }
+    openSheet(ui.tri.id ? 'Треугольник' : 'Новый треугольник', triSheetHtml(), (b) => { b.dataset.k = 'tri'; });
+}
+
+function triKeepNote(box) {
+    const ta = box?.querySelector('[data-f="trinote"]');
+    if (ta && ui.tri) ui.tri.note = ta.value.trim();
 }
 
 // ───── Деньги (банк Телефона) ─────
@@ -2176,8 +2357,9 @@ function chronSheet(i) {
                 : `«${esc(o.name)}»${o.holder ? ` у ${esc(o.holder)}` : ''}${o.where ? ` — ${esc(o.where)}` : ''}`;
     openSheet(`${icon('spark')} Летописец · #${i}`, `
         ${e.chips?.length ? `<div class="lf-statechip static">${icon('spark')}<span>${e.chips.map(esc).join(' <b>·</b> ')}</span></div>` : ''}
+        ${e.scene ? `<div class="lf-row lf-scene-l">${icon('flame')}<span>Тон поста: ${esc(sceneLabel(e.scene))}</span></div>` : ''}
         ${e.ops?.length ? `${sec('Вещи')}<div class="lf-list">${e.ops.map(o => `<div class="lf-row">${icon(o.op === 'drop' ? 'trash' : o.op === 'merge' ? 'layers' : 'box')}<span>${opLine(o)}</span></div>`).join('')}</div>` : ''}
-        ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} × ${esc(r.b)}: ${SCALES.filter(([f]) => r[f]).map(([f, label]) => `${label.toLowerCase()} ${r[f] > 0 ? '+' : ''}${r[f]}`).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
+        ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} ${r.dir ? '→' : '×'} ${esc(r.b)}: ${SCALES.filter(([f]) => r[f]).map(([f, label]) => `${label.toLowerCase()} ${r[f] > 0 ? '+' : ''}${r[f]}`).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
         ${e.sec?.length ? `${sec('Тайны')}<div class="lf-list">${e.sec.map(x => `<div class="lf-row">${icon('lock')}<span>${esc(x.text)} <small>знает: ${esc(x.knows.join(', '))}</small></span></div>`).join('')}</div>` : ''}
         ${e.place ? `<div class="lf-hint">Место: ${esc(e.place.location)}${e.place.region ? ` · район «${esc(e.place.region)}»` : ''}</div>` : ''}
         ${sec('Деталь крупным планом')}
@@ -2371,6 +2553,8 @@ async function onClick(ev) {
 
     if (act === 'mood') { setMood(el.dataset.v); render(); toast('info', el.dataset.v ? 'Тон уйдёт модели до конца главы' : 'Тон — сам, по ходу сцены', '✦ Настроение', { timeOut: 1600 }); return; }
     if (act === 'intim') { cycleIntim(); render(); return; }
+    if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
+    if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
     if (act.startsWith('sim-')) {
         try { await simClick(act, el, ev); } catch (e) { console.warn('[Life] Жизнь', e); toast('warning', esc(String(e?.message || e)), '✦ Life'); }
         return;
@@ -2699,22 +2883,102 @@ async function onClick(ev) {
             saveSettings(); closeSheet(); render();
         }); break;
         case 'pair-edit': {
-            const p = relationsState()[pairKey(ui.who, ui.pair)] || scaleBase();
-            const rng = (k, label, v) => `<div class="lf-field"><label>${label}: <b data-out="${k}">${v}</b></label><input type="range" min="0" max="100" value="${v}" data-rng="${k}"></div>`;
-            openSheet(`${esc(shortName(ui.who))} × ${esc(shortName(ui.pair))}`, `${SCALES.map(([f, label]) => rng(f, label, p[f])).join('')}
+            const pp = relationsState()[pairKey(ui.who, ui.pair)];
+            const mine = pp ? relSide(pp, ui.who) : scaleBase(), theirs = pp ? relSide(pp, ui.pair) : scaleBase();
+            const A = shortName(canonName(ui.who)), B = shortName(canonName(ui.pair));
+            const rng = (d, k, label, v) => `<div class="lf-field"><label>${label}: <b data-out>${v}</b></label><input type="range" min="0" max="100" value="${v}" data-rng="${d}.${k}"></div>`;
+            openSheet(`${esc(A)} × ${esc(B)}`, `${sec(`${esc(A)} → ${esc(B)}`)}
+                ${SCALES.map(([f, label]) => rng('ab', f, label, mine[f])).join('')}
+                ${sec(`${esc(B)} → ${esc(A)}`)}
+                ${SCALES.map(([f, label]) => rng('ba', f, label, theirs[f])).join('')}
                 <button class="lf-btn primary full" data-act="pair-save">${icon('check')} Сохранить</button>
-                <div class="lf-hint">Это точка отсчёта — дальше Летописец двигает шкалы сам после каждого поста.</div>`);
+                <div class="lf-hint">Это точка отсчёта — дальше Летописец двигает шкалы сам после каждого поста, отдельно для каждой стороны.</div>`);
             break;
         }
         case 'pair-save': {
-            const cur = relationsState()[pairKey(ui.who, ui.pair)] || scaleBase();
+            const pp = relationsState()[pairKey(ui.who, ui.pair)];
             const cm = chatMeta();
-            cm.pairBase = cm.pairBase || {};
-            const k = pairKey(ui.who, ui.pair);
-            const b0 = { ...scaleBase(), ...(cm.pairBase[k] || {}) };
-            const want = (f) => Number(box.querySelector(`[data-rng="${f}"]`).value);
-            cm.pairBase[k] = Object.fromEntries(SCALES.map(([f]) => [f, b0[f] + want(f) - cur[f]]));
-            saveMeta(); closeSheet(); render();
+            cm.relBase = cm.relBase || {};
+            const oldB = (cm.pairBase || {})[pairKey(ui.who, ui.pair)] || {};
+            for (const [d, from, to] of [['ab', ui.who, ui.pair], ['ba', ui.pair, ui.who]]) {
+                const cur = pp ? relSide(pp, from) : scaleBase();
+                const dk = dirKey(from, to);
+                const b0 = { ...scaleBase(), ...oldB, ...(cm.relBase[dk] || {}) };
+                const want = (f) => Number(box.querySelector(`[data-rng="${d}.${f}"]`).value);
+                cm.relBase[dk] = Object.fromEntries(SCALES.map(([f]) => [f, b0[f] + want(f) - cur[f]]));
+            }
+            if (cm.pairBase) delete cm.pairBase[pairKey(ui.who, ui.pair)];
+            saveMeta(); closeSheet(); render(); updateMovePrompt();
+            break;
+        }
+
+        // треугольники
+        case 'tri-new': {
+            const who = [ui.who, ui.pair].filter(Boolean).map(canonName);
+            ui.tri = { id: '', who, center: who.find(n => sameName(n, ctx().name1)) || who[0] || '', kind: 'jeal', end: 'hold', note: '', on: true };
+            triSheet();
+            break;
+        }
+        case 'tri-edit': {
+            const t = triangles().find(x => x.id === el.dataset.id);
+            if (!t) break;
+            ui.tri = JSON.parse(JSON.stringify(t));
+            triSheet();
+            break;
+        }
+        case 'tri-who': {
+            if (!ui.tri) break;
+            triKeepNote(box);
+            const n = el.dataset.v;
+            const i = ui.tri.who.findIndex(x => sameName(x, n));
+            if (i >= 0) ui.tri.who.splice(i, 1);
+            else if (ui.tri.who.length < 3) ui.tri.who.push(canonName(n));
+            else { ui.tri.who.shift(); ui.tri.who.push(canonName(n)); }
+            if (!ui.tri.who.some(x => sameName(x, ui.tri.center))) ui.tri.center = ui.tri.who.length === 3 ? ui.tri.who.find(x => sameName(x, ctx().name1)) || ui.tri.who[1] : '';
+            triSheet();
+            break;
+        }
+        case 'tri-add': {
+            if (!ui.tri) break;
+            triKeepNote(box);
+            const inp = box?.querySelector('[data-f="triadd"]');
+            const n = canonName((inp?.value || '').trim());
+            if (!n) break;
+            if (!ui.tri.who.some(x => sameName(x, n))) { if (ui.tri.who.length >= 3) ui.tri.who.shift(); ui.tri.who.push(n); }
+            if (ui.tri.who.length === 3 && !ui.tri.who.some(x => sameName(x, ui.tri.center))) ui.tri.center = ui.tri.who.find(x => sameName(x, ctx().name1)) || ui.tri.who[1];
+            triSheet();
+            break;
+        }
+        case 'tri-center': if (ui.tri) { triKeepNote(box); ui.tri.center = el.dataset.v; triSheet(); } break;
+        case 'tri-kind': if (ui.tri) { triKeepNote(box); ui.tri.kind = el.dataset.v; triSheet(); } break;
+        case 'tri-end': if (ui.tri) { triKeepNote(box); ui.tri.end = el.dataset.v; triSheet(); } break;
+        case 'tri-save': {
+            const d = ui.tri;
+            if (!d || d.who.length !== 3 || !d.center) break;
+            triKeepNote(box);
+            const list = triangles();
+            const rec = { id: d.id || `t${Date.now().toString(36)}`, who: d.who.map(canonName), center: canonName(d.center), kind: d.kind, end: d.end, note: d.note || '', on: d.on !== false };
+            const i = list.findIndex(x => x.id === rec.id);
+            if (i >= 0) list[i] = rec; else list.push(rec);
+            ui.tri = null;
+            saveMeta(); closeSheet(); ui.relTab = 'tri'; render(); updateMovePrompt();
+            toast('success', 'Модель будет держать эту ось, когда все трое рядом', '✦ Треугольник', { timeOut: 1800 });
+            break;
+        }
+        case 'tri-onoff': {
+            const t = triangles().find(x => x.id === ui.tri?.id);
+            if (!t) break;
+            t.on = t.on === false;
+            ui.tri.on = t.on;
+            saveMeta(); triSheet(); render(); updateMovePrompt();
+            break;
+        }
+        case 'tri-del': {
+            const list = triangles();
+            const i = list.findIndex(x => x.id === ui.tri?.id);
+            if (i >= 0) list.splice(i, 1);
+            ui.tri = null;
+            saveMeta(); closeSheet(); render(); updateMovePrompt();
             break;
         }
 
@@ -2986,6 +3250,8 @@ const controlApi = {
     moodHtml: () => (hasChat() ? moodHtml('cc') : ''),
     setMood: (v) => setMood(v),
     cycleIntim: () => cycleIntim(),
+    setTone: (v) => setTone(v),
+    toggleIntimOpt: (v) => toggleIntimOpt(v),
 };
 
 const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: () => updateMovePrompt() };
@@ -2994,7 +3260,7 @@ const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
     castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
-    lastAiIndex, chatArr, chronStore, relationsState, secretsState, horaeEvents, ui, updatePrompt: () => updateMovePrompt(),
+    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, updatePrompt: () => updateMovePrompt(),
 };
 
 jQuery(async () => {

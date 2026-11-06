@@ -411,6 +411,7 @@ async function makeRumors() {
     const chips = Object.entries(store).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).slice(0, 20).map(([, e]) => (e.chips || []).join('; ')).filter(Boolean).reverse().join('\n');
     const moments = Object.values(A.relationsState()).flatMap(p => (p.moments || []).slice(-3).map(x => `${short(p.a)} и ${short(p.b)}: ${x.text}`)).slice(-10).join('\n');
     const secrets = A.secretsState().slice(-6).map(x => `- ${x.text} (знает: ${x.knows.join(', ')})`).join('\n');
+    const tris = (A.triangles?.() || []).filter(t => t.on !== false && t.who?.length === 3).map(t => `- ${t.who.map(short).join(' — ')} (в центре ${short(t.center)}${t.note ? `; ${t.note}` : ''})`).join('\n');
     const input = [
         `Дата: ${[A.weekday(st.timestamp?.story_date), st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(', ') || 'не записана'}. Место: ${st.scene?.location || '—'}`,
         `Герои: ${A.castNames(st).join(', ')}. Игрок пишет за ${userName()}.`,
@@ -418,6 +419,7 @@ async function makeRumors() {
         chips ? `Что менялось в последних постах:\n${chips}` : '',
         moments ? `Моменты пар:\n${moments}` : '',
         secrets ? `ТАЙНЫ (в слухах — только искажённо или намёком):\n${secrets}` : '',
+        tris ? `Треугольники (сплетники это чуют — можно намекнуть, но без пошлости):\n${tris}` : '',
         m.rumors?.rumors?.length ? `Прошлые слухи (не повторяй):\n${m.rumors.rumors.map(r => `- ${r.text}`).join('\n')}` : '',
     ].filter(Boolean).join('\n\n');
     const out = await A.askModel([{ role: 'system', content: RUMORS_SYSTEM }, { role: 'user', content: input }], 1600);
@@ -813,14 +815,15 @@ export async function simClick(act, el, ev) {
         case 'sim-ideas-gen': await A.withBusy(el, async () => {
             const who = A.canonName(el.dataset.name);
             const st = A.worldState();
-            const rel = Object.values(A.relationsState()).find(p => (A.sameName(p.a, who) && A.sameName(p.b, userName())) || (A.sameName(p.b, who) && A.sameName(p.a, userName())));
+            const rel = A.relOf(who, userName());
+            const back = A.relOf(userName(), who);
             const store = A.chronStore();
             const chips = Object.entries(store).sort((x, y) => parseInt(y[0]) - parseInt(x[0])).slice(0, 10).map(([, e]) => (e.chips || []).join('; ')).filter(Boolean).reverse().join('\n');
             const sl = nowSlot(who);
             const input = [
                 `Персонаж: ${who}. Игрок пишет за: ${userName()}. Можно: ${whoCfg(who).kinds.map(k => IDEA_KINDS[k]).join(', ')}.`,
                 prefsLine([userName(), who]) ? `Вкусы: ${prefsLine([userName(), who])}` : '',
-                rel ? `Отношения ${short(who)} и ${short(userName())}: доверие ${rel.trust}, близость ${rel.closeness}, напряжение ${rel.tension}. Моменты: ${(rel.moments || []).slice(-5).map(x => x.text).join('; ')}` : '',
+                rel ? `Чувства ${short(who)} к ${short(userName())}: доверие ${rel.trust}, близость ${rel.closeness}, влечение ${rel.desire}, ревность ${rel.jealousy}, напряжение ${rel.tension}, вина ${rel.guilt}. В ответ ${short(userName())} к ${short(who)}: доверие ${back?.trust ?? '—'}, близость ${back?.closeness ?? '—'}, напряжение ${back?.tension ?? '—'}. Моменты: ${(rel.moments || []).slice(-5).map(x => x.text).join('; ')}` : '',
                 `Сейчас: ${st.scene?.location || '—'}, ${[st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(' ')}. В сцене: ${(st.scene?.characters_present || []).join(', ') || '—'}.${sl ? ` По распорядку у ${short(who)}: ${sl.what}.` : ''}`,
                 chips ? `Последнее в истории:\n${chips}` : '',
                 `Уже задумано (не повторяй): ${m.ideas.filter(x => A.sameName(x.who, who) && x.status !== 'old').slice(-10).map(x => x.text).join('; ') || '—'}`,

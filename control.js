@@ -419,6 +419,8 @@ async function onCCClick(ev) {
         case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
         case 'mood': api.setMood?.(el.dataset.v); renderCC(); break;
         case 'intim': api.cycleIntim?.(); renderCC(); break;
+        case 'tone': api.setTone?.(el.dataset.v); renderCC(); break;
+        case 'iopt': api.toggleIntimOpt?.(el.dataset.v); renderCC(); break;
         case 'sheet-close': closeSheet(); break;
         case 'scene': goLife('scene'); break;
         case 'map': goLife('map'); break;
