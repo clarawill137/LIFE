@@ -16,7 +16,7 @@ import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, sync
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.12.0';
+const VERSION = '0.12.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -34,7 +34,7 @@ const DEFAULTS = {
     looks: {},
     pairs: {},
     autoMaps: 'ask',
-    chron: { on: true, profile: '', effort: 'low', tokens: 2000, timeoutSec: 75, titles: true, relations: true, secrets: true },
+    chron: { on: true, profile: '', effort: 'low', tokens: 4000, timeoutSec: 120, titles: true, relations: true, secrets: true },
     money: { autopay: true },
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
@@ -50,6 +50,8 @@ function settings() {
     const s = ext[MODULE];
     for (const [k, v] of Object.entries(DEFAULTS)) if (s[k] === undefined) s[k] = clone(v);
     for (const [k, v] of Object.entries(DEFAULTS.chron)) if (s.chron[k] === undefined) s.chron[k] = v;
+    // 0.12.1: под думающие модели (Аргон, Gemini Pro) — запас токенов и времени, иначе размышления съедают ответ
+    if (!s.chron.v121) { if ((Number(s.chron.tokens) || 0) < 4000) s.chron.tokens = 4000; if ((Number(s.chron.timeoutSec) || 0) < 120) s.chron.timeoutSec = 120; s.chron.v121 = 1; }
     for (const [k, v] of Object.entries(DEFAULTS.money)) if (s.money[k] === undefined) s.money[k] = v;
     for (const [k, v] of Object.entries(DEFAULTS.music)) if (s.music[k] === undefined) s.music[k] = clone(v);
     if (!s.detail || typeof s.detail !== 'object') s.detail = clone(DEFAULTS.detail);
@@ -811,7 +813,7 @@ async function runChron(i, { force = false } = {}) {
             chapterTitle: ch?.title, sim: so?.input, extra: ext.map(x => x.input).filter(Boolean),
         });
         const askDetail = !!s.detail.on;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext }) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -2117,6 +2119,8 @@ function renderCfg() {
         ${sw('on', 'Летописец после каждого поста', s.chron, 'chron.on')}
         <div class="lf-field"><label>Модель (профиль подключения)</label><select data-set="chron.profile">${profOpts(s.chron.profile)}</select></div>
         <div class="lf-field"><label>Reasoning effort</label><select data-set="chron.effort">${['', 'low', 'medium', 'high'].map(v => `<option value="${v}" ${v === s.chron.effort ? 'selected' : ''}>${v || 'из профиля'}</option>`).join('')}</select></div>
+        <div class="lf-field"><label>Токенов на ответ <small>(думающим моделям — 4000–8000, иначе мысли съедят ответ)</small></label><input type="number" min="1000" max="32000" step="500" data-set="chron.tokens" value="${esc(s.chron.tokens)}"></div>
+        <div class="lf-field"><label>Ждать ответа, сек</label><input type="number" min="30" max="600" step="10" data-set="chron.timeoutSec" value="${esc(s.chron.timeoutSec)}"></div>
         ${sw('titles', 'Придумывать названия главам', s.chron, 'chron.titles')}
         ${sw('relations', 'Вести шкалы и моменты отношений', s.chron, 'chron.relations')}
         ${sw('secrets', 'Замечать тайны', s.chron, 'chron.secrets')}
