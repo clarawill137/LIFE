@@ -13,6 +13,7 @@ const CC_DEFAULTS = {
 };
 
 const AGENTS = [
+    { key: 'repliky', label: 'Реплики', icon: 'message', opt: true },
     { key: 'conveyor', label: 'Конвейер', icon: 'bot', cmd: 'conveyor' },
     { key: 'charCluster', label: 'Кластер', icon: 'users', box: 'cl_enabled' },
     { key: 'backstage', label: 'Закулисье', icon: 'moon', box: 'bs_enabled' },
@@ -255,6 +256,13 @@ export function closeCC() {
     setTimeout(() => { if (dlg.open && ccOpenedAt === t && !dlg.classList.contains('on')) dlg.close(); }, 320);
 }
 
+// расширение не стоит (Конвейер убран в запас, Реплики не поставлены) — плитку не показываем
+function agentPresent(a) {
+    if (a.cmd) { try { return !!ctx().SlashCommandParser?.commands?.[a.cmd]; } catch { return true; } }
+    if (a.opt) return !!ctx().extensionSettings?.[a.key];
+    return true;
+}
+
 function agentOn(a) {
     const ext = ctx().extensionSettings || {};
     if (a.key === 'life.chron') return api.settings().chron?.on !== false && api.settings().enabled !== false;
@@ -286,6 +294,11 @@ function quickButtons() {
         out.push({ i, label, ic, title: el.title || '' });
     });
     return out;
+}
+
+// старый скрипт Tavern Helper «🎛 Режимы» ещё включён?
+function ttModes() {
+    return [...document.querySelectorAll(QB_SEL)].some(el => /Нежнятинка вкл\/выкл/i.test(el.textContent || el.title || ''));
 }
 
 function faClass(el) {
@@ -365,6 +378,8 @@ function renderCC() {
         <button class="cc-tile" data-cc="morning">${icon('sunrise')}<span>Утро</span></button>
     </div>
 
+    ${api.modesHtml ? (() => { const h = api.modesHtml(ttModes()); return h ? `<div class="cc-label">Режимы</div>${h}` : ''; })() : ''}
+
     ${api.moodHtml ? (() => { const h = api.moodHtml(); return h ? `<div class="cc-label">Настроение сцены</div>${h}` : ''; })() : ''}
 
     <div class="cc-label">Чат</div>
@@ -377,7 +392,7 @@ function renderCC() {
     <div class="cc-chips wrap">${blocks.map(b => `<button class="cc-chip btn" data-cc="block" data-v="${esc(b.name)}" data-t="${esc(b.block_type || '')}">${icon(b.block_type === 'rewrite' ? 'pencil' : b.block_type === 'script' ? 'zap' : 'blocks')}${esc(b.name)}</button>`).join('')}</div>` : ''}
 
     <div class="cc-label">Агенты</div>
-    <div class="cc-row">${AGENTS.map(a => toggleTile(a.key, a.label, a.icon, agentOn(a))).join('')}</div>
+    <div class="cc-row">${AGENTS.filter(agentPresent).map(a => toggleTile(a.key, a.label, a.icon, agentOn(a))).join('')}</div>
 
     ${profs.length ? `<div class="cc-label">Модель</div>
     <div class="cc-chips">${profs.map(p => `<button class="cc-chip${p.id === selected ? ' on' : ''}" data-cc="profile" data-v="${esc(p.name)}">${esc(p.name)}</button>`).join('')}</div>` : ''}
@@ -431,6 +446,19 @@ async function onCCClick(ev) {
     switch (act) {
         case 'close': closeCC(); break;
         case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
+        case 'mode': {
+            const on = api.toggleMode?.(el.dataset.v);
+            const label = el.textContent.replace(/\s+/g, ' ').trim();
+            api.toast(on ? 'success' : 'info', on ? `${esc(label)} — держу, пока не выключишь` : `${esc(label)} выключен`, '✦ Режимы', { timeOut: 1600 });
+            renderCC();
+            break;
+        }
+        case 'once': {
+            const id = api.armOnce?.(el.dataset.v);
+            api.toast('info', id === 'event' ? '🎲 В следующем ответе что-то случится' : id === 'calm' ? '🌙 Следующий ответ — без событий' : 'Отменено', '✦ Режимы', { timeOut: 1600 });
+            renderCC();
+            break;
+        }
         case 'mood': api.setMood?.(el.dataset.v); renderCC(); break;
         case 'intim': api.cycleIntim?.(); renderCC(); break;
         case 'tone': api.setTone?.(el.dataset.v); renderCC(); break;

@@ -1436,3 +1436,13 @@ body.lf-theme.lf-ava-wide #chat .lf-detail.wait { margin: 16px 0 10px; border-ra
 .lf-ag-acts .lf-btn { flex: 1; }
 .lf-off > span.lf-ag-ev-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: rgba(217, 104, 123, .14); color: var(--lf-rose2); }
 .lf-ag-ev-ic .lf-i { width: 16px; height: 16px; }
+
+/* ───────────── режимы (пульт) ───────────── */
+.lf-modes .lf-mode-chip { gap: 6px; }
+.lf-mode-emo { font-size: 15px; line-height: 1; filter: saturate(1.1); }
+.lf-modes.lf-once { margin-top: 8px; }
+.lf-modes.lf-once .cc-chip { padding: 7px 12px; font-size: 12px; opacity: .92; }
+.lf-modes .cc-chip.on { background: rgba(217, 104, 123, .26); border-color: rgba(217, 104, 123, .65); box-shadow: 0 0 0 3px rgba(217, 104, 123, .12); }
+.lf-modes-warn { margin: 10px 4px 0; padding: 9px 12px; border-radius: 12px; background: rgba(242, 200, 121, .1); border: 1px solid rgba(242, 200, 121, .3); color: #f2c879; font-size: 12px; line-height: 1.45; }
+body.lf-modes-on #send_form { box-shadow: inset 0 2px 0 var(--lf-mode-color, #f2a7c3); }
+body.lf-modes-on #send_textarea::placeholder { color: var(--lf-mode-color, #f2a7c3); }

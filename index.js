@@ -12,10 +12,11 @@ import { initErrors } from './errors.js';
 import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson } from './people.js';
 import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
+import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.11.0';
+const VERSION = '0.12.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -635,7 +636,7 @@ function moveNote(mark) {
     return `[Новая глава${mark.title ? `: ${mark.title}` : ''}.${mark.note ? ` ${mark.note}` : ''}]`;
 }
 
-function updateMovePrompt(type) {
+function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
     const dir = settings().enabled ? chatMeta().director : null;
@@ -651,11 +652,15 @@ function updateMovePrompt(type) {
     }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
-    return text;
+    // режимы — отдельным ключом, который сортируется последним: самый конец промпта
+    let modes = '';
+    try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
+    try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
+    return [text, modes].filter(Boolean).join('\n');
 }
 
 globalThis.life_intercept = async function (_chat, _size, _abort, type) {
-    try { if (type !== 'quiet') updateMovePrompt(type); } catch (e) { console.warn('[Life] перехват', e); }
+    try { if (type !== 'quiet') updateMovePrompt(type, true); } catch (e) { console.warn('[Life] перехват', e); }
 };
 
 async function removeMarker(id) {
@@ -676,6 +681,19 @@ let chronRunning = false;
 function msgKey(m) { return `${m?.swipe_id ?? 0}:${hash(m?.mes || '')}`; }
 function chronStore() { const cm = chatMeta(); if (!cm.chron || typeof cm.chron !== 'object') cm.chron = {}; return cm.chron; }
 function chronOf(i) { const m = chatArr()[i]; return m ? chronStore()[`${i}:${msgKey(m)}`] || null : null; }
+/** Сообщение поправили снаружи (Реплики подменили реплику) — запись Летописца переезжает на новый текст. */
+function rekeyChron(i, oldMes) {
+    const m = chatArr()[i];
+    if (!m || oldMes == null) return false;
+    const st = chronStore();
+    const oldK = `${i}:${m.swipe_id ?? 0}:${hash(oldMes)}`;
+    const newK = `${i}:${msgKey(m)}`;
+    if (oldK === newK || !st[oldK]) return false;
+    if (!st[newK]) st[newK] = st[oldK];
+    delete st[oldK];
+    saveMeta();
+    return true;
+}
 
 function trimChron() {
     const st = chronStore();
@@ -3267,6 +3285,7 @@ function onChatChanged() {
     hookChat();
     decorateSoon(200);
     updateMovePrompt();
+    syncBody();
     if (ui.open) closeHub();
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
@@ -3291,6 +3310,10 @@ const controlApi = {
     cycleIntim: () => cycleIntim(),
     setTone: (v) => setTone(v),
     toggleIntimOpt: (v) => toggleIntimOpt(v),
+    modesHtml: (tt) => (hasChat() && settings().enabled ? modesHtml(esc, tt) : ''),
+    toggleMode: (v) => toggleMode(v),
+    armOnce: (v) => armOnce(v),
+    rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
 };
 
 const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: () => updateMovePrompt() };
@@ -3305,7 +3328,7 @@ const simApi = {
 
 globalThis.LifeBridge = {
     version: VERSION,
-    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon },
+    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes) },
     register(mod) {
         if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;
         bridgeMods.push(mod);
@@ -3321,6 +3344,7 @@ jQuery(async () => {
     settings();
     initSim(simApi);
     initMood(moodApi);
+    initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
@@ -3349,7 +3373,7 @@ jQuery(async () => {
         updateMovePrompt();
     };
     for (const ev of [E.GENERATION_ENDED, E.GENERATION_STOPPED]) if (ev) eventSource.on(ev, endGen);
-    if (E.APP_READY) eventSource.on(E.APP_READY, () => { addWandButton(); hookChat(); decorateSoon(); updateMovePrompt(); });
+    if (E.APP_READY) eventSource.on(E.APP_READY, () => { addWandButton(); hookChat(); decorateSoon(); updateMovePrompt(); syncBody(); });
     decorateSoon(300);
     updateMovePrompt();
     setTimeout(updateSceneBg, 1500);
