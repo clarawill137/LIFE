@@ -1419,7 +1419,7 @@ function render() {
         if (on) app.querySelector('.lf-tab-ink').style.transform = `translateX(${i * 100}%)`;
     });
     const me = app.querySelector('.lf-me');
-    if (me) me.innerHTML = ava(ui.tab === 'person' && ui.who && !String(ui.who).startsWith('pet:') ? ui.who : ctx().name1, 'ring');
+    if (me) me.innerHTML = ava(ui.tab === 'person' && ui.who && !String(ui.who).startsWith('pet:') && !bridgeOf(ui.who) ? ui.who : ctx().name1, 'ring');
     const body = app.querySelector('.lf-body');
     const same = body.dataset.tab === ui.tab;
     const keep = same ? body.scrollTop : 0;
