@@ -90,7 +90,7 @@ traces — следы в местах, которые переживут эту 
 
 const PETS_RULE = `
 
-pets — что в этом посте случилось с питомцами (и с новыми животными в доме): [{"name":"кличка","fed":false,"played":false,"petted":false,"hurt":"","with":"кто был с ним","moment":"3–8 слов, если был милый или важный момент","new":false,"kind":"кошка|собака|…","look":"как выглядит"}]. new — true, только если в истории появился новый питомец героев. Ничего — [].`;
+pets — что в этом посте случилось с питомцами (и с новыми животными в доме): [{"name":"кличка","fed":false,"played":false,"petted":false,"cleaned":false,"hurt":"","with":"кто был с ним","moment":"3–8 слов, если был милый или важный момент","new":false,"kind":"кошка|собака|…","look":"как выглядит"}]. cleaned — убрали лоток или выгуляли. new — true, только если в истории появился новый питомец героев. Ничего — [].`;
 
 const PEOPLE_RULE = `
 
@@ -199,7 +199,7 @@ export function normalizeResult(j) {
             kind: ['trace', 'note', 'food', 'gift'].includes(str(x.kind)) ? str(x.kind) : 'trace',
         })).slice(0, 8),
         pets: arr(j?.pets).filter(x => str(x?.name)).map(x => ({
-            name: str(x.name).slice(0, 40), fed: !!x.fed, played: !!x.played, petted: !!x.petted, hurt: str(x.hurt).slice(0, 80),
+            name: str(x.name).slice(0, 40), fed: !!x.fed, played: !!x.played, petted: !!x.petted, cleaned: !!x.cleaned, hurt: str(x.hurt).slice(0, 80),
             with: str(x.with), moment: str(x.moment).slice(0, 80), new: !!x.new, kind: str(x.kind).slice(0, 30), look: str(x.look).slice(0, 160),
         })).slice(0, 4),
         people: arr(j?.people).filter(x => str(x?.name)).map(x => ({

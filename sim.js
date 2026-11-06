@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
 import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
+import { loreAbout } from './inner.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
 let A = null;
@@ -323,13 +324,25 @@ function parseSched(text) {
 // ───────────── питомцы ─────────────
 
 const PET_KINDS = {
-    cat: { label: 'Домашний кот', en: 'cat', needs: [['food', 'Сытость', 6], ['play', 'Игра', 5], ['love', 'Ласка', 4], ['health', 'Здоровье', 0]] },
-    dog: { label: 'Домашний пёс', en: 'dog', needs: [['food', 'Сытость', 6], ['play', 'Прогулка', 7], ['love', 'Ласка', 5], ['health', 'Здоровье', 0]] },
-    other: { label: 'Питомец', en: 'pet', needs: [['food', 'Сытость', 5], ['play', 'Внимание', 4], ['love', 'Ласка', 3], ['health', 'Здоровье', 0]] },
+    cat: { m: 'Домашний кот', f: 'Домашняя кошка', en: 'cat', needs: [['food', 'Сытость', 6], ['play', 'Игра', 5], ['love', 'Ласка', 4], ['tray', 'Лоток', 3], ['health', 'Здоровье', 0]] },
+    dog: { m: 'Домашний пёс', f: 'Домашняя собака', en: 'dog', needs: [['food', 'Сытость', 6], ['play', 'Прогулка', 7], ['love', 'Ласка', 5], ['health', 'Здоровье', 0]] },
+    other: { m: 'Питомец', f: 'Питомец', en: 'pet', needs: [['food', 'Сытость', 5], ['play', 'Внимание', 4], ['love', 'Ласка', 3], ['health', 'Здоровье', 0]] },
 };
-const NEED_ICON = { food: 'utensils', play: 'zap', love: 'heart', health: 'activity' };
+const NEED_ICON = { food: 'utensils', play: 'zap', love: 'heart', tray: 'sparkles', health: 'activity' };
+// темперамент: [ключ, левый край м/ж, правый край м/ж]
+const TEMPER = [
+    ['affection', ['Независимый', 'Независимая'], ['Ласковый', 'Ласковая']],
+    ['energy', ['Спокойный', 'Спокойная'], ['Шкодливый', 'Шкодливая']],
+    ['bold', ['Пугливый', 'Пугливая'], ['Смелый', 'Смелая']],
+    ['social', ['Только свои', 'Только свои'], ['Любит гостей', 'Любит гостей']],
+];
 const guessKind = (t) => { t = String(t || '').toLowerCase(); return /кош|кот|кис|cat/.test(t) ? 'cat' : /соба|пёс|пес|щен|dog/.test(t) ? 'dog' : 'other'; };
 const pk = (p) => PET_KINDS[p.kind] || PET_KINDS.other;
+/** Пол питомца: по полю, иначе по прилагательным в характере («наглая» → она). */
+const isF = (p) => (p.sex ? p.sex === 'f' : (p.traits || []).some(t => /(ая|яя)$/i.test(String(t).trim())));
+const pg = (p, m, f) => (isF(p) ? f : m);
+const kindLabel = (p) => (isF(p) ? pk(p).f : pk(p).m);
+const kindWord = (p) => kindLabel(p).toLowerCase().replace(/^домашн(ий|яя)\s+/, '');
 
 function needOf(p, k, now = rpNow()) {
     const n = p.needs?.[k];
@@ -341,10 +354,11 @@ function setNeed(p, k, v, now = rpNow()) { p.needs = p.needs || {}; p.needs[k] =
 
 function needWord(p, k, v) {
     const dog = p.kind === 'dog';
-    if (k === 'food') return v >= 70 ? 'Сыт' : v >= 40 ? 'Не прочь перекусить' : v >= 20 ? 'Голодный' : 'Орёт от голода';
-    if (k === 'play') return v >= 60 ? (dog ? 'Нагулялся' : 'Наигрался') : v >= 30 ? (dog ? 'Просится гулять' : 'Хочет играть') : (dog ? 'Скулит у двери' : 'Шкодит от скуки');
-    if (k === 'love') return v >= 60 ? 'Довольный' : v >= 30 ? 'Ищет внимания' : 'Обиделся';
-    return v >= 70 ? 'Здоров' : v >= 40 ? 'Вялый' : 'Болеет';
+    if (k === 'food') return v >= 70 ? pg(p, 'Сыт', 'Сыта') : v >= 40 ? 'Не прочь перекусить' : v >= 20 ? pg(p, 'Голодный', 'Голодная') : 'Орёт от голода';
+    if (k === 'play') return v >= 60 ? (dog ? pg(p, 'Нагулялся', 'Нагулялась') : pg(p, 'Наигрался', 'Наигралась')) : v >= 30 ? (dog ? 'Просится гулять' : 'Хочет играть') : (dog ? 'Скулит у двери' : 'Шкодит от скуки');
+    if (k === 'love') return v >= 60 ? pg(p, 'Довольный', 'Довольная') : v >= 30 ? 'Ищет внимания' : pg(p, 'Обиделся', 'Обиделась');
+    if (k === 'tray') return v >= 60 ? 'Лоток чистый' : v >= 30 ? 'Пора убрать лоток' : 'Лоток — беда';
+    return v >= 70 ? pg(p, 'Здоров', 'Здорова') : v >= 40 ? pg(p, 'Вялый', 'Вялая') : pg(p, 'Болеет', 'Болеет');
 }
 function sleepy(p, now) {
     const h = now.hour;
@@ -353,14 +367,17 @@ function sleepy(p, now) {
 }
 function urgentText(p, k, v) {
     const dog = p.kind === 'dog';
-    if (k === 'food' && v < 30) return dog ? 'голоден — сидит у миски, скулит, ходит хвостом' : 'давно не ел — голоден, громко орёт, путается под ногами и требует еду';
-    if (k === 'play' && v < 25) return dog ? 'засиделся без прогулки — носится, тащит поводок, скулит у двери' : 'заскучал — шкодит, носится по дому, нападает на ноги';
-    if (k === 'love' && v < 25) return 'обижен, что на него не обращают внимания — то лезет на руки, то демонстративно игнорирует';
-    if (k === 'health' && v < 45) return `нездоров${p.hurt ? ` (${p.hurt})` : ''} — вялый, прячется`;
+    if (k === 'food' && v < 30) return dog ? pg(p, 'голоден — сидит у миски, скулит, ходит хвостом', 'голодна — сидит у миски, скулит, ходит хвостом') : pg(p, 'давно не ел — голоден, громко орёт, путается под ногами и требует еду', 'давно не ела — голодна, громко орёт, путается под ногами и требует еду');
+    if (k === 'play' && v < 25) return dog ? pg(p, 'засиделся без прогулки — носится, тащит поводок, скулит у двери', 'засиделась без прогулки — носится, тащит поводок, скулит у двери') : pg(p, 'заскучал — шкодит, носится по дому, нападает на ноги', 'заскучала — шкодит, носится по дому, нападает на ноги');
+    if (k === 'love' && v < 25) return pg(p, 'обижен, что на него не обращают внимания — то лезет на руки, то демонстративно игнорирует', 'обижена, что на неё не обращают внимания — то лезет на руки, то демонстративно игнорирует');
+    if (k === 'tray' && v < 25) return 'лоток давно не убирали — демонстративно орёт у лотка, может сделать дела мимо назло';
+    if (k === 'health' && v < 45) return `${pg(p, 'нездоров', 'нездорова')}${p.hurt ? ` (${p.hurt})` : ''} — ${pg(p, 'вялый', 'вялая')}, прячется`;
     return '';
 }
 function favOf(p) {
     if (p.favName) return p.favName;
+    const top = (p.people || []).slice().sort((a, b) => (b.love || 0) - (a.love || 0))[0];
+    if (top && (top.love || 0) >= 70) return top.name;
     const e = Object.entries(p.fav || {}).sort((a, b) => b[1] - a[1])[0];
     return e && e[1] >= 2 ? e[0] : '';
 }
@@ -370,7 +387,7 @@ function findPet(name) {
 }
 function petById(id) { return M().pets.find(p => p.id === id) || null; }
 function newPet({ name = 'Без имени', kind = 'cat', look = '' } = {}) {
-    const p = { id: A.uid(), name, kind, look, traits: [], home: homeLoc(), img: '', fav: {}, favName: '', needs: {}, moments: [], on: true, hurt: '' };
+    const p = { id: A.uid(), name, kind, look, traits: [], home: homeLoc(), img: '', fav: {}, favName: '', needs: {}, moments: [], on: true, hurt: '', sex: '', age: '', story: '', owner: '', people: [], likes: [], dislikes: [], habits: [], temper: {}, health: '' };
     const now = rpNow();
     for (const [k] of pk(p).needs) setNeed(p, k, k === 'health' ? 100 : 80, now);
     M().pets.push(p);
@@ -392,6 +409,7 @@ function applyPets(list, i) {
         if (e.fed) setNeed(p, 'food', 100, now);
         if (e.played) setNeed(p, 'play', 100, now);
         if (e.petted) setNeed(p, 'love', needOf(p, 'love', now) + 45, now);
+        if (e.cleaned && pk(p).needs.some(n => n[0] === 'tray')) setNeed(p, 'tray', 100, now);
         if (e.hurt) { setNeed(p, 'health', needOf(p, 'health', now) - 35, now); p.hurt = e.hurt; p.moments.push({ t: e.hurt, mes: i, bad: true }); }
         if (e.with) { const w = A.canonName(e.with); if (w) p.fav[w] = (p.fav[w] || 0) + 1; }
         if (e.moment) p.moments.push({ t: e.moment, mes: i, with: e.with ? A.canonName(e.with) : '' });
@@ -482,7 +500,7 @@ export function simChronOpts() {
             sched: inits.map(n => { const sl = nowSlot(n); return sl ? `${short(n)} — ${sl.what}${sl.where ? ` (${sl.where})` : ''}` : ''; }).filter(Boolean).join('; '),
             ideas: ideasNow.map(x => `[${x.id}] ${x.who}: ${x.text}`).join('\n'),
             traces: c.traces ? tracesLine(loc) : '',
-            pets: c.pets && pets.length ? pets.map(p => `${p.name} (${pk(p).label.toLowerCase()}${p.home ? `, живёт: ${p.home}` : ''})`).join('; ') : '',
+            pets: c.pets && pets.length ? pets.map(p => `${p.name} (${kindWord(p)}${p.home ? `, живёт: ${p.home}` : ''})`).join('; ') : '',
         },
     };
 }
@@ -540,12 +558,18 @@ export function simPrompt(type) {
     }
     if (c.pets) {
         const now = rpNow();
+        const L = A.chatArr().length;
         for (const p of m.pets.filter(x => x.on !== false && petHere(x))) {
             const s = petState(p, now);
-            if (!s.urgent.length) continue;
-            const traits = (p.traits || []).slice(0, 3).join(', ');
-            const fav = favOf(p);
-            out.push(`[Питомец: ${pk(p).label.toLowerCase().replace('домашний ', '')} ${p.name}${traits ? ` (${traits})` : ''}${fav ? `, больше всех любит ${short(fav)}` : ''} — ${s.urgent.join('; ')}. Если он рядом в сцене — покажи это, пусть требует своего.]`);
+            const traits = (p.traits || []).slice(0, 4).join(', ');
+            const fam = petFamily(p);
+            const who = `${kindWord(p)} ${p.name}${traits ? ` (${traits})` : ''}${fam ? `. ${A.cap(fam)}` : ''}`;
+            if (s.urgent.length) out.push(`[Питомец: ${who} — ${s.urgent.join('; ')}. Если ${pg(p, 'он', 'она')} рядом в сцене — покажи это, пусть требует своего.]`);
+            else if (L % 6 === 0) {
+                const bits = [...(p.habits || []), ...(p.likes || []).map(x => `любит ${x}`)];
+                const pick = bits.length ? bits[Math.floor(L / 6) % bits.length] : '';
+                out.push(`[Дома ${who}. Живёт своей жизнью${pick ? `: ${pick}` : ''}. Может мелькнуть в сцене, если к месту, — не делай ${pg(p, 'его', 'её')} центром сцены.]`);
+            }
         }
     }
     if (m.rumorPush?.text) out.push(`[Слух, который сейчас ходит: «${m.rumorPush.text}». Кто-то из персонажей может его упомянуть или на него отреагировать.]`);
@@ -654,48 +678,132 @@ export function petsRowHtml(cur) {
     <button class="lf-pers add" data-act="sim-pet-new"><span class="lf-ava md"><i>${icon('plus')}</i></span><span class="lf-pers-n">Питомец</span></button>`;
 }
 
+function petFamily(p) {
+    const bits = [];
+    const owner = p.owner;
+    const ppl = p.people || [];
+    const feel = (x) => ((x.love ?? 50) >= 75 ? ', обожает' : (x.love ?? 50) < 30 ? ', сторонится' : '');
+    if (owner) {
+        const x = ppl.find(y => A.sameName(y.name, owner)) || {};
+        bits.push(`хозяин${x.role ? ` и «${x.role}»` : ''} — ${short(owner)}${feel(x)}`);
+    }
+    for (const x of ppl) {
+        if (owner && A.sameName(x.name, owner)) continue;
+        if (!x.role && (x.love ?? 50) < 70) continue;
+        bits.push(`${x.role ? `«${x.role}» — ` : ''}${short(x.name)}${feel(x)}`);
+    }
+    return bits.length ? `семья: ${bits.join('; ')}` : '';
+}
+
+const petList = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 12);
+/** Списки, где внутри пунктов бывают запятые: по строке на пункт (или через «;»). */
+const petLines = (v) => String(v || '').split(/\n|;/).map(x => x.trim()).filter(Boolean).slice(0, 14);
+const uniq = (list) => { const seen = new Set(); return list.filter(x => { const k = A.norm(x); if (seen.has(k)) return false; seen.add(k); return true; }); };
+
 export function renderPet(id) {
     const p = petById(id);
     if (!p) return '<div class="lf-empty small">Питомец не найден.</div>';
     const now = rpNow();
     const s = petState(p, now);
-    const fav = favOf(p);
     const where = p.home ? A.placeName(A.locTop(p.home)) : '';
     const last = p.moments.slice(-1)[0];
-    const words = s.needs.filter(n => n.k !== 'health' || n.v < 70).map(n => [NEED_ICON[n.k], n.word]);
-    if (s.sleepy) words.unshift(['moon', 'Сонный']);
+    const words = s.needs.filter(n => n.k !== 'health' || n.v < 70).sort((a, b) => a.v - b.v).map(n => [NEED_ICON[n.k], n.word]);
+    if (s.sleepy) words.unshift(['moon', pg(p, 'Сонный', 'Сонная')]);
+    const ppl = (p.people || []).slice().sort((a, b) => (A.sameName(b.name, p.owner) ? 1 : 0) - (A.sameName(a.name, p.owner) ? 1 : 0) || (b.love ?? 50) - (a.love ?? 50));
+    const together = (n) => p.fav?.[A.canonName(n)] || 0;
+    const chips = (list, cls = '') => `<div class="lf-chips wrap">${list.map(t => `<span class="lf-chip static${cls}">${esc(t)}</span>`).join('')}</div>`;
+    const t = p.temper || {};
+    const f = isF(p);
     return `<section class="lf-pethero${p.img ? ' lf-fit' : ''}"${A.fitAttr(p.img)}>${p.img ? '<i class="lf-fit-i"></i>' : `<span class="lf-pethero-ic">${icon('paw')}</span>`}
         <button class="lf-glass" data-act="sim-pet-pic" data-id="${esc(p.id)}">${icon('camera')} ${p.img ? 'Фото' : 'Нарисовать'}</button>
-        <div class="lf-pethero-t"><h2>${esc(p.name)}</h2><span>${esc(pk(p).label)}${where ? ` · ${esc(where)}` : ''}</span></div>
+        <div class="lf-pethero-t"><h2>${esc(p.name)}</h2><span>${esc([kindLabel(p), p.age, where].filter(Boolean).join(' · '))}</span></div>
     </section>
-    <div class="lf-chips wrap">
-        ${(p.traits || []).map(t => `<span class="lf-chip static">${icon('paw')} ${esc(t)}</span>`).join('')}
-        ${fav ? `<span class="lf-chip static on">${icon('heart')} Выбрал ${esc(short(fav))}</span>` : ''}
-    </div>
+    ${(p.traits || []).length ? `<div class="lf-chips wrap lf-pet-traits">${p.traits.map(x => `<span class="lf-chip static">${icon('paw')} ${esc(x)}</span>`).join('')}</div>` : ''}
     <div class="lf-petwords">${words.slice(0, 3).map(([ic, w]) => `<span>${icon(ic)}<b>${esc(w)}</b></span>`).join('')}</div>
-    <div class="lf-bars">${s.needs.map(n => `<div class="lf-bar-row${n.v < 30 ? ' low' : ''}">${icon(NEED_ICON[n.k])}<span>${esc(n.label)}</span><i class="lf-meter"><b style="width:${n.v}%"></b></i><small>${n.v}</small></div>`).join('')}</div>
     ${s.urgent.length ? `<div class="lf-note">${icon('activity')} ${esc(A.cap(s.urgent[0]))}. Модель это увидит, когда сцена дома.</div>` : ''}
+    ${ppl.length || p.owner ? `${A.sec('Семья', 'кто для неё кто'.replace('неё', pg(p, 'него', 'неё')))}
+    <div class="lf-pet-fam">${(ppl.length ? ppl : [{ name: p.owner, role: '', love: 80 }]).map(x => `<div class="lf-pet-p">${A.ava(x.name, 'sm')}
+        <span class="lf-pet-p-t"><b>${esc(short(x.name))}${A.sameName(x.name, p.owner) ? ` <i class="lf-pet-own">${icon('crown')} хозяин</i>` : ''}</b>${x.role ? `<small>«${esc(x.role)}»</small>` : ''}</span>
+        <span class="lf-pet-p-m"><i class="lf-meter"><b style="width:${x.love ?? 50}%"></b></i><small>${(x.love ?? 50) >= 80 ? 'обожает' : (x.love ?? 50) >= 60 ? 'любит' : (x.love ?? 50) >= 35 ? 'терпит' : 'сторонится'}${together(x.name) ? ` · ${together(x.name)} момент.` : ''}</small></span></div>`).join('')}</div>` : ''}
+    ${A.sec('Сейчас', s.sleepy ? 'сонное время' : '')}
+    <div class="lf-bars">${s.needs.map(n => `<div class="lf-bar-row${n.v < 30 ? ' low' : ''}">${icon(NEED_ICON[n.k])}<span>${esc(n.label)}</span><i class="lf-meter"><b style="width:${n.v}%"></b></i><small>${n.v}</small></div>`).join('')}</div>
+    ${A.sec('Темперамент')}
+    <div class="lf-temper">${TEMPER.map(([k, l, r]) => { const v = t[k] ?? 50; return `<div class="lf-temper-r"><span class="${v < 40 ? 'on' : ''}">${f ? l[1] : l[0]}</span><i class="lf-temper-b"><b style="left:${v}%"></b></i><span class="${v > 60 ? 'on' : ''}">${f ? r[1] : r[0]}</span></div>`; }).join('')}</div>
+    ${(p.likes || []).length ? `${A.sec('Любит')}${chips(p.likes)}` : ''}
+    ${(p.dislikes || []).length ? `${A.sec('Не любит')}${chips(p.dislikes, ' no')}` : ''}
+    ${(p.habits || []).length ? `${A.sec('Привычки')}<div class="lf-pet-habits">${p.habits.map(x => `<span>${icon('sparkles')} ${esc(x)}</span>`).join('')}</div>` : ''}
+    ${p.story ? `${A.sec('История')}<div class="lf-pet-story">${esc(p.story)}</div>` : ''}
+    ${p.health ? `${A.sec('Здоровье')}<div class="lf-pet-story dim">${esc(p.health)}</div>` : ''}
     ${last ? `<button class="lf-petmem" data-act="jump" data-mes="${last.mes}"><b>${esc(A.cap(last.t))}</b><small>${icon('image')} Воспоминание · #${last.mes}</small>${icon('right')}</button>` : ''}
     ${p.moments.length > 1 ? `${A.sec('Воспоминания', String(p.moments.length))}<div class="lf-timeline">${p.moments.slice(0, -1).reverse().slice(0, 20).map(x => `<button class="lf-tl" data-act="jump" data-mes="${x.mes}"><span class="lf-tl-dot"></span><span class="lf-tl-txt"><b>${esc(x.t)}</b><small>#${x.mes}${x.with ? ` · с ${esc(short(x.with))}` : ''}</small></span></button>`).join('')}</div>` : ''}
-    <div class="lf-actions"><button class="lf-btn" data-act="sim-pet-edit" data-id="${esc(p.id)}">${icon('pencil')} Характер и потребности</button></div>
-    <div class="lf-hint">Кормят, гладят и играют с ним — в постах: Летописец заметит, а голод и скука растут сами по времени Horae.</div>`;
+    <div class="lf-actions"><button class="lf-btn" data-act="sim-pet-edit" data-id="${esc(p.id)}">${icon('pencil')} Характер и семья</button><button class="lf-btn ghost" data-act="sim-pet-fill" data-id="${esc(p.id)}">${icon('sparkles')} По истории</button></div>
+    <div class="lf-hint">Кормят, гладят, играют${pk(p).needs.some(n => n[0] === 'tray') ? ', убирают лоток' : ''} — в постах: Летописец заметит, а голод и скука растут сами по времени Horae. «По истории» — дочитаю лорбуки и чат и дополню пустое.</div>`;
 }
 
 function petEditSheet(p) {
     const now = rpNow();
     const homes = [...A.knownLocations()].filter(([k]) => !k.includes('·')).slice(0, 30);
-    const fav = favOf(p);
+    const names = [...new Set([...A.castNames().map(A.canonName), ...(p.people || []).map(x => x.name)])].filter(Boolean);
+    const per = (n) => (p.people || []).find(x => A.sameName(x.name, n)) || {};
+    const t = p.temper || {};
+    const f = isF(p);
     A.openSheet(`${icon('paw')} ${p.id ? esc(p.name) : 'Новый питомец'}`, `
         <div class="lf-field"><label>Кличка</label><input type="text" data-in="pname" value="${esc(p.name || '')}"></div>
-        <div class="lf-field"><label>Кто</label><div class="lf-chips" data-kind>${Object.entries(PET_KINDS).map(([k, v]) => `<button class="lf-chip${p.kind === k ? ' on' : ''}" data-act="kind" data-v="${k}">${esc(v.label.replace('Домашний ', ''))}</button>`).join('')}</div></div>
-        <div class="lf-field"><label>Как выглядит</label><input type="text" data-in="plook" value="${esc(p.look || '')}" placeholder="белый пушистый, голубые глаза"></div>
-        <div class="lf-field"><label>Характер <small>(через запятую)</small></label><input type="text" data-in="ptraits" value="${esc((p.traits || []).join(', '))}" placeholder="любопытный, наглый, ревнивый"></div>
-        <div class="lf-field"><label>Любимчик</label><div class="lf-chips wrap" data-fav>${A.castNames().map(n => `<button class="lf-chip${A.sameName(n, fav) ? ' on' : ''}" data-act="how" data-v="${esc(n)}">${esc(short(n))}</button>`).join('')}</div></div>
+        <div class="lf-field"><label>Кто</label><div class="lf-chips" data-kind>${[['cat', 'Кошка / кот'], ['dog', 'Собака'], ['other', 'Другое']].map(([k, v]) => `<button class="lf-chip${p.kind === k ? ' on' : ''}" data-act="kind" data-v="${k}">${v}</button>`).join('')}</div></div>
+        <div class="lf-field"><label>Пол</label><div class="lf-chips" data-sex>${[['f', 'Девочка'], ['m', 'Мальчик']].map(([k, v]) => `<button class="lf-chip${(p.sex || (f ? 'f' : 'm')) === k ? ' on' : ''}" data-act="kind" data-v="${k}">${v}</button>`).join('')}</div></div>
+        <div class="lf-field"><label>Возраст</label><input type="text" data-in="page" value="${esc(p.age || '')}" placeholder="около года"></div>
+        <div class="lf-field"><label>Как выглядит</label><input type="text" data-in="plook" value="${esc(p.look || '')}" placeholder="белая пушистая, голубые глаза"></div>
+        <div class="lf-field"><label>Характер <small>(через запятую)</small></label><input type="text" data-in="ptraits" value="${esc((p.traits || []).join(', '))}" placeholder="любопытная, наглая, ревнивая"></div>
+        <div class="lf-field"><label>Темперамент</label>${TEMPER.map(([k, l, r]) => `<div class="lf-temper-in"><span>${f ? l[1] : l[0]}</span><input type="range" min="0" max="100" data-in="tmp-${k}" value="${t[k] ?? 50}"><span>${f ? r[1] : r[0]}</span></div>`).join('')}</div>
+        <div class="lf-field"><label>Любит <small>(по строке на пункт)</small></label><textarea data-in="plikes" rows="3" placeholder="спать на подушке Баки&#10;курица с его тарелки&#10;коробки">${esc((p.likes || []).join('\n'))}</textarea></div>
+        <div class="lf-field"><label>Не любит</label><textarea data-in="pdislikes" rows="2" placeholder="пылесос&#10;ветеринар">${esc((p.dislikes || []).join('\n'))}</textarea></div>
+        <div class="lf-field"><label>Привычки</label><textarea data-in="phabits" rows="3" placeholder="встречает у двери&#10;будит в 6 утра, топчась по груди">${esc((p.habits || []).join('\n'))}</textarea></div>
+        <div class="lf-field"><label>История</label><textarea data-in="pstory" rows="4" placeholder="как ${f ? 'она' : 'он'} попал${f ? 'а' : ''} в дом">${esc(p.story || '')}</textarea></div>
+        <div class="lf-field"><label>Здоровье</label><input type="text" data-in="phealth" value="${esc(p.health || '')}" placeholder="стерилизована, прививки, аллергия на…"></div>
+        <div class="lf-field"><label>Хозяин</label><div class="lf-chips wrap" data-owner>${names.map(n => `<button class="lf-chip${A.sameName(n, p.owner) ? ' on' : ''}" data-act="how" data-v="${esc(n)}">${icon('crown')} ${esc(short(n))}</button>`).join('')}</div></div>
+        <div class="lf-field"><label>Кто для ${f ? 'неё' : 'него'} кто</label>${names.map(n => { const x = per(n); return `<div class="lf-pet-fam-in" data-pn="${esc(n)}"><b>${esc(short(n))}</b><input type="text" data-in="role" value="${esc(x.role || '')}" placeholder="батя, мама, друг…"><input type="range" min="0" max="100" data-in="love" value="${x.love ?? 50}" title="Привязанность"></div>`; }).join('')}
+            <div class="lf-hint">Ползунок — привязанность: слева сторонится, справа обожает.</div></div>
         <div class="lf-field"><label>Живёт</label><select data-in="phome"><option value="">— где и все —</option>${homes.map(([k, raw]) => `<option value="${esc(raw)}" ${A.placeKey(p.home || '') === k ? 'selected' : ''}>${esc(A.placeName(raw))}</option>`).join('')}</select></div>
         ${p.id ? `<div class="lf-field"><label>Поправить потребности</label>${pk(p).needs.map(([k, label]) => `<div class="lf-inline"><span class="lf-need-l">${esc(label)}</span><input type="range" min="0" max="100" data-in="need-${k}" value="${needOf(p, k, now)}"></div>`).join('')}</div>` : ''}
         <label class="lf-switch"><input type="checkbox" data-in="pon" ${p.on !== false ? 'checked' : ''}><span></span>Участвует в истории</label>
         <button class="lf-btn primary serif full big" data-act="sim-pet-save" data-id="${esc(p.id || '')}">${icon('check')} Сохранить</button>
         ${p.id ? `<button class="lf-btn ghost full" data-act="sim-pet-del" data-id="${esc(p.id)}">${icon('trash')} Убрать питомца</button>` : ''}`);
+}
+
+const PET_FILL = `Ты собираешь карточку домашнего животного из ролевой истории на русском. По записям лорбуков и событиям чата ответь только JSON:
+{"sex":"f|m","age":"","look":"","traits":["1–2 слова, в роде питомца"],"likes":["…"],"dislikes":["…"],"habits":["3–8 слов"],"story":"как попал(а) в дом и кто выхаживал, 2–4 предложения","health":"","owner":"имя хозяина","people":[{"name":"имя","role":"кем считает: хозяин, батя, мама, друг…","love":0}],"temper":{"affection":50,"energy":50,"bold":50,"social":50}}
+love — привязанность 0–100. temper — 0–100: affection (независимость → ласковость), energy (спокойствие → шкодливость), bold (пугливость → смелость), social (только свои → любит гостей). Пиши только то, что есть в записях или прямо следует из них; чего нет — пустые поля.`;
+
+async function petFill(p) {
+    const lore = await loreAbout(p.name, /./);
+    const chips = Object.entries(A.chronStore()).map(([, e]) => (e.chips || []).join('; ')).filter(t => A.norm(t).includes(A.norm(p.name).slice(0, 4))).slice(-15).join('\n');
+    const mem = (p.moments || []).slice(-15).map(x => `- ${x.t}${x.with ? ` (с ${x.with})` : ''}`).join('\n');
+    const input = [`Питомец: ${p.name} (${kindWord(p)}). Люди в истории: ${A.castNames().join(', ')}. Игрок пишет за: ${A.ctx().name1}.`,
+        lore ? `Лорбуки:\n${lore}` : '', chips ? `События чата:\n${chips}` : '', mem ? `Моменты:\n${mem}` : '',
+        `Уже записано: ${JSON.stringify({ sex: p.sex, age: p.age, look: p.look, traits: p.traits, likes: p.likes, owner: p.owner, people: p.people, story: p.story })}`].filter(Boolean).join('\n\n');
+    const out = await A.askModel([{ role: 'system', content: PET_FILL }, { role: 'user', content: input }], 1500);
+    const j = A.extractJson(out);
+    if (!j) throw new Error('модель не прислала JSON');
+    const str = (v) => (typeof v === 'string' ? v.trim() : '');
+    const arr = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
+    if (!p.sex && ['f', 'm'].includes(str(j.sex))) p.sex = str(j.sex);
+    for (const k of ['age', 'look', 'story', 'health']) if (!p[k] && str(j[k])) p[k] = str(j[k]).slice(0, 1200);
+    for (const k of ['traits', 'likes', 'dislikes', 'habits']) { const add = arr(j[k]); if (add.length) p[k] = uniq([...(p[k] || []), ...add]).slice(0, 12); }
+    if (!p.owner && str(j.owner)) p.owner = A.canonName(str(j.owner));
+    p.people = p.people || [];
+    for (const x of Array.isArray(j.people) ? j.people : []) {
+        const n = A.canonName(str(x?.name));
+        if (!n) continue;
+        const cur = p.people.find(y => A.sameName(y.name, n));
+        const love = Math.max(0, Math.min(100, Math.round(Number(x.love) || 50)));
+        if (cur) { if (!cur.role && str(x.role)) cur.role = str(x.role).slice(0, 40); }
+        else p.people.push({ name: n, role: str(x.role).slice(0, 40), love });
+    }
+    if (j.temper && typeof j.temper === 'object' && !Object.keys(p.temper || {}).length) {
+        p.temper = Object.fromEntries(TEMPER.map(([k]) => [k, Math.max(0, Math.min(100, Math.round(Number(j.temper[k]) || 50)))]));
+    }
+    A.saveMeta();
+    A.updatePrompt();
 }
 
 // ───────────── живой дом: комната ─────────────
@@ -806,7 +914,7 @@ export function simSceneHtml() {
     const now = rpNow();
     let html = '';
     if (offs.length) html += `<section class="lf-offcard"><div class="lf-offcard-h">${icon('home')} Пока тебя не было</div>${offHtml(offs)}</section>`;
-    if (pets.length) html += `<div class="lf-chips wrap">${pets.map(p => { const s = petState(p, now); const w = s.urgent.length ? s.needs.find(n => n.v < 30)?.word : s.sleepy ? 'Сонный' : s.needs[0].word; return `<button class="lf-chip${s.urgent.length ? ' warn' : ''}" data-act="sim-pet" data-id="${esc(p.id)}">${icon('paw')} ${esc(p.name)} · ${esc(w)}</button>`; }).join('')}</div>`;
+    if (pets.length) html += `<div class="lf-chips wrap">${pets.map(p => { const s = petState(p, now); const w = s.urgent.length ? s.needs.find(n => n.v < 30)?.word : s.sleepy ? pg(p, 'Сонный', 'Сонная') : s.needs[0].word; return `<button class="lf-chip${s.urgent.length ? ' warn' : ''}" data-act="sim-pet" data-id="${esc(p.id)}">${icon('paw')} ${esc(p.name)} · ${esc(w)}</button>`; }).join('')}</div>`;
     if (c.on && a) html += `<button class="lf-teaser" data-act="who" data-name="${esc(a.who)}">${A.ava(a.who, 'xs')}<span>${esc(short(a.who))} ${c.tease ? 'что-то затевает…' : `затевает: ${esc(a.text)}`}</span>${icon('sparkles')}</button>`;
     try { html += agendaSceneHtml(); } catch (e) { console.warn('[Life] закулисье: сцена', e); }
     try {
@@ -901,18 +1009,36 @@ export async function simClick(act, el, ev) {
         case 'sim-pet-edit': { const p = petById(el.dataset.id); if (p) petEditSheet(p); return true; }
         case 'sim-pet-save': {
             const name = val('[data-in="pname"]');
-            if (!name) { A.toast('info', 'Как его зовут?'); return true; }
+            if (!name) { A.toast('info', 'Как зовут?'); return true; }
             const p = petById(el.dataset.id) || newPet({ name, kind: chipVals(box, '[data-kind]')[0] || 'cat' });
             p.name = name;
             p.kind = chipVals(box, '[data-kind]')[0] || p.kind;
+            p.sex = chipVals(box, '[data-sex]')[0] || p.sex || '';
+            p.age = val('[data-in="page"]');
             p.look = val('[data-in="plook"]');
-            p.traits = val('[data-in="ptraits"]').split(',').map(x => x.trim()).filter(Boolean).slice(0, 6);
-            p.favName = chipVals(box, '[data-fav]')[0] || '';
+            p.traits = uniq(petList(val('[data-in="ptraits"]')));
+            const lines = (sel) => uniq(petLines(box?.querySelector(sel)?.value || ''));
+            p.likes = lines('[data-in="plikes"]');
+            p.dislikes = lines('[data-in="pdislikes"]');
+            p.habits = lines('[data-in="phabits"]');
+            p.story = (box?.querySelector('[data-in="pstory"]')?.value || '').trim().slice(0, 2000);
+            p.health = val('[data-in="phealth"]');
+            p.owner = chipVals(box, '[data-owner]')[0] || '';
+            p.favName = '';
+            p.temper = Object.fromEntries(TEMPER.map(([k]) => [k, Number(box?.querySelector(`[data-in="tmp-${k}"]`)?.value ?? 50)]));
+            p.people = [...(box?.querySelectorAll('[data-pn]') || [])].map(r => ({ name: r.dataset.pn, role: r.querySelector('[data-in="role"]')?.value.trim().slice(0, 40) || '', love: Number(r.querySelector('[data-in="love"]')?.value ?? 50) }))
+                .filter(x => x.role || x.love !== 50 || A.sameName(x.name, p.owner));
             p.home = box?.querySelector('[data-in="phome"]')?.value || '';
             p.on = !!box?.querySelector('[data-in="pon"]')?.checked;
             const now = rpNow();
             for (const [k] of pk(p).needs) { const r = box?.querySelector(`[data-in="need-${k}"]`); if (r && Number(r.value) !== needOf(p, k, now)) setNeed(p, k, Number(r.value), now); }
             A.saveMeta(); A.closeSheet(); ui.who = `pet:${p.id}`; ui.tab = 'person'; A.render(); A.updatePrompt();
+            return true;
+        }
+        case 'sim-pet-fill': {
+            const p = petById(el.dataset.id);
+            if (!p) return true;
+            await A.withBusy(el, async () => { await petFill(p); A.toast('success', 'Дополнила то, что было пустым', '✦ Питомец', { timeOut: 2200 }); A.render(); }, 'Читаю…');
             return true;
         }
         case 'sim-pet-del': { m.pets = m.pets.filter(p => p.id !== el.dataset.id); ui.who = ''; A.saveMeta(); A.closeSheet(); A.render(); return true; }
@@ -926,7 +1052,7 @@ export async function simClick(act, el, ev) {
         }
         case 'sim-pet-draw': await A.withBusy(el, async () => {
             const p = petById(el.dataset.id);
-            p.img = await A.drawPicture(`Portrait of a ${pk(p).en}${p.look ? `: ${p.look}` : ''}${p.traits?.length ? `, character: ${p.traits.join(', ')}` : ''}, at home on a sofa, cozy evening light. Style: ${A.style()}. No people, no text.`, { aspect: '4:3', prefix: 'life_pet' });
+            p.img = await A.drawPicture(`Portrait of a ${isF(p) ? 'female ' : ''}${pk(p).en}${p.look ? `: ${p.look}` : ''}${p.traits?.length ? `, character: ${p.traits.join(', ')}` : ''}, at home on a sofa, cozy evening light. Style: ${A.style()}. No people, no text.`, { aspect: '4:3', prefix: 'life_pet' });
             A.saveMeta(); A.closeSheet(); A.render();
         }); return true;
         // комнаты

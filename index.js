@@ -16,7 +16,7 @@ import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, sync
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.12.4';
+const VERSION = '0.12.5';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 

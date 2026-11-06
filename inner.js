@@ -344,7 +344,7 @@ turnons — 5–8 конкретных сексуальных триггеров
 async function wiMod() { try { return await import('/scripts/world-info.js'); } catch { return null; } }
 
 /** Записи активных лорбуков про персонажа и близость. */
-async function loreAbout(who, re) {
+export async function loreAbout(who, re) {
     const W = await wiMod();
     if (!W?.loadWorldInfo) return '';
     const c = A.ctx();
