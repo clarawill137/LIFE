@@ -13,6 +13,35 @@ export function initShots(api) { A = api; }
 
 const MOTIONS = ['rain', 'snow', 'steam', 'smoke', 'flicker', 'glow', 'pulse', 'heartbeat', 'drift'];
 const busy = new Map(); // id → { key, kind, at, step, total, label }
+let pick = null; // открытая под кадром панель «перерисовать»: { id, style, fix }
+
+/** Стили кадров. [id, ярлык, иконка, текст для рисовалки] — у «как у истории» и «своего» текст берётся из настроек. */
+export const SHOT_STYLES = [
+    ['story', 'Как у истории', 'feather', ''],
+    ['pencil', 'Карандаш', 'pencil', 'hand-drawn colored-pencil sketch illustration: crisp ink linework, soft pencil shading and hatching, subtle toned-paper texture, warm natural skin, semi-realistic proportions, not a photo'],
+    ['real', 'Реализм', 'camera', 'photorealistic, like a real photograph: natural skin texture, true-to-life proportions and light, 35mm lens, subtle film grain; not an illustration, not a painting, no CGI look'],
+    ['cine', 'Кино', 'film', 'cinematic film still from a modern drama: anamorphic lens, shallow depth of field, moody teal-and-amber colour grade, motivated practical lighting, soft haze, film grain'],
+    ['noir', 'Нуар', 'moon', 'black-and-white film noir still: high contrast, deep hard shadows, slatted light through blinds, smoke and haze, 1940s cinematography'],
+    ['film', 'Плёнка', 'image', 'candid 35mm film photograph: warm faded colours, visible grain, soft light leaks, slightly imperfect focus, like a private snapshot'],
+    ['retro', 'Ретро 40-х', 'clock', '1940s Kodachrome colour photograph: rich saturated reds and blues, soft contrast, period atmosphere and film texture'],
+    ['oil', 'Масло', 'palette', 'classical oil painting: visible brushstrokes, rich glazes, Rembrandt-like chiaroscuro, canvas texture'],
+    ['water', 'Акварель', 'waves', 'loose watercolor and ink illustration: soft washes bleeding into each other, fine ink lines, white paper showing through, airy and emotional'],
+    ['comic', 'Комикс', 'zap', 'graphic novel panel: bold confident ink lines, dramatic shadows, flat muted colours with halftone texture, dynamic framing; no speech bubbles, no text'],
+    ['anime', 'Аниме', 'star', 'anime feature film still: clean line art, cel shading, painterly detailed backgrounds, soft cinematic lighting'],
+    ['custom', 'Свой', 'type', ''],
+];
+const styleById = (id) => SHOT_STYLES.find(x => x[0] === id) || SHOT_STYLES[0];
+/** Стиль кадров в этом чате (Режиссёр), иначе по умолчанию (настройки). */
+export function chatStyle() { const v = A.chatMeta().shotStyle || cfg().style || 'story'; return styleById(v)[0]; }
+export function styleText(id = chatStyle()) {
+    if (id === 'custom') return String(cfg().custom || '').trim() || A.style();
+    return styleById(id)[3] || A.style();
+}
+export const styleName = (id) => styleById(id)[1];
+/** Ряд стилей. act — data-act для чипа, cur — выбранный. */
+export function styleChips(act, cur, attr = 'data-act') {
+    return SHOT_STYLES.map(([id, label, ic]) => `<button class="lf-chip${id === cur ? ' on' : ''}" ${attr}="${act}" data-v="${id}">${icon(ic)} ${label}</button>`).join('');
+}
 
 const cfg = () => A.settings().shot;
 const list = () => (Array.isArray(A.chatMeta().cuts) ? A.chatMeta().cuts : []);
@@ -46,7 +75,7 @@ function locate(texts, quote) {
 const snippet = (t) => nz(t).split(' ').slice(0, 10).join(' ');
 
 const BLOCK = /^(P|BLOCKQUOTE|UL|OL|H[1-6]|PRE|TABLE|DIV)$/;
-function blocksOf(mt) { return [...mt.children].filter(x => BLOCK.test(x.tagName) && !x.matches('.lf-shot, .lf-shot-sug') && nz(x.textContent)); }
+function blocksOf(mt) { return [...mt.children].filter(x => BLOCK.test(x.tagName) && !x.matches('.lf-shot, .lf-shot-sug, .lf-shot-pick') && nz(x.textContent)); }
 
 // ───── отрисовка в посте ─────
 
@@ -82,6 +111,22 @@ function waitHtml(id, w) {
     return `<div class="lf-shot wait" data-wait="${A.esc(id)}" contenteditable="false"><i class="lf-det-sh"></i><span>${icon(w.kind === 'cut' ? 'film' : 'camera')} ${what}<small>${A.esc(w.label || '')}</small></span></div>`;
 }
 
+function pickHtml(c) {
+    const cur = pick.style;
+    const custom = cur === 'custom' && !String(cfg().custom || '').trim();
+    return `<div class="lf-shot-pick" contenteditable="false">
+        <div class="lf-shot-pick-h">${icon('palette')}<b>Перерисовать</b><small>${c.kind === 'cut' ? 'все кадры' : 'этот кадр'} · сейчас: ${A.esc(styleName(c.style || 'story').toLowerCase())}</small></div>
+        <div class="lf-shot-pick-st">${styleChips('pk-style', cur, 'data-sh')}</div>
+        ${custom ? '<div class="lf-shot-pick-note">Свой стиль пустой — впиши его в Режиссёре (Стиль кадров → Свой), пока будет как у истории.</div>' : ''}
+        <input type="text" class="lf-shot-fix" placeholder="Что поправить (можно пусто): он без бороды, она в красном платье…" value="${A.esc(pick.fix || '')}">
+        <div class="lf-shot-pick-b">
+            <button data-sh="pk-go" class="on">${icon('refresh')} Перерисовать</button>
+            <button data-sh="pk-new">${icon('camera')} Другой ракурс</button>
+            <button data-sh="pk-x" title="Закрыть">${icon('x')}</button>
+        </div>
+    </div>`;
+}
+
 function sugHtml(e) {
     const s = e.shot;
     const main = s.kind === 'cut' ? 'cut' : 'frame';
@@ -103,6 +148,7 @@ function wanted(i) {
         if (c.key !== key || !c.frames?.some(f => f.img)) continue;
         if ([...busy.values()].some(w => w.redo === c.id)) continue; // перерисовывается — на месте заглушка
         out.push({ id: c.id, html: c.kind === 'frame' ? frameHtml(c) : cutHtml(c), at: c.at, para: c.para, sig: c.sig !== sig ? 'loose' : '' });
+        if (pick?.id === c.id) out.push({ id: 'pick', html: pickHtml(c), at: c.at, para: c.para, sig: c.sig !== sig ? 'loose' : '' });
     }
     for (const [id, w] of busy) if (w.key === key) out.push({ id: `w-${id}`, html: waitHtml(id, w), at: w.at, para: w.para });
     const e = A.chronOf(i);
@@ -116,7 +162,7 @@ export function paintShots(el, i) {
     if (!mt || mt.querySelector('textarea')) return; // идёт правка
     shotButton(el, i);
     const want = A.settings().enabled ? wanted(i) : [];
-    const have = [...mt.querySelectorAll(':scope > .lf-shot, :scope > .lf-shot-sug')];
+    const have = [...mt.querySelectorAll(':scope > .lf-shot, :scope > .lf-shot-sug, :scope > .lf-shot-pick')];
     if (!want.length) { have.forEach(x => x.remove()); return; }
     mt.style.setProperty('--lf-mtpr', getComputedStyle(mt).paddingRight || '0px'); // чтобы кадр в широком режиме вставал во всю ширину
     const blocks = blocksOf(mt);
@@ -194,9 +240,11 @@ export function onShotClick(ev) {
         if (Number.isFinite(i)) shoot(i, { kind: 'frame' });
         return true;
     }
-    const fig = ev.target.closest('.lf-shot, .lf-shot-sug');
+    const fig = ev.target.closest('.lf-shot, .lf-shot-sug, .lf-shot-pick');
     if (!fig) return false;
-    ev.preventDefault(); ev.stopPropagation();
+    ev.stopPropagation();
+    if (ev.target.closest('input')) return true; // поле «что поправить» — дать фокус
+    ev.preventDefault();
     if (fig.classList.contains('wait')) return true;
     const i = Number(fig.closest('.mes[mesid]')?.getAttribute('mesid'));
     const b = ev.target.closest('[data-sh]');
@@ -208,15 +256,33 @@ export function onShotClick(ev) {
         if (act === 'sug-frame' || act === 'sug-cut') shoot(i, { kind: act === 'sug-cut' ? 'cut' : 'frame', at: e.shot.at, caption: e.shot.caption, sug: true });
         return true;
     }
+    if (fig.classList.contains('lf-shot-pick')) { pickClick(fig, act, b); return true; }
     const c = list().find(x => x.id === fig.dataset.shot);
     if (!c) return true;
     if (act === 'del') { if (confirm(c.kind === 'cut' ? 'Убрать кат-сцену из поста?' : 'Убрать кадр из поста?')) { A.chatMeta().cuts = list().filter(x => x.id !== c.id); A.saveMeta(); A.repaint(); } return true; }
     if (act === 'up' || act === 'down') { move(c, fig, act === 'up' ? -1 : 1); return true; }
-    if (act === 'redo') { redraw(c); return true; }
+    if (act === 'redo') {
+        pick = pick?.id === c.id ? null : { id: c.id, style: c.style || chatStyle(), fix: c.fix || '' };
+        A.repaint();
+        if (pick) requestAnimationFrame(() => fig.parentNode?.querySelector(':scope > .lf-shot-pick')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+        return true;
+    }
     if (act === 'grow') { shoot(i, { kind: 'cut', at: c.at, caption: c.frames[0]?.caption, replace: c.id }); return true; }
     if (c.kind === 'cut') playCut(c, { music: A.cutMusic(c) });
     else { const f = c.frames[0]; lightbox(f.img, f.caption || c.title || '', null, A.settings().detail?.motion !== false ? (f.motion || 'drift') : ''); }
     return true;
+}
+
+function pickClick(box, act, b) {
+    if (!pick) return;
+    const c = list().find(x => x.id === pick.id);
+    pick.fix = box.querySelector('.lf-shot-fix')?.value?.trim() || '';
+    if (act === 'pk-x' || !c) { pick = null; A.repaint(); return; }
+    if (act === 'pk-style') { if (b?.dataset.v) pick.style = b.dataset.v; A.repaint(); return; }
+    const { style, fix } = pick;
+    pick = null;
+    if (act === 'pk-go') redraw(c, { style, fix });
+    if (act === 'pk-new') shoot(c.mes, { kind: c.kind, at: c.at, caption: c.frames[0]?.caption, replace: c.id, style, fix });
 }
 
 function move(c, fig, d) {
@@ -237,7 +303,7 @@ function move(c, fig, d) {
 // ───── съёмка ─────
 
 const SHOT_SYSTEM = (kind) => `You are a film director's storyboard assistant for an illustrated roleplay story. The post is split into numbered paragraphs.
-Return ONLY JSON: {"para":2,"title":"2-4 Russian words, name of the moment","frames":[{"title":"Russian frame label, 1-3 words","who":["exact names of people in the frame"],"caption":"one short Russian line from or about this moment, max 90 chars","motion":"${MOTIONS.join('|')}","prompt":"English image prompt, 45-70 words: shot type and angle, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), pose, gesture, expression, clothing as listed, setting, light, weather, mood; cinematic film still"}]}
+Return ONLY JSON: {"para":2,"title":"2-4 Russian words, name of the moment","frames":[{"title":"Russian frame label, 1-3 words","who":["exact names of people in the frame"],"caption":"one short Russian line from or about this moment, max 90 chars","motion":"${MOTIONS.join('|')}","prompt":"English image prompt, 45-70 words: shot type and angle, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), pose, gesture, expression, clothing as listed, setting, light, weather, mood; do not name an art style"}]}
 para — the number of the paragraph where the moment happens; the picture goes right after it.
 ${kind === 'cut'
         ? 'Make 3 or 4 frames that show this moment unfolding like a short film scene: first a wider shot of the place and the people, then closer shots of the key gestures and reactions, ending on the strongest beat. The frames are cuts of one continuous moment.'
@@ -294,21 +360,22 @@ async function refsFor(who, loc) {
     return { refs, note };
 }
 
-function imagePrompt(f, note, sex) {
-    return `${f.prompt}\n${note}Style: ${A.style()}. Cinematic 16:9 film still, shallow depth of field, no text, no letterbox, no watermark. No nudity, no lingerie${sex ? '; tasteful and atmospheric: clothed or covered, the emotion carried by faces, hands and light' : ''}.`;
+function imagePrompt(f, note, sex, sid, fix) {
+    return `${f.prompt}${fix ? `\nCorrection from the player (follow it exactly): ${fix}` : ''}\n${note}${note ? 'The references are only for who is who and what the place looks like — draw everything in the style below, even if they look different.\n' : ''}Style: ${styleText(sid)}.\n16:9 frame, film-like composition, no text, no letterbox, no watermark. No nudity, no lingerie${sex ? '; tasteful and atmospheric: clothed or covered, the emotion carried by faces, hands and light' : ''}.`;
 }
 
 /**
  * Снять кадр или кат-сцену к посту i. at — слова абзаца (подсказка Летописца или старый кадр);
  * нет — модель сама выбирает момент. replace — id кадра, который станет этой кат-сценой.
  */
-export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = false, replace = '', play = false, onStep = null } = {}) {
+export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = false, replace = '', play = false, onStep = null, style = '', fix = '' } = {}) {
     const chat = A.chatArr();
     const m = chat[i];
     if (!m) return null;
     const key = shotKey(i);
     if ([...busy.values()].some(w => w.key === key && w.kind === kind && w.at === at)) return null;
     const id = A.uid();
+    const sid = styleById(style || chatStyle())[0];
     const ps = paragraphs(A.plainText(m.mes));
     let para = at ? locate(ps, at) : -1;
     const w = { key, kind, at: at || '', para, step: 0, total: kind === 'cut' ? 4 : 1, label: 'раскадровка…', sug };
@@ -328,6 +395,7 @@ export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = fa
             `Clothes now:\n${clothesLine(st) || '?'}`,
             sex ? 'Right now the scene is sexual — keep the picture atmospheric and covered.' : '',
             hint,
+            fix ? `Player's correction for the picture: ${fix}` : '',
             '',
             `POST by ${m.name}:\n${A.cut(numbered, 7000)}`,
         ].filter(x => x !== '').join('\n');
@@ -342,13 +410,13 @@ export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = fa
         w.para = para;
         w.at = at || snippet(ps[para] || '');
         w.total = frames.length;
-        const obj = { id, key, mes: i, sig: sigOf(m), kind, at: w.at, para, title: String(j?.title || caption || (kind === 'cut' ? 'Кат-сцена' : 'Кадр')).slice(0, 40), ts: Date.now(), frames: [] };
+        const obj = { id, key, mes: i, sig: sigOf(m), kind, style: sid, fix: fix || '', at: w.at, para, title: String(j?.title || caption || (kind === 'cut' ? 'Кат-сцена' : 'Кадр')).slice(0, 40), ts: Date.now(), frames: [] };
         for (let k = 0; k < frames.length; k++) {
             upd(frames.length > 1 ? `кадр ${k + 1} из ${frames.length}…` : 'рисую…', (k + 1) / (frames.length + 1));
             const f = frames[k];
             const who = (Array.isArray(f.who) ? f.who : []).map(A.canonName).filter(Boolean);
             const { refs, note } = await refsFor(who, loc);
-            const img = await A.drawPicture(imagePrompt(f, note, sex), { aspect: '16:9', refs, prefix: kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 });
+            const img = await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 });
             const mo = String(f.motion || '').toLowerCase();
             obj.frames.push({ title: String(f.title || '').slice(0, 30), caption: String(f.caption || '').slice(0, 120), img, prompt: String(f.prompt).slice(0, 900), who, motion: MOTIONS.includes(mo) ? mo : 'drift' });
         }
@@ -371,7 +439,7 @@ export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = fa
 }
 
 /** Перерисовать те же кадры по тем же раскадровкам. */
-async function redraw(c) {
+async function redraw(c, { style = '', fix = '' } = {}) {
     const i = c.mes;
     const key = c.key;
     if ([...busy.values()].some(w => w.key === key && w.redo === c.id)) return;
@@ -383,15 +451,18 @@ async function redraw(c) {
     try {
         const { loc } = stateAt(i);
         const sex = sexNow(i);
+        const sid = styleById(style || c.style || chatStyle())[0];
         const out = [];
         for (let k = 0; k < hidden.length; k++) {
             w.label = hidden.length > 1 ? `кадр ${k + 1} из ${hidden.length}…` : 'перерисовываю…';
             A.repaint();
             const f = hidden[k];
             const { refs, note } = await refsFor(f.who || [], loc);
-            out.push({ ...f, img: await A.drawPicture(imagePrompt(f, note, sex), { aspect: '16:9', refs, prefix: c.kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 }) });
+            out.push({ ...f, img: await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: c.kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 }) });
         }
         c.frames = out;
+        c.style = sid;
+        c.fix = fix;
     } catch (e) {
         A.toast('error', A.esc(String(e?.message || e)), '✦ Кадр');
     } finally {
@@ -402,3 +473,13 @@ async function redraw(c) {
 }
 
 export function shotsBusy() { return busy.size; }
+
+/** Режиссёр: стиль кадров в этом чате. */
+export function shotAct(act, el) {
+    if (act === 'sh-chat-style') {
+        const cm = A.chatMeta();
+        cm.shotStyle = el.dataset.v;
+        A.saveMeta();
+        A.toast('info', `${styleName(cm.shotStyle)} — для новых кадров и деталей в этом чате. Готовые — ↻ на кадре.`, '✦ Стиль кадров', { timeOut: 2600 });
+    }
+}

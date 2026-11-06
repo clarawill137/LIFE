@@ -13,11 +13,11 @@ import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPers
 import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
-import { initShots, paintShots, onShotClick, shoot as shootShot } from './shots.js';
+import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.14.0';
+const VERSION = '0.15.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -40,7 +40,7 @@ const DEFAULTS = {
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
     detail: { on: true, auto: true, motion: true },
-    shot: { suggest: true, btn: true },
+    shot: { suggest: true, btn: true, style: 'story', custom: '' },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -868,7 +868,7 @@ let detRunning = false;
 function detailPrompt(d) {
     const look = d.motion === 'scan'
         ? 'Look: grainy black-and-white medical ultrasound sonogram, fan-shaped scan sector on a dark monitor, soft speckle noise'
-        : `Style: ${style()}`;
+        : `Style: ${(() => { try { return styleText(); } catch { return style(); } })()}`;
     return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}\n${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
 }
 
@@ -2152,6 +2152,7 @@ function renderCfg() {
         ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
+        <div class="lf-field"><label>Стиль кадров по умолчанию <small>(в чате — Режиссёр → Стиль кадров)</small></label><select data-set="shot.style">${SHOT_STYLES.map(([id, label]) => `<option value="${id}" ${id === (s.shot.style || 'story') ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
         ${sec('Жизнь вокруг')}
         ${sw('on', 'Персонажи проявляют инициативу сами', simCfg(), 'sim.on')}
         ${sw('tease', 'Их задумки — сюрприз (размыто)', simCfg(), 'sim.tease')}
@@ -2272,7 +2273,11 @@ function directorSheet() {
             ${playing ? `<button class="lf-btn" data-act="mus-del" data-id="${esc(playing.id)}">${icon('trash')} Убрать этот</button>` : ''}
         </div>
         <label class="lf-switch"><input type="checkbox" data-set="music.auto" ${s.music.auto ? 'checked' : ''}><span></span>Месту — свой трек <small>(задаётся в меню места, играет, если музыка уже включена)</small></label>
-        ${sec(`${icon('image')} Кат-сцена`, 'ключевые кадры в стиле истории')}
+        ${sec(`${icon('palette')} Стиль кадров`, 'в этом чате')}
+        <div class="lf-chips wrap lf-shot-styles">${styleChips('sh-chat-style', chatStyle())}</div>
+        ${chatStyle() === 'custom' ? `<div class="lf-field"><label>Свой стиль <small>(лучше по-английски)</small></label><input type="text" data-set="shot.custom" value="${esc(s.shot.custom || '')}" placeholder="soft pastel gouache, dreamy light, visible paper grain"></div>` : ''}
+        <div class="lf-hint">Для новых кадров, кат-сцен и деталей. Готовый кадр — ↻ на нём: другой стиль, «что поправить» или другой ракурс.</div>
+        ${sec(`${icon('image')} Кат-сцена`, 'ключевые кадры')}
         ${cs.length ? `<div class="lf-strip">${cs.map(cutTile).join('')}</div>` : ''}
         ${busyCut || `<button class="lf-btn primary serif full big" data-act="cut-make">${icon('sparkles')} Снять по последнему посту</button>`}
         <div class="lf-hint">3–4 кадра через SLAY по последнему посту — встанут прямо в пост, в тот момент, где всё происходит, и будут листаться сами. Тап по кат-сцене — на весь экран с музыкой. Модель её не видит. Одиночный кадр — кнопка ${icon('film')} у любого поста.</div>
@@ -2602,6 +2607,7 @@ async function onClick(ev) {
     if (act === 'bond') { cycleBond(); render(); return; }
     if (act === 'btone') { const t = setBondTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца главы' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
+    if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
     if (act.startsWith('ag-')) {
         try { await agendaClick(act, el); } catch (e) { console.warn('[Life] Закулисье', e); toast('warning', esc(String(e?.message || e)), '✦ Закулисье'); }
         return;
