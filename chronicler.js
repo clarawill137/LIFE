@@ -31,7 +31,7 @@ items — правки списка вещей:
 
 place — где сейчас сцена, для карты: {"location":"место так, как его пишет Horae","region":"крупная часть карты, где это находится: район, город или страна — «Манхэттен», «Бруклин», «Бухарест», «База в Неваде». Если подходит один из известных районов — бери его","kind":"бар|квартира|штаб|кафе|улица|машина|…","inside":"здание, если место — комната внутри него, иначе пусто"}. Если места не понять — null.
 
-relations — как в этом посте сдвинулись отношения пар: [{"a":"имя","b":"имя","trust":0,"closeness":0,"tension":0,"moment":""}]. Числа — изменение от −20 до +20, только если правда что-то сдвинулось. moment — ключевой момент пары в 3–8 слов («Оставил ключ от квартиры»), только если он был. Ничего не сдвинулось — [].
+relations — как в этом посте сдвинулись отношения пар: [{"a":"имя","b":"имя","trust":0,"closeness":0,"desire":0,"jealousy":0,"tension":0,"moment":""}]. Числа — изменение от −20 до +20, только если правда что-то сдвинулось. closeness — душевная близость и привязанность; desire — чисто физическое, сексуальное влечение (бывает без любви, и любовь бывает без него); jealousy — ревность; tension — напряжение, конфликт. moment — ключевой момент пары в 3–8 слов («Оставил ключ от квартиры»), только если он был. Ничего не сдвинулось — [].
 
 secrets — новые тайны: [{"text":"что именно скрыто","knows":["кто знает"]}]. Только настоящие тайны, о которых знают не все.
 
@@ -100,6 +100,7 @@ export function chronSystem(askTitle, askDetail = false, sim = {}) {
     if (sim.ideas) { keys.push('"ideas": []', '"done": []'); rules += IDEAS_RULE; }
     if (sim.traces) { keys.push('"traces": []'); rules += TRACES_RULE; }
     if (sim.pets) { keys.push('"pets": []'); rules += PETS_RULE; }
+    if (sim.moodRule) { keys.push('"scene": {"mood": "calm", "intim": 0}'); rules += sim.moodRule; }
     if (sim.itemStory) s = s.replace('Если список и так чистый', `${ITEM_STORY_RULE.trim()}\nЕсли список и так чистый`);
     if (keys.length) s = s.replace('  "secrets": [],', `  "secrets": [],\n  ${keys.join(',\n  ')},`);
     return s + rules;
@@ -164,8 +165,8 @@ export function normalizeResult(j) {
             location: str(j.place.location), region: str(j.place.region), kind: str(j.place.kind), inside: str(j.place.inside),
         } : null,
         relations: arr(j?.relations).filter(r => str(r?.a) && str(r?.b)).map(r => ({
-            a: str(r.a), b: str(r.b), trust: num(r.trust), closeness: num(r.closeness), tension: num(r.tension), moment: str(r.moment),
-        })).filter(r => r.trust || r.closeness || r.tension || r.moment),
+            a: str(r.a), b: str(r.b), trust: num(r.trust), closeness: num(r.closeness), desire: num(r.desire), jealousy: num(r.jealousy), tension: num(r.tension), moment: str(r.moment),
+        })).filter(r => r.trust || r.closeness || r.desire || r.jealousy || r.tension || r.moment),
         secrets: arr(j?.secrets).filter(s => str(s?.text)).map(s => ({ text: str(s.text), knows: arr(s.knows).map(str).filter(Boolean) })),
         title: str(j?.title).replace(/^[«"']|[»"']$/g, ''),
         prefs: arr(j?.prefs).filter(x => str(x?.who) && str(x?.text)).map(x => ({ who: str(x.who), text: str(x.text).slice(0, 60), kind: str(x.kind) === 'dislike' ? 'dislike' : 'like' })).slice(0, 6),

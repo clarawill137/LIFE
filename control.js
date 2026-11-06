@@ -26,7 +26,7 @@ const MASKS = [
     ['#WIDrawerIcon', 'book'], ['#user-settings-button .drawer-icon', 'settings'], ['#backgrounds-button .drawer-icon', 'image'],
     ['#extensions-settings-button .drawer-icon', 'puzzle'], ['#persona-management-button .drawer-icon', 'user'],
     ['#rightNavDrawerIcon', 'idcard'], ['#options_button', 'menu'], ['#extensionsMenuButton', 'wand'],
-    ['#send_but', 'send'], ['#mes_continue', 'right'], ['#mes_impersonate', 'feather'],
+    ['#send_but', 'arrowUp'], ['#mes_continue', 'right'], ['#mes_impersonate', 'feather'],
 ];
 
 // кнопки чата из меню-гамбургера ST
@@ -351,6 +351,8 @@ function renderCC() {
         <button class="cc-tile" data-cc="morning">${icon('sunrise')}<span>Утро</span></button>
     </div>
 
+    ${api.moodHtml ? (() => { const h = api.moodHtml(); return h ? `<div class="cc-label">Настроение сцены</div>${h}` : ''; })() : ''}
+
     <div class="cc-label">Чат</div>
     <div class="cc-row">${CHAT_ACTS.map(([id, ic, l]) => `<button class="cc-tog act" data-cc="chat" data-v="${id}"><span class="cc-tog-ic">${icon(ic)}</span><span class="cc-tog-l">${l}</span></button>`).join('')}</div>
 
@@ -415,6 +417,8 @@ async function onCCClick(ev) {
     switch (act) {
         case 'close': closeCC(); break;
         case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
+        case 'mood': api.setMood?.(el.dataset.v); renderCC(); break;
+        case 'intim': api.cycleIntim?.(); renderCC(); break;
         case 'sheet-close': closeSheet(); break;
         case 'scene': goLife('scene'); break;
         case 'map': goLife('map'); break;

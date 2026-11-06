@@ -28,6 +28,7 @@ const P = {
     right: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     chevL: '<path d="m15 18-6-6 6-6"/>',
+    arrowUp: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
     chevR: '<path d="m9 18 6-6-6-6"/>',
     chevD: '<path d="m6 9 6 6 6-6"/>',
     chevU: '<path d="m18 15-6-6-6 6"/>',

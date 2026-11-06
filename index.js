@@ -8,10 +8,12 @@ import { initControl, applyTheme, openCC } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
+import { initErrors } from './errors.js';
+import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow } from './mood.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.6.1';
+const VERSION = '0.7.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -625,7 +627,11 @@ function updateMovePrompt(type) {
     const parts = [];
     if (p) parts.push(moveNote(p.mark));
     if (dir?.once && dir.text) parts.push(`[Режиссёр: ${dir.text}]`);
-    if (settings().enabled && hasChat()) { try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); } }
+    if (settings().enabled && hasChat()) {
+        try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
+        try { const rp = relPrompt(); if (rp) parts.push(rp); } catch (e) { console.warn('[Life] отношения: заметка', e); }
+        try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
+    }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
     return text;
@@ -769,7 +775,7 @@ async function runChron(i, { force = false } = {}) {
             chapterTitle: ch?.title, sim: so?.input,
         });
         const askDetail = !!s.detail.on;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, so?.flags || {}) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0));
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE }) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0) + 40);
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -787,7 +793,7 @@ async function runChron(i, { force = false } = {}) {
             cm.ver = (cm.ver || 0) + 1;
         }
         const old = store[key];
-        store[key] = { chips: res.chips, ops: res.items, rel: s.chron.relations ? res.relations : [], sec: s.chron.secrets ? res.secrets : [], place: res.place, title: res.title, undo, at: Date.now() };
+        store[key] = { chips: res.chips, ops: res.items, rel: s.chron.relations ? res.relations : [], sec: s.chron.secrets ? res.secrets : [], place: res.place, title: res.title, scene: normalizeScene(j), undo, at: Date.now() };
         if (old?.detImg && old.det) { store[key].det = old.det; store[key].detImg = old.detImg; }
         else if (askDetail && res.detail) store[key].det = res.detail;
         trimChron();
@@ -966,6 +972,9 @@ async function cleanInventory() {
 // отношения и тайны — свёртка записей Летописца по чату (ветки и свайпы учитываются сами)
 function pairKey(a, b) { return [canonName(a), canonName(b)].map(norm).sort().join('|'); }
 
+const SCALES = [['trust', 'Доверие', 'handshake', 50], ['closeness', 'Близость', 'heart', 50], ['desire', 'Влечение', 'flame', 30], ['jealousy', 'Ревность', 'eye', 10], ['tension', 'Напряжение', 'zap', 25]];
+const scaleBase = () => Object.fromEntries(SCALES.map(([k, , , v]) => [k, v]));
+
 function relationsState() {
     const chat = chatArr();
     const base = chatMeta().pairBase || {};
@@ -974,7 +983,8 @@ function relationsState() {
         const k = pairKey(a, b);
         if (!pairs[k]) {
             const b0 = base[k] || {};
-            pairs[k] = { key: k, a: canonName(a), b: canonName(b), trust: b0.trust ?? 50, closeness: b0.closeness ?? 50, tension: b0.tension ?? 25, moments: [] };
+            pairs[k] = { key: k, a: canonName(a), b: canonName(b), moments: [] };
+            for (const [f, , , v] of SCALES) pairs[k][f] = b0[f] ?? v;
         }
         return pairs[k];
     };
@@ -985,14 +995,35 @@ function relationsState() {
         for (const r of e.rel || []) {
             if (sameName(r.a, r.b)) continue;
             const p = get(r.a, r.b);
-            p.trust = clamp(p.trust + (r.trust || 0));
-            p.closeness = clamp(p.closeness + (r.closeness || 0));
-            p.tension = clamp(p.tension + (r.tension || 0));
+            for (const [f] of SCALES) p[f] = clamp(p[f] + (r[f] || 0));
             if (r.moment) p.moments.push({ text: r.moment, mes: i, ts: chat[i]?.horae_meta?.timestamp });
         }
     }
     for (const k of Object.keys(base)) if (!pairs[k]) { const [a, b] = k.split('|'); get(a, b); }
     return pairs;
+}
+
+// как отношения выглядят в поведении — чтобы модель играла чувства, а не читала цифры
+const REL_HINT = {
+    trust: ['не верит ни слову', 'держится настороже', '', 'верит, открывается', 'верит на слово, без оглядки'],
+    closeness: ['чужие друг другу', 'на расстоянии', '', 'тянутся друг к другу, дорожат', 'не представляют себя друг без друга'],
+    desire: ['физически не тянет', '', 'лёгкий физический интерес', 'физически тянет, возбуждение рядом', 'сильное желание, физический голод'],
+    jealousy: ['', '', 'тревога за своё место', 'ревнует, следит за соперниками', 'жгучая ревность, собственничество'],
+    tension: ['легко и спокойно', '', 'что-то висит в воздухе', 'искрит, колкости, обиды', 'на грани взрыва'],
+};
+function relPrompt() {
+    if (!settings().chron.relations) return '';
+    const st = worldState();
+    const here = [ctx().name1, ...(st.scene?.characters_present || [])].map(canonName).filter(Boolean);
+    if (here.length < 2) return '';
+    const pairs = Object.values(relationsState()).filter(p => here.some(n => sameName(n, p.a)) && here.some(n => sameName(n, p.b)));
+    const lvl = (v) => v < 15 ? 0 : v < 35 ? 1 : v < 60 ? 2 : v < 80 ? 3 : 4;
+    const lines = pairs.slice(0, 4).map(p => {
+        const bits = SCALES.map(([f]) => REL_HINT[f][lvl(p[f])]).filter(Boolean);
+        const last = p.moments.slice(-2).map(x => `«${x.text}»`).join(', ');
+        return bits.length || last ? `${shortName(p.a)} и ${shortName(p.b)}: ${bits.join('; ')}${last ? `. Недавно: ${last}` : ''}` : '';
+    }).filter(Boolean);
+    return lines.length ? `[Отношения сейчас — играй их в поведении, не называя: ${lines.join('. ')}.]` : '';
 }
 
 function secretsState() {
@@ -1363,6 +1394,7 @@ function renderScene() {
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
     ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
+    ${isCur ? `${sec('Настроение сцены', 'до конца главы')}${moodHtml('life')}` : ''}
     ${(() => {
         const ci = imagesBetween(imgs(), fch.start, fch.end).slice(-14).reverse();
         const cc = cuts().filter(c => c.mes >= fch.start && c.mes <= fch.end).reverse();
@@ -1496,6 +1528,7 @@ function renderMap() {
 
     const mapBox = img ? `<div class="lf-map${ui.editPins ? ' editing' : ''}">
             <div class="lf-map-in" data-act="map-tap"><img src="${esc(img)}" alt="" draggable="false">${pinHtml}</div>
+            ${ui.editPins ? '' : `<div class="lf-map-tools"><button class="lf-glass" data-act="edit-pins" title="Метки">${icon('pencil')}</button><button class="lf-glass" data-act="map-menu" data-key="${esc(level?.key || '')}">${icon('refresh')} ${level ? 'План' : 'Карта'}</button></div>`}
             ${ui.editPins ? `<div class="lf-map-hint">${icon('pencil')} Тапни по карте — поставить метку, тяни метку — подвинуть</div>` : ''}
         </div>`
         : `<div class="lf-mapempty">
@@ -1690,7 +1723,7 @@ function renderRelations(who, st) {
     }
     const other = ui.pair;
     if (!other) return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
-    const p = pairs[pairKey(who, other)] || { trust: 50, closeness: 50, tension: 25, moments: [] };
+    const p = pairs[pairKey(who, other)] || { ...scaleBase(), moments: [] };
     const pairImg = settings().pairs[pairKey(who, other)] || imagesWith(imgs(), [nameKeys(who), nameKeys(other)]).slice(-1)[0]?.src || '';
     const hrel = horaeRelationships().filter(r => (sameName(r.from, who) && sameName(r.to, other)) || (sameName(r.from, other) && sameName(r.to, who)));
     const secrets = secretsState().filter(x => x.knows.some(k => sameName(k, who) || sameName(k, other)));
@@ -1720,9 +1753,7 @@ function renderRelations(who, st) {
         <h2>${esc(shortName(canonName(who)))} <i>×</i> ${esc(shortName(canonName(other)))}</h2>
     </section>
     <div class="lf-bars">
-        ${bar('handshake', 'Доверие', p.trust)}
-        ${bar('heart', 'Близость', p.closeness)}
-        ${bar('zap', 'Напряжение', p.tension)}
+        ${SCALES.map(([f, label, ic]) => bar(ic, label, p[f])).join('')}
     </div>
     ${seg([['common', 'Общее'], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab')}
     ${body}`;
@@ -1877,6 +1908,8 @@ function renderCfg() {
         ${sw('traces', 'Следы сцен в местах (бокалы, записки…)', simCfg(), 'sim.traces')}
         ${sw('pets', 'Питомцы с потребностями', simCfg(), 'sim.pets')}
         ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
+        ${sec('Прочее')}
+        <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
         <div class="lf-field"><label>Новый район</label><select data-set="autoMaps">
             <option value="ask" ${s.autoMaps === 'ask' ? 'selected' : ''}>сказать мне, рисую по кнопке</option>
@@ -2144,7 +2177,7 @@ function chronSheet(i) {
     openSheet(`${icon('spark')} Летописец · #${i}`, `
         ${e.chips?.length ? `<div class="lf-statechip static">${icon('spark')}<span>${e.chips.map(esc).join(' <b>·</b> ')}</span></div>` : ''}
         ${e.ops?.length ? `${sec('Вещи')}<div class="lf-list">${e.ops.map(o => `<div class="lf-row">${icon(o.op === 'drop' ? 'trash' : o.op === 'merge' ? 'layers' : 'box')}<span>${opLine(o)}</span></div>`).join('')}</div>` : ''}
-        ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} × ${esc(r.b)}: ${[r.trust && `доверие ${r.trust > 0 ? '+' : ''}${r.trust}`, r.closeness && `близость ${r.closeness > 0 ? '+' : ''}${r.closeness}`, r.tension && `напряжение ${r.tension > 0 ? '+' : ''}${r.tension}`].filter(Boolean).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
+        ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} × ${esc(r.b)}: ${SCALES.filter(([f]) => r[f]).map(([f, label]) => `${label.toLowerCase()} ${r[f] > 0 ? '+' : ''}${r[f]}`).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
         ${e.sec?.length ? `${sec('Тайны')}<div class="lf-list">${e.sec.map(x => `<div class="lf-row">${icon('lock')}<span>${esc(x.text)} <small>знает: ${esc(x.knows.join(', '))}</small></span></div>`).join('')}</div>` : ''}
         ${e.place ? `<div class="lf-hint">Место: ${esc(e.place.location)}${e.place.region ? ` · район «${esc(e.place.region)}»` : ''}</div>` : ''}
         ${sec('Деталь крупным планом')}
@@ -2336,6 +2369,8 @@ async function onClick(ev) {
     const loc = el.dataset.loc;
     const val = (sel) => (box || document.getElementById('lf-app'))?.querySelector(sel)?.value?.trim() || '';
 
+    if (act === 'mood') { setMood(el.dataset.v); render(); toast('info', el.dataset.v ? 'Тон уйдёт модели до конца главы' : 'Тон — сам, по ходу сцены', '✦ Настроение', { timeOut: 1600 }); return; }
+    if (act === 'intim') { cycleIntim(); render(); return; }
     if (act.startsWith('sim-')) {
         try { await simClick(act, el, ev); } catch (e) { console.warn('[Life] Жизнь', e); toast('warning', esc(String(e?.message || e)), '✦ Life'); }
         return;
@@ -2469,8 +2504,9 @@ async function onClick(ev) {
             openSheet(`${icon('map')} ${esc(level ? (level.place?.name || '') : region.name)}`, `
                 <div class="lf-actions">
                     <label class="lf-btn">${icon('upload')} Загрузить другую<input type="file" accept="image/*" data-file="${level ? 'plan' : 'map'}" data-key="${esc(level?.key || '')}" hidden></label>
-                    <button class="lf-btn" data-act="${level ? 'draw-plan' : 'draw-map'}" data-key="${esc(level?.key || '')}">${icon('wand')} Перерисовать</button>
+                    <button class="lf-btn primary" data-act="${level ? 'draw-plan' : 'draw-map'}" data-key="${esc(level?.key || '')}">${icon('wand')} Перерисовать</button>
                 </div>
+                <div class="lf-hint">${level ? 'Нарисую план заново — комнаты потом расставишь метками.' : 'Нарисую карту заново со всеми местами района — метки встанут сами. Старая картинка заменится.'}</div>
                 ${level ? '' : `<div class="lf-field"><label>Название района</label><div class="lf-inline"><input type="text" data-in="rname" value="${esc(region.name)}"><button class="lf-btn" data-act="region-rename">OK</button></div></div>
                 <div class="lf-field"><label>Пара слов для картинок</label><div class="lf-inline"><input type="text" data-in="rnote" value="${esc(region.note || '')}"><button class="lf-btn" data-act="region-note">OK</button></div></div>
                 ${s.regions.length > 1 ? `<button class="lf-btn ghost full" data-act="region-del">${icon('trash')} Удалить район (места останутся)</button>` : ''}`}`);
@@ -2663,21 +2699,21 @@ async function onClick(ev) {
             saveSettings(); closeSheet(); render();
         }); break;
         case 'pair-edit': {
-            const p = relationsState()[pairKey(ui.who, ui.pair)] || { trust: 50, closeness: 50, tension: 25 };
+            const p = relationsState()[pairKey(ui.who, ui.pair)] || scaleBase();
             const rng = (k, label, v) => `<div class="lf-field"><label>${label}: <b data-out="${k}">${v}</b></label><input type="range" min="0" max="100" value="${v}" data-rng="${k}"></div>`;
-            openSheet(`${esc(shortName(ui.who))} × ${esc(shortName(ui.pair))}`, `${rng('trust', 'Доверие', p.trust)}${rng('closeness', 'Близость', p.closeness)}${rng('tension', 'Напряжение', p.tension)}
+            openSheet(`${esc(shortName(ui.who))} × ${esc(shortName(ui.pair))}`, `${SCALES.map(([f, label]) => rng(f, label, p[f])).join('')}
                 <button class="lf-btn primary full" data-act="pair-save">${icon('check')} Сохранить</button>
                 <div class="lf-hint">Это точка отсчёта — дальше Летописец двигает шкалы сам после каждого поста.</div>`);
             break;
         }
         case 'pair-save': {
-            const cur = relationsState()[pairKey(ui.who, ui.pair)] || { trust: 50, closeness: 50, tension: 25 };
+            const cur = relationsState()[pairKey(ui.who, ui.pair)] || scaleBase();
             const cm = chatMeta();
             cm.pairBase = cm.pairBase || {};
             const k = pairKey(ui.who, ui.pair);
-            const b0 = cm.pairBase[k] || { trust: 50, closeness: 50, tension: 25 };
+            const b0 = { ...scaleBase(), ...(cm.pairBase[k] || {}) };
             const want = (f) => Number(box.querySelector(`[data-rng="${f}"]`).value);
-            cm.pairBase[k] = { trust: b0.trust + want('trust') - cur.trust, closeness: b0.closeness + want('closeness') - cur.closeness, tension: b0.tension + want('tension') - cur.tension };
+            cm.pairBase[k] = Object.fromEntries(SCALES.map(([f]) => [f, b0[f] + want(f) - cur[f]]));
             saveMeta(); closeSheet(); render();
             break;
         }
@@ -2947,7 +2983,12 @@ const controlApi = {
     openMoney: () => { ui.who = canonName(ctx().name1); ui.pTab = 'money'; openHub('person'); },
     sceneBg: (on) => { if (on !== undefined) { settings().sceneBg = !!on; saveSettings(); updateSceneBg(); } return settings().sceneBg; },
     detail: (on) => { if (on !== undefined) { settings().detail.on = !!on; saveSettings(); paintChips(); } return settings().detail.on; },
+    moodHtml: () => (hasChat() ? moodHtml('cc') : ''),
+    setMood: (v) => setMood(v),
+    cycleIntim: () => cycleIntim(),
 };
+
+const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: () => updateMovePrompt() };
 
 const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
@@ -2959,6 +3000,8 @@ const simApi = {
 jQuery(async () => {
     settings();
     initSim(simApi);
+    initMood(moodApi);
+    try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
     registerSlash();
