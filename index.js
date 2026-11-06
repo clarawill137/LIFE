@@ -10,11 +10,12 @@ import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, pe
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
 import { initErrors } from './errors.js';
 import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson } from './people.js';
+import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.10.0';
+const VERSION = '0.11.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2111,6 +2112,7 @@ function renderCfg() {
         ${sw('traces', 'Следы сцен в местах (бокалы, записки…)', simCfg(), 'sim.traces')}
         ${sw('pets', 'Питомцы с потребностями', simCfg(), 'sim.pets')}
         ${sw('inner', 'Внутренняя жизнь: тело, состояние, мысли, свои желания, ухаживания', simCfg(), 'sim.inner')}
+        ${(() => { try { return agendaCfgHtml(); } catch { return ''; } })()}
         ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
@@ -2578,6 +2580,10 @@ async function onClick(ev) {
     if (act === 'intim') { cycleIntim(); render(); return; }
     if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
+    if (act.startsWith('ag-')) {
+        try { await agendaClick(act, el); } catch (e) { console.warn('[Life] Закулисье', e); toast('warning', esc(String(e?.message || e)), '✦ Закулисье'); }
+        return;
+    }
     if (act.startsWith('pp-')) {
         try { await peopleClick(act, el); } catch (e) { console.warn('[Life] Люди', e); toast('warning', esc(String(e?.message || e)), '✦ Люди'); }
         return;
@@ -3294,7 +3300,7 @@ const simApi = {
     castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
-    scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
+    hasChat, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
 };
 
 globalThis.LifeBridge = {

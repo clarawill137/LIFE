@@ -4,6 +4,7 @@
 // Когда NPC в сцене или его упомянули — модель получает короткую справку, чтобы он звучал как он.
 
 import { icon } from './icons.js';
+import { agendaPeopleHtml, agendaNpcHtml } from './agenda.js';
 
 let A = null;
 export function initPeople(api) { A = api; }
@@ -268,6 +269,7 @@ export function renderPeople() {
     ${groups.length ? `<div class="lf-chips">${[['', 'Все'], ...groups.map(g => [g, g]), ...(p.list.some(x => !x.group) ? [['—', 'Без круга']] : [])].map(([k, t]) => `<button class="lf-chip${(ui.pGroup || '') === k ? ' on' : ''}" data-act="pp-group" data-v="${esc(k)}">${esc(t)}${k ? ` <span class="lf-cnt">${p.list.filter(x => (k === '—' ? !x.group : x.group === k)).length}</span>` : ''}</button>`).join('')}</div>` : ''}
     ${shown.length ? `<div class="lf-npcs">${shown.map(x => cardHtml(x, near.has(x.id))).join('')}</div>`
         : `<div class="lf-empty">${icon('users', 'xl')}Пока никого. Нажми «Из лорбука» — я прочитаю записи и соберу карточки: фото потом нарисуем или загрузишь своё.</div>`}
+    ${(() => { try { return agendaPeopleHtml(); } catch (e) { console.warn('[Life] закулисье: люди', e); return ''; } })()}
     ${horae.length ? `${A.sec('Ещё в истории', 'Horae знает, карточек нет')}<div class="lf-chips wrap">${horae.map(n => `<button class="lf-chip" data-act="pp-horae" data-name="${esc(n)}">${icon('plus')} ${esc(n)}</button>`).join('')}</div>` : ''}
     ${A.sec('Модели')}
     <label class="lf-switch"><input type="checkbox" data-set="people.inject" ${p.inject ? 'checked' : ''}><span></span>Справка о NPC, когда он в сцене или его упомянули</label>
@@ -320,6 +322,7 @@ function renderNpc(x) {
     ${x.secret ? `${A.sec('Секрет', 'тапни, чтобы прочитать')}<div class="lf-npc-p lf-blur" data-act="sim-peek">${esc(x.secret)}</div>` : ''}
     ${(() => { const r = relLines(x); return r ? `${A.sec('Связи')}<div class="lf-list">${r}</div>` : ''; })()}
     ${facts.length || ev.length ? `${A.sec('В истории', 'что о нём узнали')}<div class="lf-timeline">${facts.map(f => `<button class="lf-tl" data-act="jump" data-mes="${f.mes}"><span class="lf-tl-dot"></span><span class="lf-tl-txt"><b>${esc(f.t)}</b><small>#${f.mes}</small></span></button>`).join('')}${ev.map(e => `<button class="lf-tl" data-act="jump" data-mes="${e.messageIndex}"><span class="lf-tl-dot"></span><span class="lf-tl-txt">${esc(e.event?.summary || '')}<small>Horae · #${e.messageIndex}</small></span></button>`).join('')}</div>` : ''}
+    ${(() => { try { return agendaNpcHtml(x); } catch (e) { console.warn('[Life] закулисье: карточка', e); return ''; } })()}
     ${A.sec('Справка для модели', x.inject !== false ? 'уходит, когда он рядом' : 'выключена')}
     <div class="lf-npc-p dim">${esc(x.brief || 'Пусто — модель возьмёт «Кто это».')}</div>
     <label class="lf-switch"><input type="checkbox" data-act="pp-inject" data-id="${esc(x.id)}" ${x.inject !== false ? 'checked' : ''}><span></span>Подсказывать модели</label>
@@ -359,6 +362,16 @@ async function drawNpc(x) {
     const prompt = `Cinematic portrait of ${x.name}${x.age ? `, ${x.age} years old` : ''}. ${x.look || x.bio || ''}\nMood: ${(x.traits || []).slice(0, 3).join(', ')}. Head and shoulders, natural light, atmospheric background. Style: ${A.style()}. Vertical, no text.`;
     x.img = await A.drawPicture(prompt, { aspect: '3:4', max: 1100, prefix: 'life_npc' });
     A.saveSettings();
+}
+
+/** Новая карточка (из Закулисья и т.п.). */
+export function peopleAdd(rec) {
+    const x = findPerson(rec.name);
+    if (x) { Object.assign(x, Object.fromEntries(Object.entries(rec).filter(([k, v]) => v !== undefined && (k === 'bs' || !x[k])))); A.saveSettings(); return x; }
+    const y = { id: A.uid(), name: rec.name, aliases: [], group: '', role: '', age: '', look: '', traits: [], voice: '', bio: '', toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: rec.src || 'me', at: Date.now(), ...rec };
+    P().list.push(y);
+    A.saveSettings();
+    return y;
 }
 
 export function peopleSetImg(id, path) { const x = personById(id); if (x) { x.img = path; A.saveSettings(); } }

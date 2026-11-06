@@ -1424,3 +1424,15 @@ body.lf-theme.lf-ava-wide #chat .lf-detail.wait { margin: 16px 0 10px; border-ra
 .lf-npc-p.dim { color: var(--lf-text2); font-size: 14px; }
 .lf-npc-p.lf-blur { cursor: pointer; }
 .lf-fresh b { font-weight: 600; }
+
+/* ───── 0.11: Закулисье внутри Life ───── */
+.lf-ag { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--lf-line2); background: var(--lf-card); margin-bottom: 6px; }
+.lf-ag-r { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.lf-ag-r small { color: var(--lf-dim); font: 600 10.5px var(--lf-sans); letter-spacing: .05em; text-transform: uppercase; padding-top: 2px; }
+.lf-ag-r span { font: 14.5px/1.4 var(--lf-serif); color: var(--lf-text); }
+.lf-ag-mood { display: flex; align-items: center; gap: 6px; color: var(--lf-text2); font: italic 13.5px var(--lf-serif); }
+.lf-ag-mood .lf-i { width: 15px; height: 15px; color: var(--lf-rose); }
+.lf-ag-acts { display: flex; gap: 8px; margin-top: 2px; }
+.lf-ag-acts .lf-btn { flex: 1; }
+.lf-off > span.lf-ag-ev-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: rgba(217, 104, 123, .14); color: var(--lf-rose2); }
+.lf-ag-ev-ic .lf-i { width: 16px; height: 16px; }

@@ -5,10 +5,11 @@
 import { icon } from './icons.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
 import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
+import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
 let A = null;
-export function initSim(api) { A = api; initInner(api); initPeople(api); }
+export function initSim(api) { A = api; initInner(api); initPeople(api); try { initAgenda(api); } catch (e) { console.warn('[Life] закулисье', e); } }
 
 const DEF = {
     on: true, tease: true, freq: 'mid', kinds: ['care', 'court', 'flirt', 'touch', 'spicy', 'gift', 'own', 'talk'],
@@ -511,6 +512,7 @@ export function simAfterPost(i, res, msg) {
     if (c.on) maybeArm(i);
     try { innerAfterPost(i, res, msg); } catch (e) { console.warn('[Life] внутренняя жизнь', e); }
     try { peopleAfterPost(i, res); } catch (e) { console.warn('[Life] люди', e); }
+    try { agendaTick(i); } catch (e) { console.warn('[Life] закулисье', e); }
     A.saveMeta();
     rumorsAuto();
 }
@@ -548,6 +550,7 @@ export function simPrompt(type) {
     }
     if (m.rumorPush?.text) out.push(`[Слух, который сейчас ходит: «${m.rumorPush.text}». Кто-то из персонажей может его упомянуть или на него отреагировать.]`);
     try { const ip = innerPrompt(type); if (ip) out.push(ip); } catch (e) { console.warn('[Life] внутренняя жизнь: заметка', e); }
+    try { const ap = agendaPrompt(type); if (ap) out.push(ap); } catch (e) { console.warn('[Life] закулисье: заметка', e); }
     return out.join('\n');
 }
 
@@ -805,6 +808,7 @@ export function simSceneHtml() {
     if (offs.length) html += `<section class="lf-offcard"><div class="lf-offcard-h">${icon('home')} Пока тебя не было</div>${offHtml(offs)}</section>`;
     if (pets.length) html += `<div class="lf-chips wrap">${pets.map(p => { const s = petState(p, now); const w = s.urgent.length ? s.needs.find(n => n.v < 30)?.word : s.sleepy ? 'Сонный' : s.needs[0].word; return `<button class="lf-chip${s.urgent.length ? ' warn' : ''}" data-act="sim-pet" data-id="${esc(p.id)}">${icon('paw')} ${esc(p.name)} · ${esc(w)}</button>`; }).join('')}</div>`;
     if (c.on && a) html += `<button class="lf-teaser" data-act="who" data-name="${esc(a.who)}">${A.ava(a.who, 'xs')}<span>${esc(short(a.who))} ${c.tease ? 'что-то затевает…' : `затевает: ${esc(a.text)}`}</span>${icon('sparkles')}</button>`;
+    try { html += agendaSceneHtml(); } catch (e) { console.warn('[Life] закулисье: сцена', e); }
     try {
         const inn = innerSceneChips();
         if (inn.length) html += `<div class="lf-chips wrap">${inn.map(x => `<button class="lf-chip" data-act="who" data-name="${esc(x.who)}">${icon(x.ic)} ${esc(short(x.who))} · ${esc(x.text)}</button>`).join('')}</div>`;

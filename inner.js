@@ -5,6 +5,7 @@
 import { icon } from './icons.js';
 import { rpNow, hoursSince, nowSlot, simCfg } from './sim.js';
 import { moodNow } from './mood.js';
+import { agendaCardHtml } from './agenda.js';
 
 let A = null;
 export function initInner(api) { A = api; }
@@ -412,6 +413,7 @@ export function renderInner(who) {
     const stChip = (id, label, ic, on) => `<button class="lf-chip${on ? ' on' : ''}" data-act="in-state" data-name="${esc(who)}" data-v="${id}">${icon(ic)} ${label}</button>`;
     const f = p.fem;
     return `${!p.filled && !p.hobbies.length ? `<button class="lf-in-setup" data-act="in-fill" data-name="${esc(who)}">${icon('sparkles')}<span><b>Оживить ${W} по карточке</b><small>увлечения, что заводит, как ухаживает, что тяготит и чего хочет сам — потом всё правится руками</small></span></button>` : ''}
+    ${(() => { try { return agendaCardHtml(who); } catch (e) { console.warn('[Life] закулисье: внутри', e); return ''; } })()}
     ${A.sec('Состояние', x.state?.manual ? 'твоё — до конца главы' : st ? 'видит Летописец' : '')}
     <div class="lf-chips lf-in-states">${stChip('', 'Авто', 'spark', !x.state?.manual)}${STATES.map(s => stChip(s[0], stLabel(s, f), s[3], x.state?.id === s[0] && x.state?.manual)).join('')}</div>
     ${st ? `<div class="lf-in-now">${icon(st[3])}<span><b>${stLabel(st, f)}</b>${x.state.why ? ` — ${esc(x.state.why)}` : ''}<small>${esc(A.cap(st[4].replace(/^[^:]+:\s*/, '')))}</small></span></div>` : ''}
