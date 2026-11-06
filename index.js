@@ -11,7 +11,7 @@ import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSe
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1565,30 +1565,36 @@ function renderWardrobe(who, st) {
     const set = sets.find(x => x.id === ui.wset) || null;
     const on = !!set && isOn(set);
     const img = set?.img || '';
-    const look = img || avatarUrl(who, true);
     const pieces = set ? set.itemIds.map(wardrobeItem).filter(Boolean) : worn;
     const drawingNow = !!set && !!window.Wardrobe?.isDrawing?.(set.id);
     const hasApi = !!window.Wardrobe?.wearSets;
-    const tabs = sets.length ? (sets.length <= 3
-        ? `<div class="lf-seg sets">${sets.map(x => `<button class="${x.id === ui.wset ? 'on' : ''}" data-act="wset" data-v="${esc(x.id)}">${esc(cut(x.name, 18))}</button>`).join('')}</div>`
-        : `<div class="lf-chips">${sets.map(x => `<button class="lf-chip${x.id === ui.wset ? ' on' : ''}" data-act="wset" data-v="${esc(x.id)}">${isOn(x) ? icon('check') : ''}${esc(cut(x.name, 22))}</button>`).join('')}</div>`) : '';
+    const tile = (e, tab) => `<button class="lf-wd2-piece" data-act="wardrobe" data-tab="${tab}">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-wd2-noimg">${icon('shirt')}</span>`}<span>${esc(e.name)}</span></button>`;
+    const setThumb = (x) => `<button class="lf-wd2-set${x.id === ui.wset ? ' on' : ''}" data-act="wset" data-v="${esc(x.id)}">
+        <span class="lf-wd2-set-i">${setImg(x) ? `<img src="${esc(setImg(x))}" alt="" loading="lazy">` : icon('shirt')}${isOn(x) ? `<b>${icon('check')}</b>` : ''}</span>
+        <span class="lf-wd2-set-n">${esc(cut(x.name, 24))}</span></button>`;
     return `<div class="lf-pagehead"><h1>Гардероб</h1><span class="lf-tagpill">${icon('sparkles')} ${esc(cut(canonName(who), 22))}</span></div>
-    <section class="lf-wd">
-        <div class="lf-wd-look${drawingNow ? ' drawing' : ''}${look ? ' lf-fit' : ''}"${fitAttr(look)}>${look ? '<i class="lf-fit-i"></i>' : icon('user', 'xl')}${drawingNow ? '<span class="lf-spin big"></span>' : ''}</div>
-        <div class="lf-wd-side">
+    <section class="lf-wd2">
+        <div class="lf-wd2-img${img ? '' : ' empty'}">
+            ${img ? `<img src="${esc(img)}" alt="" data-act="lightbox" data-src="${esc(img)}">` : `<span class="lf-wd2-ph">${ava(who, 'xl')}</span>`}
+            ${on ? `<span class="lf-wd2-badge">${icon('check')} Надето</span>` : ''}
+            ${drawingNow ? '<span class="lf-wd2-wait"><span class="lf-spin big"></span></span>' : ''}
+        </div>
+        <div class="lf-wd2-info">
             <h2>${esc(set ? set.name : 'Сейчас')}</h2>
-            <p>${esc(cut((pieces.length ? pieces.map(e => e.name).join(', ') : 'Ничего не записано.'), 150))}</p>
-            ${set ? (on ? `<button class="lf-btn primary serif full" disabled>${icon('check')} Надето</button>`
-                : `<button class="lf-btn primary serif full" data-act="wset-wear" data-v="${esc(set.id)}" ${hasApi ? '' : 'disabled'}>Надеть</button>`)
-                : `<button class="lf-btn primary serif full" data-act="wardrobe" data-tab="sets">Собрать комплект</button>`}
-            ${set && !img ? `<button class="lf-btn full" data-act="wset-draw" data-v="${esc(set.id)}">${icon('sparkles')} Нарисовать образ</button>`
-                : `<button class="lf-btn full" data-act="wardrobe" data-tab="${set ? 'sets' : 'worn'}">${icon('shirt')} Гардероб</button>`}
-            <span class="lf-hint-i">${on ? 'Образ учитывается в сцене' : set ? 'Сейчас надето другое' : 'Образ учитывается в сцене'}</span>
-            <div class="lf-wd-grid">${pieces.slice(0, 4).map(e => `<button class="lf-tile sm" data-act="wardrobe" data-tab="${set ? 'sets' : 'worn'}">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 22))}</span></button>`).join('')}</div>
+            <p>${esc(pieces.length ? pieces.map(e => e.name).join(', ') : 'Ничего не записано.')}</p>
+            <div class="lf-wd2-acts">
+                ${set ? (on ? `<button class="lf-btn primary serif" disabled>${icon('check')} Надето</button>`
+                    : `<button class="lf-btn primary serif" data-act="wset-wear" data-v="${esc(set.id)}" ${hasApi ? '' : 'disabled'}>Надеть</button>`)
+                    : `<button class="lf-btn primary serif" data-act="wardrobe" data-tab="sets">Собрать комплект</button>`}
+                ${set && !img ? `<button class="lf-btn" data-act="wset-draw" data-v="${esc(set.id)}">${icon('sparkles')} Нарисовать</button>` : ''}
+                <button class="lf-btn" data-act="wardrobe" data-tab="${set ? 'sets' : 'worn'}">${icon('shirt')} Гардероб</button>
+            </div>
+            <span class="lf-hint-i">${on || !set ? 'Образ учитывается в сцене' : 'Сейчас надето другое'}</span>
         </div>
     </section>
-    ${tabs}
-    ${set && worn.length && !on ? `${sec('Сейчас надето')}<div class="lf-grid">${worn.slice(0, 12).map(e => `<button class="lf-tile" data-act="wardrobe" data-tab="worn">${e.img ? `<img src="${esc(e.img)}" alt="" loading="lazy">` : `<span class="lf-tile-ico">${icon('shirt')}</span>`}<span class="lf-tile-n">${esc(cut(e.name, 26))}</span></button>`).join('')}</div>` : ''}
+    ${sets.length > 1 ? `${sec('Комплекты', String(sets.length))}<div class="lf-wd2-sets">${sets.map(setThumb).join('')}</div>` : ''}
+    ${pieces.length ? `${sec(set ? 'В комплекте' : 'Надето', String(pieces.length))}<div class="lf-wd2-pieces">${pieces.map(e => tile(e, set ? 'sets' : 'worn')).join('')}</div>` : ''}
+    ${set && worn.length && !on ? `${sec('Сейчас надето')}<div class="lf-wd2-pieces">${worn.slice(0, 12).map(e => tile(e, 'worn')).join('')}</div>` : ''}
     ${hasApi ? '' : '<div class="lf-hint">Обнови Гардероб (git pull) — тогда «Надеть» заработает прямо отсюда.</div>'}`;
 }
 
