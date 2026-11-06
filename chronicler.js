@@ -107,6 +107,7 @@ export function chronSystem(askTitle, askDetail = false, sim = {}) {
     if (sim.pets) { keys.push('"pets": []'); rules += PETS_RULE; }
     if (sim.inner) { keys.push('"inner": []'); rules += INNER_RULE; }
     if (sim.moodRule) { keys.push('"scene": {"mood": "calm", "intim": 0}'); rules += sim.moodRule; }
+    for (const x of sim.ext || []) if (x?.key) { keys.push(x.key); rules += x.rule || ''; }
     if (sim.itemStory) s = s.replace('Если список и так чистый', `${ITEM_STORY_RULE.trim()}\nЕсли список и так чистый`);
     if (keys.length) s = s.replace('  "secrets": [],', `  "secrets": [],\n  ${keys.join(',\n  ')},`);
     return s + rules;
@@ -125,7 +126,7 @@ function itemLine(name, it) {
     return `- ${name}${bits.length ? ` — ${bits.join('; ')}` : ''}`;
 }
 
-export function chronInput({ cast, location, when, regions, items, post, speaker, prev, chapterTitle, sim = null }) {
+export function chronInput({ cast, location, when, regions, items, post, speaker, prev, chapterTitle, sim = null, extra = [] }) {
     const list = Object.entries(items || {});
     return [
         `Персонажи (так их и называй): ${cast.join('; ') || '—'}`,
@@ -137,6 +138,7 @@ export function chronInput({ cast, location, when, regions, items, post, speaker
         sim?.traces ? `Следы в этом месте: ${sim.traces}` : '',
         sim?.pets ? `Питомцы: ${sim.pets}` : '',
         sim?.inner ? `Внутри:\n${sim.inner}` : '',
+        ...(extra || []),
         `Место по Horae: ${location || 'не записано'}${when ? `. Время: ${when}` : ''}`,
         `Известные районы карты: ${regions.length ? regions.join(', ') : 'пока нет'}`,
         chapterTitle ? `Текущее название главы: ${chapterTitle}` : '',

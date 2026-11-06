@@ -611,6 +611,19 @@ function pendingMarker() {
     return null;
 }
 
+// ───────────── мост для соседних расширений (Зёрнышко и др.) ─────────────
+// Соседнее расширение зовёт LifeBridge.register({ id, init(api), prompt(type), chron(), afterPost(i, json, msg), personRow(who), renderPerson(rest), sceneHtml() }).
+
+const bridgeMods = [];
+function bridgeEach(fn, label = '') {
+    const out = [];
+    for (const m of bridgeMods) {
+        try { const v = fn(m); if (v) out.push(v); } catch (e) { console.warn(`[Life] ${m.id}${label ? `: ${label}` : ''}`, e); }
+    }
+    return out;
+}
+const bridgeOf = (who) => bridgeMods.find(m => String(who || '').startsWith(`${m.id}:`)) || null;
+
 function moveNote(mark) {
     const who = (mark.who || []).filter(Boolean);
     const whoTxt = who.length ? who.join(', ') : 'Персонажи';
@@ -631,6 +644,7 @@ function updateMovePrompt(type) {
         try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
         try { const rp = relPrompt(); if (rp) parts.push(rp); } catch (e) { console.warn('[Life] отношения: заметка', e); }
         try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
+        parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
     }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
@@ -769,13 +783,14 @@ async function runChron(i, { force = false } = {}) {
         });
         let so = null;
         try { so = simChronOpts(); } catch (e) { console.warn('[Life] Жизнь: опции', e); }
+        const ext = bridgeEach(m => m.chron?.(), 'Летописец');
         const input = chronInput({
             cast, location: st.scene?.location, when: fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time),
             regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: m.name, prev,
-            chapterTitle: ch?.title, sim: so?.input,
+            chapterTitle: ch?.title, sim: so?.input, extra: ext.map(x => x.input).filter(Boolean),
         });
         const askDetail = !!s.detail.on;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE }) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0) + 40);
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext }) }, { role: 'user', content: input }], s.chron.tokens + (askDetail ? 300 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -802,6 +817,7 @@ async function runChron(i, { force = false } = {}) {
         invalidate();
         if (store[key].det && !store[key].detImg && s.detail.auto) queueDetail(key);
         try { simAfterPost(i, res, m); updateMovePrompt(); } catch (e) { console.warn('[Life] Жизнь после поста', e); }
+        if (ext.length) { bridgeEach(x => x.afterPost?.(i, j, m), 'после поста'); updateMovePrompt(); }
     } catch (e) {
         console.warn('[Life] Летописец:', e);
         toast('warning', esc(String(e?.message || e)), '✦ Летописец', { timeOut: 6000 });
@@ -1496,6 +1512,7 @@ function renderScene() {
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
     ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
+    ${isCur ? bridgeEach(m => m.sceneHtml?.(), 'сцена').join('') : ''}
     ${isCur ? `${sec('Настроение сцены', 'до конца главы')}${moodHtml('life')}` : ''}
     ${(() => {
         const ci = imagesBetween(imgs(), fch.start, fch.end).slice(-14).reverse();
@@ -1671,13 +1688,16 @@ function wardrobeSets(name) {
 function renderPerson() {
     const st = worldState();
     const names = castNames(st);
-    const petMode = String(ui.who || '').startsWith('pet:');
+    const bm = bridgeOf(ui.who);
+    const petMode = String(ui.who || '').startsWith('pet:') || !!bm;
     if (!petMode && (!ui.who || !names.some(n => sameName(n, ui.who)))) ui.who = (st.scene?.characters_present || []).map(canonName).find(n => !sameName(n, ctx().name1)) || names.find(n => !sameName(n, ctx().name1)) || names[0] || '';
     const who = ui.who;
     if (!who) return `<div class="lf-empty">${icon('users', 'xl')}В этом чате пока никого.</div>`;
     let petsRow = '';
     try { petsRow = petsRowHtml(who); } catch (e) { console.warn('[Life] питомцы', e); }
+    petsRow += bridgeEach(m => m.personRow?.(who), 'персонаж').join('');
     const people = `<div class="lf-people">${names.map(n => `<button class="lf-pers${!petMode && sameName(n, who) ? ' on' : ''}" data-act="who" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span></button>`).join('')}${petsRow}</div>`;
+    if (bm) { let body = ''; try { body = bm.renderPerson?.(who.slice(bm.id.length + 1)) || ''; } catch (e) { console.warn(`[Life] ${bm.id}`, e); body = `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } return `${people}${body}`; }
     if (petMode) return `${people}${renderPet(who.slice(4))}`;
     const me = sameName(who, ctx().name1);
     if (ui.pTab === 'money' && !me) ui.pTab = 'life';
@@ -3262,6 +3282,20 @@ const simApi = {
     castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
+};
+
+globalThis.LifeBridge = {
+    version: VERSION,
+    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon },
+    register(mod) {
+        if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;
+        bridgeMods.push(mod);
+        try { mod.init?.(this.api); } catch (e) { console.warn(`[Life] ${mod.id}: старт`, e); }
+        try { updateMovePrompt(); } catch { /* */ }
+        if (ui.open) renderSoon();
+        return true;
+    },
+    modules: () => bridgeMods.map(m => m.id),
 };
 
 jQuery(async () => {
