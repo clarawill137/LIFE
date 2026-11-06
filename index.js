@@ -9,11 +9,12 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
 import { initErrors } from './errors.js';
+import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson } from './people.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.9.1';
+const VERSION = '0.10.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -430,7 +431,7 @@ function avatarUrl(name, full = false) {
     const face = c.extensionSettings?.wardrobe?.faces?.[n];
     if (face && !full) return face;
     const ch = (c.characters || []).find(x => x.name === n);
-    if (!ch?.avatar) return face || '';
+    if (!ch?.avatar) return face || npcImg(n) || '';
     return full ? `/characters/${encodeURIComponent(ch.avatar)}` : `/thumbnail?type=avatar&file=${encodeURIComponent(ch.avatar)}`;
 }
 
@@ -643,6 +644,7 @@ function updateMovePrompt(type) {
     if (settings().enabled && hasChat()) {
         try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
         try { const rp = relPrompt(); if (rp) parts.push(rp); } catch (e) { console.warn('[Life] отношения: заметка', e); }
+        try { const pp = peoplePrompt(type); if (pp) parts.push(pp); } catch (e) { console.warn('[Life] люди: заметка', e); }
         try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
         parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
     }
@@ -1348,7 +1350,7 @@ let openedAt = 0;
 let renderTimer = null;
 function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 120); }
 
-const TABS = [['scene', 'scene', 'Сцена'], ['map', 'pin', 'Карта'], ['person', 'users', 'Персонаж'], ['world', 'globe', 'Мир']];
+const TABS = [['scene', 'scene', 'Сцена'], ['map', 'pin', 'Карта'], ['person', 'user', 'Персонаж'], ['people', 'users', 'Люди'], ['world', 'globe', 'Мир']];
 
 function buildHub() {
     if (document.getElementById('lf-dialog')) return;
@@ -1424,7 +1426,7 @@ function render() {
     const same = body.dataset.tab === ui.tab;
     const keep = same ? body.scrollTop : 0;
     try {
-        body.innerHTML = ui.tab === 'map' ? renderMap() : ui.tab === 'person' ? renderPerson() : ui.tab === 'world' ? renderWorld() : renderScene();
+        body.innerHTML = ui.tab === 'map' ? renderMap() : ui.tab === 'person' ? renderPerson() : ui.tab === 'people' ? renderPeople() : ui.tab === 'world' ? renderWorld() : renderScene();
     } catch (e) {
         console.error('[Life] render', e);
         body.innerHTML = `<div class="lf-empty"><b>Ошибка Life</b><pre class="lf-pre">${esc(String(e?.stack || e).slice(0, 900))}</pre>Сделай скрин и кинь Claude.</div>`;
@@ -2576,6 +2578,10 @@ async function onClick(ev) {
     if (act === 'intim') { cycleIntim(); render(); return; }
     if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
+    if (act.startsWith('pp-')) {
+        try { await peopleClick(act, el); } catch (e) { console.warn('[Life] Люди', e); toast('warning', esc(String(e?.message || e)), '✦ Люди'); }
+        return;
+    }
     if (act.startsWith('sim-') || act.startsWith('in-')) {
         try { await simClick(act, el, ev); } catch (e) { console.warn('[Life] Жизнь', e); toast('warning', esc(String(e?.message || e)), '✦ Life'); }
         return;
@@ -2584,7 +2590,12 @@ async function onClick(ev) {
         case 'close': if (Date.now() - openedAt > 350) closeHub(); break;
         case 'sheet-close': closeSheet(); break;
         case 'tab': ui.tab = el.dataset.tab; ui.editPins = false; ui.atlas = false; ui.room = ''; ui.tracePin = ''; closeSheet(); render(); break;
-        case 'person': case 'who': ui.who = el.dataset.name; ui.tab = 'person'; ui.item = ''; ui.pair = ''; ui.wset = ''; render(); break;
+        case 'person': case 'who': {
+            const n = el.dataset.name;
+            const npc = ![ctx().name1, ...groupMembers()].some(x => sameName(x, n)) ? findPerson(n) : null;
+            if (npc) { ui.tab = 'people'; ui.npc = npc.id; closeSheet(); render(); break; }
+            ui.who = n; ui.tab = 'person'; ui.item = ''; ui.pair = ''; ui.wset = ''; render(); break;
+        }
         case 'p-tab': ui.pTab = el.dataset.v; if (ui.pTab === 'money') bank().then(() => { if (ui.open && ui.pTab === 'money') render(); }); render(); break;
         case 'items-tab': ui.itemsTab = el.dataset.v; ui.item = ''; render(); break;
         case 'world-tab': ui.worldTab = el.dataset.v; render(); break;
@@ -3094,7 +3105,7 @@ async function onChange(ev) {
         const file = el.files[0];
         const kind = el.dataset.file;
         await withBusy(el.closest('label'), async () => {
-            const max = kind === 'map' || kind === 'plan' ? 2200 : kind === 'item' || kind === 'pet' ? 1100 : 1600;
+            const max = kind === 'map' || kind === 'plan' ? 2200 : kind === 'item' || kind === 'pet' || kind === 'npc' ? 1100 : 1600;
             const path = await uploadImage(await fileToJpeg(file, max), `life_${kind}`);
             if (kind === 'map') { const r = (ui.region && regionById(ui.region)) || currentRegion(); r.map = path; delete r.needsMap; }
             else if (kind === 'plan') { const key = el.dataset.key || mapLevel()?.key; const p = s.places[key] || getPlace(key, true); p.plan = path; }
@@ -3102,6 +3113,7 @@ async function onChange(ev) {
             else if (kind === 'item') setItemInfo(el.dataset.name, { img: path });
             else if (kind === 'pair') s.pairs[el.dataset.name] = path;
             else if (kind === 'pet') simSetPetImg(el.dataset.id, path);
+            else if (kind === 'npc') peopleSetImg(el.dataset.id, path);
             else if (kind === 'frame') { const cm = chatMeta(); cm.frames = cm.frames || {}; cm.frames[el.dataset.start] = path; saveMeta(); }
             saveSettings();
             closeSheet(); render(); decorate();
@@ -3212,7 +3224,7 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / world — вкладка; chron — Летописец по последнему посту; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
             unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
@@ -3227,7 +3239,7 @@ function registerSlash() {
                     return '';
                 }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
-                openHub(['map', 'person', 'world'].includes(v) ? v : 'scene');
+                openHub(['map', 'person', 'people', 'world'].includes(v) ? v : 'scene');
                 return '';
             },
         }));
@@ -3282,6 +3294,7 @@ const simApi = {
     castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
+    scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
 };
 
 globalThis.LifeBridge = {

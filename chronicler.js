@@ -91,6 +91,10 @@ const PETS_RULE = `
 
 pets — что в этом посте случилось с питомцами (и с новыми животными в доме): [{"name":"кличка","fed":false,"played":false,"petted":false,"hurt":"","with":"кто был с ним","moment":"3–8 слов, если был милый или важный момент","new":false,"kind":"кошка|собака|…","look":"как выглядит"}]. new — true, только если в истории появился новый питомец героев. Ничего — [].`;
 
+const PEOPLE_RULE = `
+
+people — люди-NPC (не главные герои) в ЭТОМ посте: [{"name":"имя","fact":"","status":"","new":false,"who":""}]. Для людей из строки «Люди»: fact — что о нём стало известно или что с ним случилось, 5–12 слов (только новое и важное, не пересказ сцены), status — active|away|hurt|missing|dead, только если сменился. new — true для НОВОГО постоянного человека с именем, которого нет ни в «Люди», ни среди героев, и который, похоже, ещё появится (не прохожий и не официант); who — кто это, 3–8 слов. Ничего — [].`;
+
 const INNER_STATES = ['good', 'playful', 'thoughtful', 'sulky', 'irritated', 'restless', 'tired', 'unwell', 'sad', 'aroused'];
 const INNER_RULE = `
 
@@ -106,6 +110,7 @@ export function chronSystem(askTitle, askDetail = false, sim = {}) {
     if (sim.traces) { keys.push('"traces": []'); rules += TRACES_RULE; }
     if (sim.pets) { keys.push('"pets": []'); rules += PETS_RULE; }
     if (sim.inner) { keys.push('"inner": []'); rules += INNER_RULE; }
+    if (sim.people) { keys.push('"people": []'); rules += PEOPLE_RULE; }
     if (sim.moodRule) { keys.push('"scene": {"mood": "calm", "intim": 0}'); rules += sim.moodRule; }
     for (const x of sim.ext || []) if (x?.key) { keys.push(x.key); rules += x.rule || ''; }
     if (sim.itemStory) s = s.replace('Если список и так чистый', `${ITEM_STORY_RULE.trim()}\nЕсли список и так чистый`);
@@ -138,6 +143,7 @@ export function chronInput({ cast, location, when, regions, items, post, speaker
         sim?.traces ? `Следы в этом месте: ${sim.traces}` : '',
         sim?.pets ? `Питомцы: ${sim.pets}` : '',
         sim?.inner ? `Внутри:\n${sim.inner}` : '',
+        sim?.people != null && sim?.peopleOn ? `Люди: ${sim.people || '— пока никого —'}` : '',
         ...(extra || []),
         `Место по Horae: ${location || 'не записано'}${when ? `. Время: ${when}` : ''}`,
         `Известные районы карты: ${regions.length ? regions.join(', ') : 'пока нет'}`,
@@ -194,6 +200,11 @@ export function normalizeResult(j) {
             name: str(x.name).slice(0, 40), fed: !!x.fed, played: !!x.played, petted: !!x.petted, hurt: str(x.hurt).slice(0, 80),
             with: str(x.with), moment: str(x.moment).slice(0, 80), new: !!x.new, kind: str(x.kind).slice(0, 30), look: str(x.look).slice(0, 160),
         })).slice(0, 4),
+        people: arr(j?.people).filter(x => str(x?.name)).map(x => ({
+            name: str(x.name).slice(0, 60), fact: str(x.fact).slice(0, 160), who: str(x.who).slice(0, 80),
+            status: ['active', 'away', 'hurt', 'missing', 'dead'].includes(str(x.status).toLowerCase()) ? str(x.status).toLowerCase() : '',
+            new: x.new === true || x.new === 'true',
+        })).slice(0, 6),
         inner: arr(j?.inner).filter(x => str(x?.who)).map(x => {
             const yes = (v) => v === true || v === 'true' || v === 1;
             const stt = str(x.state).toLowerCase();

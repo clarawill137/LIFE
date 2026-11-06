@@ -4,10 +4,11 @@
 
 import { icon } from './icons.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
+import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
 let A = null;
-export function initSim(api) { A = api; initInner(api); }
+export function initSim(api) { A = api; initInner(api); initPeople(api); }
 
 const DEF = {
     on: true, tease: true, freq: 'mid', kinds: ['care', 'court', 'flirt', 'touch', 'spicy', 'gift', 'own', 'talk'],
@@ -467,14 +468,16 @@ export function simChronOpts() {
     const people = [userName(), ...inits];
     const pets = m.pets.filter(p => p.on !== false);
     const inn = innerChronOpts();
+    const ppl = peopleChronOpts();
     return {
-        flags: { prefs: c.prefs, ideas: inits.length > 0, traces: c.traces, pets: c.pets, itemStory: true, inner: !!inn },
-        tokens: (c.prefs ? 150 : 0) + (inits.length ? 350 : 0) + (c.traces ? 200 : 0) + (c.pets && pets.length ? 150 : 0) + (inn?.tokens || 0) + 120,
+        flags: { prefs: c.prefs, ideas: inits.length > 0, traces: c.traces, pets: c.pets, itemStory: true, inner: !!inn, people: !!ppl },
+        tokens: (c.prefs ? 150 : 0) + (inits.length ? 350 : 0) + (c.traces ? 200 : 0) + (c.pets && pets.length ? 150 : 0) + (inn?.tokens || 0) + (ppl?.tokens || 0) + 120,
         input: {
             user: userName(),
             prefs: c.prefs || inits.length ? prefsLine(people) : '',
             init: needIdeas.length ? needIdeas.map(n => { const br = innerBrief(n); return `${n} (${FREQ[whoCfg(n).freq][2].toLowerCase()}; можно: ${whoCfg(n).kinds.map(k => IDEA_KINDS[k]).join(', ')}${br ? `; ${A.cut(br, 300)}` : ''})`; }).join('; ') : (inits.length ? 'новых идей не нужно, только отметь сбывшиеся' : ''),
             inner: inn?.line || '',
+            people: ppl ? ppl.line : null, peopleOn: !!ppl,
             sched: inits.map(n => { const sl = nowSlot(n); return sl ? `${short(n)} — ${sl.what}${sl.where ? ` (${sl.where})` : ''}` : ''; }).filter(Boolean).join('; '),
             ideas: ideasNow.map(x => `[${x.id}] ${x.who}: ${x.text}`).join('\n'),
             traces: c.traces ? tracesLine(loc) : '',
@@ -507,6 +510,7 @@ export function simAfterPost(i, res, msg) {
     if (m.rumorPush && i > m.rumorPush.at) m.rumorPush = null;
     if (c.on) maybeArm(i);
     try { innerAfterPost(i, res, msg); } catch (e) { console.warn('[Life] внутренняя жизнь', e); }
+    try { peopleAfterPost(i, res); } catch (e) { console.warn('[Life] люди', e); }
     A.saveMeta();
     rumorsAuto();
 }
