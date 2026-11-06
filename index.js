@@ -13,7 +13,7 @@ import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cyc
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2088,6 +2088,7 @@ function renderCfg() {
         ${sw('prefs', 'Запоминать вкусы (для подарков)', simCfg(), 'sim.prefs')}
         ${sw('traces', 'Следы сцен в местах (бокалы, записки…)', simCfg(), 'sim.traces')}
         ${sw('pets', 'Питомцы с потребностями', simCfg(), 'sim.pets')}
+        ${sw('inner', 'Внутренняя жизнь: тело, состояние, мысли, свои желания, ухаживания', simCfg(), 'sim.inner')}
         ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
@@ -2555,7 +2556,7 @@ async function onClick(ev) {
     if (act === 'intim') { cycleIntim(); render(); return; }
     if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
-    if (act.startsWith('sim-')) {
+    if (act.startsWith('sim-') || act.startsWith('in-')) {
         try { await simClick(act, el, ev); } catch (e) { console.warn('[Life] Жизнь', e); toast('warning', esc(String(e?.message || e)), '✦ Life'); }
         return;
     }
@@ -3260,7 +3261,7 @@ const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
     castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
-    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, updatePrompt: () => updateMovePrompt(),
+    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
 };
 
 jQuery(async () => {

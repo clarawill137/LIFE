@@ -63,7 +63,7 @@ export function detailSystem() {
 // ───── Жизнь: вкусы, инициатива персонажей, следы в местах, питомцы, память вещей ─────
 
 export const IDEA_KINDS = {
-    care: 'забота', court: 'ухаживание', flirt: 'подкат', gift: 'подарок', own: 'свои дела', talk: 'разговор', plot: 'сюжет',
+    care: 'забота', court: 'ухаживание', flirt: 'подкат', touch: 'касание', spicy: 'пошлость', gift: 'подарок', own: 'свои дела', talk: 'разговор', plot: 'сюжет',
 };
 
 const ITEM_STORY_RULE = `
@@ -75,9 +75,9 @@ prefs — что в этом посте стало ясно про вкусы п
 
 const IDEAS_RULE = `
 
-ideas — 0–2 новые идеи, что персонаж мог бы сделать САМ, по своей инициативе, в ближайших сценах — чтобы он жил своей жизнью и проявлял себя, а не только отвечал игроку. Только для персонажей из строки «Инициатива». Формат: [{"who":"имя","kind":"care|court|flirt|gift|own|talk|plot","text":"8–20 слов, конкретно и в его характере","when":"scene|later|offscreen","where":"место, если важно"}].
-kind: care — забота (принести кофе, укрыть пледом, заметить усталость); court — ухаживание, романтический жест; flirt — подкат, флирт, дразнит, поцелуй невпопад; gift — подарок, конкретный, с учётом её вкусов; own — свои дела, независимость (тренировка, работа, друзья, хобби, личные планы — он не сидит и не ждёт); talk — сам начинает важный или трудный разговор; plot — сюжетный ход по его линии.
-court/flirt — только если между ними и правда есть романтика или к ней идёт. Опирайся на характер, отношения, вкусы и то, что сейчас происходит. Не повторяй уже задуманное.
+ideas — 0–2 новые идеи, что персонаж мог бы сделать САМ, по своей инициативе, в ближайших сценах — чтобы он жил своей жизнью и проявлял себя, а не только отвечал игроку. Только для персонажей из строки «Инициатива». Формат: [{"who":"имя","kind":"care|court|flirt|touch|spicy|gift|own|talk|plot","text":"8–20 слов, конкретно и в его характере","when":"scene|later|offscreen","where":"место, если важно"}].
+kind: care — забота (принести кофе, укрыть пледом, заметить усталость); court — ухаживание, романтический жест (цветы утром, свидание, старомодная галантность); flirt — подкат, флирт, комплимент, дразнит; touch — касание или поцелуй мимоходом (обнять сзади, поцеловать в висок, рука на талии); spicy — провокационная пошлость или откровенный намёк вслух; gift — подарок, конкретный, с учётом её вкусов; own — свои дела, независимость (тренировка, работа, друзья, хобби, личные планы — он не сидит и не ждёт); talk — сам начинает важный или трудный разговор; plot — сюжетный ход по его линии.
+court/flirt/touch/spicy — только если между ними и правда есть романтика или к ней идёт. Опирайся на характер, отношения, вкусы и то, что сейчас происходит. Не повторяй уже задуманное.
 when: scene — можно прямо в текущей сцене; later — в другой раз; offscreen — сделает, пока игрока нет рядом (оставит записку, приготовит ужин, купит и спрячет подарок).
 text для scene и later — что он сделает («принести ей кофе с корицей, как она любит»); для offscreen — как уже сделанное («приготовил ужин и оставил записку на холодильнике»).
 
@@ -91,6 +91,11 @@ const PETS_RULE = `
 
 pets — что в этом посте случилось с питомцами (и с новыми животными в доме): [{"name":"кличка","fed":false,"played":false,"petted":false,"hurt":"","with":"кто был с ним","moment":"3–8 слов, если был милый или важный момент","new":false,"kind":"кошка|собака|…","look":"как выглядит"}]. new — true, только если в истории появился новый питомец героев. Ничего — [].`;
 
+const INNER_STATES = ['good', 'playful', 'thoughtful', 'sulky', 'irritated', 'restless', 'tired', 'unwell', 'sad', 'aroused'];
+const INNER_RULE = `
+
+inner — внутренняя жизнь персонажей из строки «Внутри» по ЭТОМУ посту: [{"who":"имя","ate":false,"slept":false,"washed":false,"tired":0,"hurt":"","healed":false,"state":"","why":"","thought":"","want":"","with":"","done":[],"spark":""}]. ate — нормально поел; slept — поспал; washed — душ или ванна; tired — насколько вымотался в посте, 0–30 (тренировка, драка, бессонная ночь); hurt — новая рана или травма, коротко, иначе ""; healed — рану обработали или она зажила. state — его состояние, только если сменилось: good|playful|thoughtful|sulky|irritated|restless|tired|unwell|sad|aroused, ok — если прошло и он снова ровный; why — почему, 3–8 слов. thought — если всплыла мысль или внутренний конфликт (прошлое, вина, будущее семьи, друзья, страхи), 6–14 слов, иначе "". want — его собственное новое желание, не про игрока (сходить с другом на хоккей, доделать полку), 6–14 слов, иначе ""; with — с кем. done — номера его желаний из строки «Внутри», которые в этом посте сбылись. spark — если в посте случилось то, что его заводит (она надела красивое платье, вышла из душа, прикусила губу) — что именно, 3–8 слов, иначе "". Только то, что правда видно в посте. Ничего — [].`;
+
 export function chronSystem(askTitle, askDetail = false, sim = {}) {
     let s = CHRON_SYSTEM.replace('{TITLE_RULE}', askTitle ? TITLE_ASK : TITLE_SKIP);
     const keys = [];
@@ -100,6 +105,7 @@ export function chronSystem(askTitle, askDetail = false, sim = {}) {
     if (sim.ideas) { keys.push('"ideas": []', '"done": []'); rules += IDEAS_RULE; }
     if (sim.traces) { keys.push('"traces": []'); rules += TRACES_RULE; }
     if (sim.pets) { keys.push('"pets": []'); rules += PETS_RULE; }
+    if (sim.inner) { keys.push('"inner": []'); rules += INNER_RULE; }
     if (sim.moodRule) { keys.push('"scene": {"mood": "calm", "intim": 0}'); rules += sim.moodRule; }
     if (sim.itemStory) s = s.replace('Если список и так чистый', `${ITEM_STORY_RULE.trim()}\nЕсли список и так чистый`);
     if (keys.length) s = s.replace('  "secrets": [],', `  "secrets": [],\n  ${keys.join(',\n  ')},`);
@@ -130,6 +136,7 @@ export function chronInput({ cast, location, when, regions, items, post, speaker
         sim?.ideas ? `Уже задумано:\n${sim.ideas}` : '',
         sim?.traces ? `Следы в этом месте: ${sim.traces}` : '',
         sim?.pets ? `Питомцы: ${sim.pets}` : '',
+        sim?.inner ? `Внутри:\n${sim.inner}` : '',
         `Место по Horae: ${location || 'не записано'}${when ? `. Время: ${when}` : ''}`,
         `Известные районы карты: ${regions.length ? regions.join(', ') : 'пока нет'}`,
         chapterTitle ? `Текущее название главы: ${chapterTitle}` : '',
@@ -185,6 +192,17 @@ export function normalizeResult(j) {
             name: str(x.name).slice(0, 40), fed: !!x.fed, played: !!x.played, petted: !!x.petted, hurt: str(x.hurt).slice(0, 80),
             with: str(x.with), moment: str(x.moment).slice(0, 80), new: !!x.new, kind: str(x.kind).slice(0, 30), look: str(x.look).slice(0, 160),
         })).slice(0, 4),
+        inner: arr(j?.inner).filter(x => str(x?.who)).map(x => {
+            const yes = (v) => v === true || v === 'true' || v === 1;
+            const stt = str(x.state).toLowerCase();
+            return {
+                who: str(x.who), ate: yes(x.ate), slept: yes(x.slept), washed: yes(x.washed), healed: yes(x.healed),
+                tired: Math.max(0, Math.min(40, Math.round(Number(x.tired) || 0))), hurt: str(x.hurt).slice(0, 80),
+                state: INNER_STATES.includes(stt) || stt === 'ok' ? stt : '', why: str(x.why).slice(0, 80),
+                thought: str(x.thought).slice(0, 180), want: str(x.want).slice(0, 180), with: str(x.with).slice(0, 40),
+                done: arr(x.done).map(Number).filter(Number.isFinite).slice(0, 4), spark: str(x.spark).slice(0, 100),
+            };
+        }).slice(0, 6),
         detail: j?.detail && typeof j.detail === 'object' && str(j.detail.prompt).length > 20 ? {
             prompt: str(j.detail.prompt).slice(0, 700),
             motion: MOTIONS.includes(str(j.detail.motion).toLowerCase()) ? str(j.detail.motion).toLowerCase() : 'drift',

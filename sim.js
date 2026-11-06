@@ -4,19 +4,27 @@
 
 import { icon } from './icons.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
+import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
 let A = null;
-export function initSim(api) { A = api; }
+export function initSim(api) { A = api; initInner(api); }
 
 const DEF = {
-    on: true, tease: true, freq: 'mid', kinds: ['care', 'court', 'flirt', 'gift', 'own', 'talk'],
-    prefs: true, traces: true, pets: true, rumorsAuto: true, who: {}, sched: {}, home: '',
+    on: true, tease: true, freq: 'mid', kinds: ['care', 'court', 'flirt', 'touch', 'spicy', 'gift', 'own', 'talk'],
+    prefs: true, traces: true, pets: true, rumorsAuto: true, who: {}, sched: {}, home: '', inner: true, prof: {},
 };
 
 export function simCfg() {
     const s = A.settings();
     if (!s.sim || typeof s.sim !== 'object') s.sim = {};
     for (const [k, v] of Object.entries(DEF)) if (s.sim[k] === undefined) s.sim[k] = JSON.parse(JSON.stringify(v));
+    // 0.9: новые виды инициативы — касания и пошлости — там, где уже разрешён флирт
+    if (!s.sim._k9) {
+        const add = (list) => (list.includes('flirt') ? [...new Set([...list, 'touch', 'spicy'])] : list);
+        s.sim.kinds = add(s.sim.kinds);
+        for (const w of Object.values(s.sim.who || {})) if (Array.isArray(w.kinds)) w.kinds = add(w.kinds);
+        s.sim._k9 = true;
+    }
     return s.sim;
 }
 
@@ -48,7 +56,7 @@ export function rpNow() {
 }
 
 /** Сколько игровых часов прошло; без даты в Horae — по постам (~15 минут на пост). */
-function hoursSince(a, b = rpNow()) {
+export function hoursSince(a, b = rpNow()) {
     if (!a) return 0;
     const h = a.t != null && b.t != null ? (b.t - a.t) / 3.6e6 : (b.mes - (a.mes ?? b.mes)) * 0.25;
     return Math.max(0, Math.min(96, h));
@@ -85,7 +93,7 @@ function prefsLine(names) {
 // ───────────── инициатива ─────────────
 
 const FREQ = { off: [0, 0, 'Выкл'], rare: [0.12, 14, 'Редко'], mid: [0.25, 7, 'Умеренно'], often: [0.45, 3, 'Часто'] };
-const KIND_ICON = { care: 'coffee', court: 'heart', flirt: 'flame', gift: 'gift', own: 'briefcase', talk: 'message', plot: 'feather' };
+const KIND_ICON = { care: 'coffee', court: 'heart', flirt: 'flame', touch: 'handshake', spicy: 'sparkles', gift: 'gift', own: 'briefcase', talk: 'message', plot: 'feather' };
 
 function aiChars() {
     const out = [];
@@ -275,7 +283,7 @@ const SCHED_SYSTEM = `Ты составляешь распорядок обыч�
 function schedOf(who) { return simCfg().sched[A.canonName(who)] || []; }
 const toMin = (t) => { const m = String(t || '').match(/(\d{1,2})[:.](\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
 
-function nowSlot(who, now = rpNow()) {
+export function nowSlot(who, now = rpNow()) {
     const list = schedOf(who);
     if (!list.length || now.min == null) return null;
     return list.find(x => {
@@ -290,7 +298,7 @@ async function genSched(who) {
     const card = (c.characters || []).find(x => x.name === A.canonName(who));
     const desc = [card?.description, card?.personality, card?.scenario].filter(Boolean).join('\n').replace(/\{\{user\}\}/gi, userName()).replace(/\{\{char\}\}/gi, who).slice(0, 4500);
     const out = await A.askModel([{ role: 'system', content: SCHED_SYSTEM }, {
-        role: 'user', content: `Персонаж: ${who}\nИгрок пишет за: ${userName()}\n${desc ? `Карточка персонажа:\n${desc}\n` : ''}${prefsLine([who]) ? `Известно: ${prefsLine([who])}` : ''}`,
+        role: 'user', content: `Персонаж: ${who}\nИгрок пишет за: ${userName()}\n${desc ? `Карточка персонажа:\n${desc}\n` : ''}${prefsLine([who]) ? `Известно: ${prefsLine([who])}\n` : ''}${innerBrief(who) ? `Он сам: ${innerBrief(who)}` : ''}`,
     }], 900);
     const j = A.extractJson(out);
     const items = Array.isArray(j?.items) ? j.items : [];
@@ -458,13 +466,15 @@ export function simChronOpts() {
     const ideasNow = m.ideas.filter(x => x.status === 'new' || x.status === 'armed').slice(-12);
     const people = [userName(), ...inits];
     const pets = m.pets.filter(p => p.on !== false);
+    const inn = innerChronOpts();
     return {
-        flags: { prefs: c.prefs, ideas: inits.length > 0, traces: c.traces, pets: c.pets, itemStory: true },
-        tokens: (c.prefs ? 150 : 0) + (inits.length ? 350 : 0) + (c.traces ? 200 : 0) + (c.pets && pets.length ? 150 : 0) + 120,
+        flags: { prefs: c.prefs, ideas: inits.length > 0, traces: c.traces, pets: c.pets, itemStory: true, inner: !!inn },
+        tokens: (c.prefs ? 150 : 0) + (inits.length ? 350 : 0) + (c.traces ? 200 : 0) + (c.pets && pets.length ? 150 : 0) + (inn?.tokens || 0) + 120,
         input: {
             user: userName(),
             prefs: c.prefs || inits.length ? prefsLine(people) : '',
-            init: needIdeas.length ? needIdeas.map(n => `${n} (${FREQ[whoCfg(n).freq][2].toLowerCase()}; можно: ${whoCfg(n).kinds.map(k => IDEA_KINDS[k]).join(', ')})`).join('; ') : (inits.length ? 'новых идей не нужно, только отметь сбывшиеся' : ''),
+            init: needIdeas.length ? needIdeas.map(n => { const br = innerBrief(n); return `${n} (${FREQ[whoCfg(n).freq][2].toLowerCase()}; можно: ${whoCfg(n).kinds.map(k => IDEA_KINDS[k]).join(', ')}${br ? `; ${A.cut(br, 300)}` : ''})`; }).join('; ') : (inits.length ? 'новых идей не нужно, только отметь сбывшиеся' : ''),
+            inner: inn?.line || '',
             sched: inits.map(n => { const sl = nowSlot(n); return sl ? `${short(n)} — ${sl.what}${sl.where ? ` (${sl.where})` : ''}` : ''; }).filter(Boolean).join('; '),
             ideas: ideasNow.map(x => `[${x.id}] ${x.who}: ${x.text}`).join('\n'),
             traces: c.traces ? tracesLine(loc) : '',
@@ -496,6 +506,7 @@ export function simAfterPost(i, res, msg) {
     for (const arr of Object.values(m.traces)) for (const t of arr) if (t.fresh && i - t.mes > 8) t.fresh = false;
     if (m.rumorPush && i > m.rumorPush.at) m.rumorPush = null;
     if (c.on) maybeArm(i);
+    try { innerAfterPost(i, res, msg); } catch (e) { console.warn('[Life] внутренняя жизнь', e); }
     A.saveMeta();
     rumorsAuto();
 }
@@ -532,6 +543,7 @@ export function simPrompt(type) {
         }
     }
     if (m.rumorPush?.text) out.push(`[Слух, который сейчас ходит: «${m.rumorPush.text}». Кто-то из персонажей может его упомянуть или на него отреагировать.]`);
+    try { const ip = innerPrompt(type); if (ip) out.push(ip); } catch (e) { console.warn('[Life] внутренняя жизнь: заметка', e); }
     return out.join('\n');
 }
 
@@ -597,19 +609,27 @@ export function renderLife(who) {
     const pool = m.ideas.filter(x => A.sameName(x.who, who) && (x.status === 'new' || x.status === 'armed')).reverse();
     const done = m.ideas.filter(x => A.sameName(x.who, who) && x.status === 'done').slice(-8).reverse();
     const wc = whoCfg(who);
-    return `<section class="lf-life-now">${A.ava(who, 'md')}<div><span class="lf-kicker">Сейчас</span>
-        <b>${here ? `Рядом с ${esc(short(userName()))}` : slot ? esc(A.cap(slot.what)) : 'Живёт своей жизнью'}</b>
-        <small>${slot ? `${esc(slot.from)}–${esc(slot.to)}${slot.where ? ` · ${esc(slot.where)}` : ''}` : here ? 'в этой сцене' : 'распорядок не задан'}</small></div></section>
-    ${A.sec('Инициатива', c.on ? 'как часто — по своей воле' : 'выключена у тебя в «Жизни»')}
+    const ui = A.ui;
+    if (!['inner', 'acts', 'char', 'day'].includes(ui.lifeTab)) ui.lifeTab = 'inner';
+    const t = ui.lifeTab;
+    let body = '';
+    if (t === 'inner') body = renderInner(who);
+    else if (t === 'acts') body = `${A.sec('Инициатива', c.on ? 'как часто — по своей воле' : 'выключена у тебя в «Жизни»')}
     ${freqSeg(who)}
-    <div class="lf-chips wrap">${Object.entries(IDEA_KINDS).map(([k, t]) => `<button class="lf-chip${wc.kinds.includes(k) ? ' on' : ''}" data-act="sim-kind" data-name="${esc(who)}" data-v="${k}">${icon(KIND_ICON[k])} ${t}</button>`).join('')}</div>
+    <div class="lf-chips wrap">${Object.entries(IDEA_KINDS).map(([k, tt]) => `<button class="lf-chip${wc.kinds.includes(k) ? ' on' : ''}" data-act="sim-kind" data-name="${esc(who)}" data-v="${k}">${icon(KIND_ICON[k] || 'spark')} ${tt}</button>`).join('')}</div>
     ${A.sec('Задумки', pool.length ? String(pool.length) : '')}
     ${pool.length ? pool.map(x => ideaRow(x, c.tease)).join('') : '<div class="lf-empty small">Пока ничего. Летописец подкинет идеи по ходу истории — или придумаю сейчас.</div>'}
     <button class="lf-btn ghost full" data-act="sim-ideas-gen" data-name="${esc(who)}">${icon('sparkles')} Придумать ещё</button>
     ${done.length ? `${A.sec('Уже сделано')}${done.map(x => ideaRow(x, false)).join('')}` : ''}
-    ${A.sec(`Любит ${esc(short(who))}`, 'для твоих подарков')}${prefsHtml(who)}
-    ${A.sec('Подарки')}${giftsHtml(who)}
-    ${A.sec('Распорядок дня')}${schedHtml(who)}`;
+    ${A.sec('Подарки')}${giftsHtml(who)}`;
+    else if (t === 'char') body = `${renderCharacter(who)}
+    ${A.sec(`Любит ${esc(short(who))}`, 'для твоих подарков')}${prefsHtml(who)}`;
+    else body = `${A.sec('Распорядок дня', 'живёт по нему, пока его нет рядом')}${schedHtml(who)}`;
+    return `<section class="lf-life-now">${A.ava(who, 'md')}<div><span class="lf-kicker">Сейчас</span>
+        <b>${here ? `Рядом с ${esc(short(userName()))}` : slot ? esc(A.cap(slot.what)) : 'Живёт своей жизнью'}</b>
+        <small>${slot ? `${esc(slot.from)}–${esc(slot.to)}${slot.where ? ` · ${esc(slot.where)}` : ''}` : here ? 'в этой сцене' : 'распорядок не задан'}</small></div></section>
+    ${A.seg([['inner', 'Внутри'], ['acts', 'Поступки'], ['char', 'Характер'], ['day', 'День']], t, 'sim-ltab')}
+    ${body}`;
 }
 
 function offHtml(list) {
@@ -781,6 +801,10 @@ export function simSceneHtml() {
     if (offs.length) html += `<section class="lf-offcard"><div class="lf-offcard-h">${icon('home')} Пока тебя не было</div>${offHtml(offs)}</section>`;
     if (pets.length) html += `<div class="lf-chips wrap">${pets.map(p => { const s = petState(p, now); const w = s.urgent.length ? s.needs.find(n => n.v < 30)?.word : s.sleepy ? 'Сонный' : s.needs[0].word; return `<button class="lf-chip${s.urgent.length ? ' warn' : ''}" data-act="sim-pet" data-id="${esc(p.id)}">${icon('paw')} ${esc(p.name)} · ${esc(w)}</button>`; }).join('')}</div>`;
     if (c.on && a) html += `<button class="lf-teaser" data-act="who" data-name="${esc(a.who)}">${A.ava(a.who, 'xs')}<span>${esc(short(a.who))} ${c.tease ? 'что-то затевает…' : `затевает: ${esc(a.text)}`}</span>${icon('sparkles')}</button>`;
+    try {
+        const inn = innerSceneChips();
+        if (inn.length) html += `<div class="lf-chips wrap">${inn.map(x => `<button class="lf-chip" data-act="who" data-name="${esc(x.who)}">${icon(x.ic)} ${esc(short(x.who))} · ${esc(x.text)}</button>`).join('')}</div>`;
+    } catch (e) { console.warn('[Life] внутренняя жизнь: сцена', e); }
     return html;
 }
 
@@ -800,7 +824,9 @@ export async function simClick(act, el, ev) {
     const m = M();
     const box = el.closest('.lf-sheet');
     const val = (sel) => box?.querySelector(sel)?.value?.trim() || '';
+    if (act.startsWith('in-')) return innerClick(act, el);
     switch (act) {
+        case 'sim-ltab': A.ui.lifeTab = el.dataset.v; A.render(); return true;
         case 'sim-freq': { const n = A.canonName(el.dataset.name); c.who[n] = { ...(c.who[n] || {}), freq: el.dataset.v }; A.saveSettings(); A.render(); return true; }
         case 'sim-kind': {
             const n = A.canonName(el.dataset.name);
@@ -823,6 +849,7 @@ export async function simClick(act, el, ev) {
             const input = [
                 `Персонаж: ${who}. Игрок пишет за: ${userName()}. Можно: ${whoCfg(who).kinds.map(k => IDEA_KINDS[k]).join(', ')}.`,
                 prefsLine([userName(), who]) ? `Вкусы: ${prefsLine([userName(), who])}` : '',
+                innerBrief(who) ? `Он сам: ${innerBrief(who)}` : '',
                 rel ? `Чувства ${short(who)} к ${short(userName())}: доверие ${rel.trust}, близость ${rel.closeness}, влечение ${rel.desire}, ревность ${rel.jealousy}, напряжение ${rel.tension}, вина ${rel.guilt}. В ответ ${short(userName())} к ${short(who)}: доверие ${back?.trust ?? '—'}, близость ${back?.closeness ?? '—'}, напряжение ${back?.tension ?? '—'}. Моменты: ${(rel.moments || []).slice(-5).map(x => x.text).join('; ')}` : '',
                 `Сейчас: ${st.scene?.location || '—'}, ${[st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(' ')}. В сцене: ${(st.scene?.characters_present || []).join(', ') || '—'}.${sl ? ` По распорядку у ${short(who)}: ${sl.what}.` : ''}`,
                 chips ? `Последнее в истории:\n${chips}` : '',
