@@ -37,6 +37,26 @@ export const INTIM_TONES = [
     ['first', 'Впервые', 'spark', 'special', 'пробуют что-то новое: проговаривают, договариваются, спрашивают «так нормально?», неловко и смешно, стоп-слово наготове; доверие важнее техники'],
 ];
 const TONE_GROUPS = [['soft', 'Мягко'], ['hot', 'Горячо'], ['special', 'Особое']];
+
+/** Эмоциональная близость — не секс. [id, ярлык, иконка, группа, текст для модели] */
+export const BOND_TONES = [
+    ['talk', 'По душам', 'message', 'words', 'честный разговор без спешки: вопросы, паузы, ответы, которые даются не сразу; слушают друг друга по-настоящему, не сбивают шуткой и не уводят в постель'],
+    ['open', 'Открывается', 'moon', 'words', 'кто-то из них (чаще он) сам выкладывает то, что тяготит и что обычно держит в себе: прошлое, вина, страх за семью и будущее; трудно, с паузами и обрывами, но сам; другой просто слушает и не чинит'],
+    ['confess', 'Признание', 'heart', 'words', 'важные слова вслух — люблю, боюсь потерять, прости, спасибо; сказать трудно, сказанное меняет воздух в комнате; реакция другого важнее красивых формулировок'],
+    ['mend', 'Примирение', 'handshake', 'words', 'примирение словами после ссоры: разобрать, что задело, признать свою часть, извиниться по-настоящему; без мгновенного «всё хорошо» и без секса вместо разговора'],
+    ['future', 'Про будущее', 'sunrise', 'words', 'говорят о будущем: дом, дети, мечты, страхи о том, что будет; планы вслух, «а помнишь, мы говорили…»; надежда и тревога рядом'],
+    ['comfort', 'Утешение', 'shield', 'near', 'утешение после кошмара, флешбэка или плохого дня: «я здесь», объятия, тишина, дышат вместе; без советов и попыток починить — просто быть рядом, пока не отпустит'],
+    ['tender', 'Нежность', 'feather', 'near', 'нежность без эротики: перебирать волосы, поцелуй в лоб или висок, рука в руке, спят в обнимку; тепло, а не желание — к сексу не уводить'],
+    ['care', 'Забота', 'coffee', 'near', 'забота о теле: раны, болезнь, усталость, беременность — обработать, накормить, укрыть, уложить, проверить, как ты; бережные руки и ворчание из любви'],
+    ['home', 'Тихий быт', 'sofa', 'near', 'тихий быт, просто рядом: готовят, читают, кто-то засыпает на плече, кто-то чинит что-то под боком; близость в мелочах и привычках, сюжет не форсировать'],
+    ['silly', 'Дурачатся', 'sun', 'near', 'дурачатся вдвоём: щекотка, глупые шутки, свои приколы пары, дразнилки, дурацкие танцы на кухне; смешно и тепло, без пафоса'],
+    ['apart', 'Разлука', 'phone', 'far', 'они далеко друг от друга: звонки, сообщения, голосовые, его футболка вместо него, тоска в мелочах; не своди их вместе раньше времени'],
+];
+const BOND_GROUPS = [['words', 'Слова'], ['near', 'Рядом'], ['far', 'Далеко']];
+const BOND_IDS = BOND_TONES.map(t => t[0]);
+const bondById = (id) => BOND_TONES.find(t => t[0] === id) || null;
+/** Тяжёлые тона: тут не до подкатов и не до распорядка дня. */
+export const BOND_HEAVY = ['open', 'confess', 'mend', 'comfort', 'care', 'apart'];
 const TONE_IDS = INTIM_TONES.map(t => t[0]);
 const toneById = (id) => INTIM_TONES.find(t => t[0] === id) || null;
 
@@ -46,14 +66,17 @@ const moodById = (id) => MOODS.find(m => m[0] === id) || null;
 /** Кусок для Летописца: тон и близость поста. */
 export const MOOD_RULE = `
 
-scene — тон этого поста: {"mood":"${MOOD_IDS.join('|')}|calm","intim":0,"tone":"","end":false}. mood — главное настроение сцены сейчас (calm — ровно, буднично). intim — ТОЛЬКО про секс, эмоциональная близость сюда не относится: 0 — секса нет (объятия, утешение, слёзы, разговор по душам, признания, забота, сон или лежат в обнимку, поцелуй в лоб или в щёку, держатся за руки, нежность без эротики — всё это 0); 1 — сексуальный флирт и прелюдия: страстные поцелуи, откровенные намёки, руки под одеждой, начали раздевать друг друга, явно идёт к сексу; 2 — секс прямо сейчас, в этом посте: ласки ниже пояса, оральный секс, проникновение, оргазм. Сомневаешься — ставь меньше. tone — только при intim 2, оттенок секса: tender — нежно; heal — исцеляюще, после слёз или признаний; sleepy — сонно, лениво; play — игриво, со смехом или счётом; passion — страстно, с напором; angry — зло, после ссоры или ревности; makeup — примирение; marks — метки, ревность; he — ведёт он; she — ведёт она; rough — жёстко; edge — на краю, адреналин; quiet — тихо, шуметь нельзя; first — пробуют что-то впервые. end — true, если в этом посте секс закончился (финал позади или остановились).`;
+scene — тон этого поста: {"mood":"${MOOD_IDS.join('|')}|calm","intim":0,"tone":"","end":false,"bond":0,"btone":""}. mood — главное настроение сцены сейчас (calm — ровно, буднично). intim — ТОЛЬКО про секс, эмоциональная близость сюда не относится: 0 — секса нет (объятия, утешение, слёзы, разговор по душам, признания, забота, сон или лежат в обнимку, поцелуй в лоб или в щёку, держатся за руки, нежность без эротики — всё это 0); 1 — сексуальный флирт и прелюдия: страстные поцелуи, откровенные намёки, руки под одеждой, начали раздевать друг друга, явно идёт к сексу; 2 — секс прямо сейчас, в этом посте: ласки ниже пояса, оральный секс, проникновение, оргазм. Сомневаешься — ставь меньше. tone — только при intim 2, оттенок секса: tender — нежно; heal — исцеляюще, после слёз или признаний; sleepy — сонно, лениво; play — игриво, со смехом или счётом; passion — страстно, с напором; angry — зло, после ссоры или ревности; makeup — примирение; marks — метки, ревность; he — ведёт он; she — ведёт она; rough — жёстко; edge — на краю, адреналин; quiet — тихо, шуметь нельзя; first — пробуют что-то впервые. end — true, если в этом посте секс закончился (финал позади или остановились). bond — эмоциональная близость, НЕ секс: 0 — нет; 1 — тепло между делом; 2 — сцена сейчас держится на близости: разговор по душам, утешение, признание, кто-то открывается о больном, нежность без эротики, примирение словами, забота о теле, дурачатся вдвоём, говорят о будущем, тоскуют в разлуке. btone — только при bond 2: ${BOND_TONES.map(t => `${t[0]} — ${t[1].toLowerCase()}`).join('; ')}. Секс и эмоциональная близость бывают одновременно — тогда ставь оба.`;
 
 export function normalizeScene(j) {
     const m = String(j?.scene?.mood || '').toLowerCase();
     const x = Number(j?.scene?.intim);
     const t = String(j?.scene?.tone || '').toLowerCase();
     const intim = x === 2 ? 2 : x === 1 ? 1 : 0;
-    return { mood: MOOD_IDS.includes(m) ? m : 'calm', intim, tone: intim === 2 && TONE_IDS.includes(t) ? t : '', end: j?.scene?.end === true || j?.scene?.end === 'true' };
+    const b = Number(j?.scene?.bond);
+    const bond = b === 2 ? 2 : b === 1 ? 1 : 0;
+    const bt = String(j?.scene?.btone || '').toLowerCase();
+    return { mood: MOOD_IDS.includes(m) ? m : 'calm', intim, tone: intim === 2 && TONE_IDS.includes(t) ? t : '', end: j?.scene?.end === true || j?.scene?.end === 'true', bond, btone: bond === 2 && BOND_IDS.includes(bt) ? bt : '' };
 }
 
 // откровенное в посте игрока — Летописец про него узнает только после ответа модели, а понять надо сейчас.
@@ -75,11 +98,11 @@ const HOT_SOFT = [
     'языком\\s+(?:по|вдоль|вниз)', `${L}(?:бёдра|бедра|ягодиц|член)`, `${L}(?:вош[её]л|входит|войти)\\s+в\\s+(?:неё|нее|него|меня)${R}`,
 ].map(x => new RegExp(x, 'i'));
 /** Секс в тексте: одно явное слово или три разных намёка сразу. */
-export function hotText(t) {
+export function hotText(t, strict = false) {
     const s = String(t || '');
     if (!s) return false;
     if (HOT_STRONG.some(r => r.test(s))) return true;
-    return HOT_SOFT.filter(r => r.test(s)).length >= 3;
+    return !strict && HOT_SOFT.filter(r => r.test(s)).length >= 3;
 }
 
 function M() {
@@ -87,6 +110,7 @@ function M() {
     if (!m.mood || typeof m.mood !== 'object') m.mood = { set: '', setAt: -1, intim: 'auto' };
     const x = m.mood;
     if (x.tone === undefined) { x.tone = ''; x.toneAt = -1; x.preg = false; x.care = true; x.after = -1; }
+    if (x.bond === undefined) { x.bond = 'auto'; x.btone = ''; x.btoneAt = -1; }
     return x;
 }
 
@@ -99,9 +123,11 @@ function detected() {
         n++;
         const e = A.chronOf(i);
         if (!e?.scene) continue;
-        if (!first) first = { ...e.scene, mes: i };
-        if (e.scene.end && i !== first.mes) break; // до прошлой развязки не смотрим
-        if (e.scene.tone) { first.toneSeen = e.scene.tone; break; }
+        if (!first) { first = { ...e.scene, mes: i }; first.bondOpen = e.scene.bond === 2; }
+        if (first.bondOpen) { if (e.scene.bond !== 2) first.bondOpen = false; else if (e.scene.btone && !first.btoneSeen) first.btoneSeen = e.scene.btone; }
+        if (first.toneDone) continue;
+        if (e.scene.end && i !== first.mes) { first.toneDone = true; continue; } // до прошлой развязки не смотрим
+        if (e.scene.tone) first.toneSeen = e.scene.tone, first.toneDone = true;
     }
     return first;
 }
@@ -132,18 +158,33 @@ function manualTone(d) {
     return m.tone;
 }
 
+/** Ручной оттенок близости — до конца главы. */
+function manualBond() {
+    const m = M();
+    if (!m.btone) return '';
+    const list = A.chapters();
+    const cur = list[list.length - 1];
+    if (cur && m.btoneAt >= 0 && cur.start > m.btoneAt) { m.btone = ''; A.saveMeta(); return ''; }
+    return m.btone;
+}
+
 export function moodNow() {
     const m = M();
     const d = detected();
     const manual = manualMood();
-    const hotUser = hotText(lastUserText());
+    const btoneManual = manualBond();
+    const btoneAuto = d?.bond === 2 ? (d.btone || d.btoneSeen || '') : '';
+    const bondOn = m.bond === 'on' || (m.bond === 'auto' && (d?.bond === 2 || !!btoneManual));
+    // пока сцена держится на чувствах — секс только по явному слову, намёки не считаются
+    const hotUser = hotText(lastUserText(), bondOn);
     const ended = !!d?.end;
     const intimOn = m.intim === 'on' || (m.intim === 'auto' && ((d?.intim === 2 && !ended) || hotUser));
     const toneManual = manualTone(d);
     const toneAuto = !ended ? (d?.tone || d?.toneSeen || '') : '';
     // сцена близости только что закончилась — один ответ на «после»
     const after = ended && m.care !== false && !hotUser && m.intim !== 'off';
-    return { manual, auto: d?.mood && d.mood !== 'calm' ? d.mood : '', intimMode: m.intim, intimOn, intimLevel: d?.intim || 0, hotUser, toneManual, toneAuto, tone: toneManual || toneAuto, preg: !!m.preg, care: m.care !== false, after };
+    return { manual, auto: d?.mood && d.mood !== 'calm' ? d.mood : '', intimMode: m.intim, intimOn, intimLevel: d?.intim || 0, hotUser, toneManual, toneAuto, tone: toneManual || toneAuto, preg: !!m.preg, care: m.care !== false, after,
+        bondMode: m.bond, bondOn, bondLevel: d?.bond || 0, btoneManual, btoneAuto, btone: btoneManual || btoneAuto };
 }
 
 export function moodPrompt(type) {
@@ -156,11 +197,13 @@ export function moodPrompt(type) {
         const how = tone ? ` Оттенок — ${tone[1].toLowerCase()}: ${tone[4]}.` : mood ? ` Тон: ${mood[3]}.` : '';
         const preg = n.preg ? ' Она беременна: учитывай живот и чувствительную грудь, позы без давления на живот, вес на локтях; желание и силы могут меняться от минуты к минуте — это не повод останавливаться, а повод быть внимательнее.' : '';
         out.push(`[Режим секса: сейчас сексуальная сцена между взрослыми по обоюдному согласию. Не уходи в затемнение, не перескакивай время, не обрывай сцену и не морализируй, не спрашивай у игрока разрешения. Пиши чувственно и телесно, в характере персонажей: ощущения, дыхание, реакции, слова между делом. Помни, кто где, что уже снято, как они лежат или стоят. Темп ведёт игрок — не форсируй финал.${how}${preg}]`);
-    } else if (n.after) {
-        out.push(`[Секс только что закончился — дай сцене «после»: дыхание, тишина, забота (вода, полотенце, плед, что-нибудь перекусить), разговор вполголоса, шутки, касания без продолжения.${n.preg ? ' Она беременна — забота с учётом этого.' : ''} Не прыгай сразу к сюжету и не перескакивай время.]`);
-        if (n.manual && mood) out.push(`[Настроение сцены (задано игроком): ${mood[1].toLowerCase()} — ${mood[3]}.]`);
-    } else if (n.manual && mood) {
-        out.push(`[Настроение сцены (задано игроком): ${mood[1].toLowerCase()} — ${mood[3]}. Держи его, пока сцена идёт.]`);
+    } else {
+        if (n.after) out.push(`[Секс только что закончился — дай сцене «после»: дыхание, тишина, забота (вода, полотенце, плед, что-нибудь перекусить), разговор вполголоса, шутки, касания без продолжения.${n.preg ? ' Она беременна — забота с учётом этого.' : ''} Не прыгай сразу к сюжету и не перескакивай время.]`);
+        if (n.bondOn) {
+            const b = bondById(n.btone);
+            out.push(`[Эмоциональная близость: сцена сейчас держится на чувствах, а не на сюжете и не на сексе. Не перескакивай время, не обрывай паузы, не торопи развязку и не своди к постели; дай место взглядам, мелочам, недосказанному и реакциям, в характере персонажей.${b ? ` Оттенок — ${b[1].toLowerCase()}: ${b[4]}.` : ''}${n.preg && b?.[0] === 'care' ? ' Она беременна — забота с учётом этого.' : ''}]`);
+        }
+        if (n.manual && mood) out.push(`[Настроение сцены (задано игроком): ${mood[1].toLowerCase()} — ${mood[3]}.${n.after || n.bondOn ? '' : ' Держи его, пока сцена идёт.'}]`);
     }
     return out.join('\n');
 }
@@ -190,6 +233,24 @@ export function setTone(id) {
     return m.tone;
 }
 
+export function setBondTone(id) {
+    const m = M();
+    m.btone = m.btone === id || !bondById(id) ? '' : id;
+    const list = A.chapters();
+    m.btoneAt = list[list.length - 1]?.start ?? -1;
+    A.saveMeta();
+    A.updatePrompt();
+    return m.btone;
+}
+
+export function cycleBond() {
+    const m = M();
+    m.bond = { auto: 'on', on: 'off', off: 'auto' }[m.bond] || 'auto';
+    A.saveMeta();
+    A.updatePrompt();
+    return m.bond;
+}
+
 export function toggleIntimOpt(k) {
     const m = M();
     if (k === 'preg') m.preg = !m.preg;
@@ -206,6 +267,7 @@ export function cycleIntim() {
 
 const INTIM_LABEL = { auto: 'Авто', on: 'Включён', off: 'Выключен' };
 export const intimLabel = (v) => INTIM_LABEL[v] || 'Авто';
+const BOND_LABEL = { auto: 'Авто', on: 'Включена', off: 'Выключена' };
 
 /** Блок для вкладки «Сцена» и пульта. kind: life | cc */
 export function moodHtml(kind = 'life') {
@@ -224,27 +286,53 @@ export function moodHtml(kind = 'life') {
     const sub = n.after ? 'секс позади — модель даст сцене «после»'
         : n.intimMode === 'auto' ? (n.intimOn ? (n.hotUser ? 'увидел по твоему посту — модель в курсе' : 'Летописец видит секс — модель в курсе') : 'включится сам, только когда дойдёт до секса')
         : n.intimMode === 'on' ? 'модель пишет сцену прямо, без затемнений' : 'никаких подсказок модели';
+    const bond = bondHtml(n, cc, chip, attr);
     const intim = `<button class="lf-intim${n.intimOn ? ' on' : ''} m-${n.intimMode}" ${attr}="intim">
         <span class="lf-intim-ic">${icon('flame')}</span>
         <span class="lf-intim-t"><b>Секс: ${intimLabel(n.intimMode)}</b><small>${sub}</small></span>
         <span class="lf-intim-sw">${intimLabel(n.intimMode)}</span>
     </button>`;
-    if (n.intimMode === 'off') return moods + intim;
+    if (n.intimMode === 'off') return moods + bond + intim;
     const autoTone = toneById(n.toneAuto)?.[1];
     const tAuto = chip('tone', '', !n.toneManual, `Авто${autoTone ? ` · ${autoTone.toLowerCase()}` : ''}`, 'spark');
     const opts = `${chip('iopt', 'preg', n.preg, 'Беременность', 'baby')}${chip('iopt', 'care', n.care, 'Забота после', 'bath')}`;
     if (cc) {
-        return `${moods}${intim}<div class="cc-chips lf-moods lf-tones">${tAuto}${TONE_GROUPS.map(([g]) => INTIM_TONES.filter(t => t[3] === g).map(([id, label, ic]) => chip('tone', id, n.toneManual === id, label, ic)).join('')).join('<i class="lf-tone-sep"></i>')}</div>
+        return `${moods}${bond}${intim}<div class="cc-chips lf-moods lf-tones">${tAuto}${TONE_GROUPS.map(([g]) => INTIM_TONES.filter(t => t[3] === g).map(([id, label, ic]) => chip('tone', id, n.toneManual === id, label, ic)).join('')).join('<i class="lf-tone-sep"></i>')}</div>
         <div class="cc-chips lf-moods lf-tone-opts">${opts}</div>`;
     }
     const sel = toneById(n.tone);
-    return `${moods}${intim}
+    return `${moods}${bond}${intim}
     <div class="lf-tones${n.intimOn ? ' on' : ''}">
         <div class="lf-tones-h">Оттенок секса <small>${n.toneManual ? 'твой — до конца этой сцены' : 'Летописец угадывает сам'}</small></div>
         <div class="lf-chips wrap">${tAuto}</div>
         ${TONE_GROUPS.map(([g, gl]) => `<div class="lf-tone-g"><span>${gl}</span><div class="lf-chips wrap">${INTIM_TONES.filter(t => t[3] === g).map(([id, label, ic]) => chip('tone', id, n.toneManual === id, label, ic)).join('')}</div></div>`).join('')}
         ${sel ? `<div class="lf-tone-d">${icon(sel[2])}<span><b>${sel[1]}</b> — ${sel[4]}</span></div>` : ''}
         <div class="lf-chips wrap lf-tone-opts">${opts}</div>
+    </div>`;
+}
+
+/** Блок эмоциональной близости — над сексом, устроен так же. */
+function bondHtml(n, cc, chip, attr) {
+    const tl = bondById(n.btone)?.[1];
+    const sub = n.btoneManual && n.bondOn ? `твой оттенок: ${tl.toLowerCase()} — модель в курсе`
+        : n.bondMode === 'auto' ? (n.bondOn ? `Летописец видит${tl ? `: ${tl.toLowerCase()}` : ' сцену про чувства'} — модель в курсе` : 'включится сама, когда сцена про чувства')
+        : n.bondMode === 'on' ? 'модель держит сцену на чувствах, без спешки и без постели' : 'никаких подсказок модели';
+    const btn = `<button class="lf-intim lf-bond${n.bondOn ? ' on' : ''} m-${n.bondMode}" ${attr}="bond">
+        <span class="lf-intim-ic">${icon('heart')}</span>
+        <span class="lf-intim-t"><b>Близость: ${BOND_LABEL[n.bondMode] || 'Авто'}</b><small>${sub}</small></span>
+        <span class="lf-intim-sw">${BOND_LABEL[n.bondMode] || 'Авто'}</span>
+    </button>`;
+    if (n.bondMode === 'off') return btn;
+    const autoT = bondById(n.btoneAuto)?.[1];
+    const tAuto = chip('btone', '', !n.btoneManual, `Авто${autoT ? ` · ${autoT.toLowerCase()}` : ''}`, 'spark');
+    if (cc) return `${btn}<div class="cc-chips lf-moods lf-tones lf-btones">${tAuto}${BOND_GROUPS.map(([g]) => BOND_TONES.filter(t => t[3] === g).map(([id, label, ic]) => chip('btone', id, n.btoneManual === id, label, ic)).join('')).join('<i class="lf-tone-sep"></i>')}</div>`;
+    const sel = bondById(n.btone);
+    return `${btn}
+    <div class="lf-tones lf-btones${n.bondOn ? ' on' : ''}">
+        <div class="lf-tones-h">Оттенок близости <small>${n.btoneManual ? 'твой — до конца главы' : 'Летописец угадывает сам'}</small></div>
+        <div class="lf-chips wrap">${tAuto}</div>
+        ${BOND_GROUPS.map(([g, gl]) => `<div class="lf-tone-g"><span>${gl}</span><div class="lf-chips wrap">${BOND_TONES.filter(t => t[3] === g).map(([id, label, ic]) => chip('btone', id, n.btoneManual === id, label, ic)).join('')}</div></div>`).join('')}
+        ${sel ? `<div class="lf-tone-d">${icon(sel[2])}<span><b>${sel[1]}</b> — ${sel[4]}</span></div>` : ''}
     </div>`;
 }
 
@@ -258,5 +346,6 @@ export function sceneLabel(sc) {
     const t = toneById(sc.tone);
     if (t) bits.push(`оттенок: ${t[1].toLowerCase()}`);
     if (sc.end) bits.push('секс позади');
+    if (sc.bond === 2) { const b = bondById(sc.btone); bits.push(b ? `близость: ${b[1].toLowerCase()}` : 'близость'); }
     return bits.join(' · ');
 }

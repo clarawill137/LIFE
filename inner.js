@@ -4,7 +4,7 @@
 
 import { icon } from './icons.js';
 import { rpNow, hoursSince, nowSlot, simCfg } from './sim.js';
-import { moodNow } from './mood.js';
+import { moodNow, BOND_HEAVY } from './mood.js';
 import { agendaCardHtml } from './agenda.js';
 
 let A = null;
@@ -277,7 +277,10 @@ export function innerPrompt(type) {
     const swipe = type === 'swipe' || type === 'regenerate';
     const redo = (mes) => mes != null && ((type === 'swipe' && L - 1 === mes) || (type === 'regenerate' && L === mes));
     const U = short(userName());
-    const intim = moodNow().intimOn;
+    const mn = moodNow();
+    const intim = mn.intimOn;
+    // тяжёлая эмоциональная сцена (утешение, признание, разлука…) — не до подкатов и не до распорядка
+    const heavy = mn.bondOn && !intim && BOND_HEAVY.includes(mn.btone);
     const out = [];
     for (const who of presentAi()) {
         const p = prof(who);
@@ -288,22 +291,27 @@ export function innerPrompt(type) {
         // кто он сам по себе
         const hob = p.hobbies.slice(0, 6).join(', ');
         const turn = p.turnons.slice(0, 8).join(', ');
-        const rom = p.romance.level !== 'off' && userHere() && !intim
+        const rom = p.romance.level !== 'off' && userHere() && !intim && !heavy
             ? ` С ${U}${p.romance.rel ? ` (${p.romance.rel})` : ''} ${g(f, 'сам', 'сама')} проявляет инициативу и не ждёт первого шага: ${p.romance.style || 'ухаживает, флиртует, делает комплименты, касается и целует мимоходом'}. ${p.romance.level === 'lots' ? `Это ${his} норма — часто и без повода.` : 'Время от времени, к месту.'}`
             : '';
         out.push(`[${W} — живой человек со своей жизнью, а не только ответ на ${U}: свои мысли, желания, дела, тело.${hob ? ` Увлечения: ${hob}.` : ''}${turn ? ` Сексуально ${g(f, 'его', 'её')} заводит: ${turn} — если такое сейчас случилось или ${U} это делает, пусть желание прорвётся.` : ''}${rom}]`);
         if (intim && p.bed.length) out.push(`[${W} в постели: ${p.bed.slice(0, 8).join('; ')}. Играй это телом, руками и голосом, в ${his} характере.]`);
         const st = stateById(x.state?.id);
         if (st && !(intim && st[0] === 'aroused')) out.push(`[Состояние ${W}: ${st[4]}${x.state.why ? ` — ${x.state.why}` : ''}. Играй в поведении, не называя.]`);
-        const sl = !intim ? nowSlot(who) : null;
+        const sl = !intim && !mn.bondOn ? nowSlot(who) : null;
         if (sl && !SLEEP_RE.test(sl.what)) out.push(`[По распорядку у ${W} сейчас: ${sl.what}${sl.from ? ` (${sl.from}–${sl.to})` : ''}. ${g(f, 'Он', 'Она')} живёт своим днём: может заняться этим, позвать ${U} с собой или отложить ради того, что происходит, — но помнит.]`);
         const b = bodyState(who);
         if (b.urgent.length) out.push(`[Тело ${W}: ${b.urgent.join('; ')}. Пусть это проявится само — полезет в холодильник, зевнёт, пойдёт в душ, поморщится; без цифр и без нытья.]`);
         const sp = x.spark && (!x.spark.used || redo(x.spark.used)) ? x.spark : null;
-        if (sp && !intim) out.push(`[${W} только что зацепило: ${sp.t}. Пусть желание прорвётся в поведении — задержанный взгляд, комплимент, касание, поцелуй мимоходом или провокационная фраза; первого шага от ${U} не ждёт.]`);
+        if (sp && !intim && !heavy) out.push(`[${W} только что зацепило: ${sp.t}. Пусть желание прорвётся в поведении — задержанный взгляд, комплимент, касание, поцелуй мимоходом или провокационная фраза; первого шага от ${U} не ждёт.]`);
         const arm = x.armed || (swipe && x.last && redo(x.last.mes) ? x.last : null);
-        const y = arm ? byId(x, arm.kind, arm.id) : null;
-        if (y && !intim) {
+        let y = arm ? byId(x, arm.kind, arm.id) : null;
+        // «Открывается»: сам заговорит о самом тяжёлом, что у него на уме
+        if (!y && mn.bondOn && mn.btone === 'open') {
+            const t = x.thoughts.filter(z => z.status === 'on').sort((a, b) => b.w - a.w || b.mes - a.mes)[0];
+            if (t) { y = t; out.push(`[Сейчас сцена, где ${W} открывается. Пусть ${g(f, 'сам', 'сама')} заговорит о том, что тяготит: «${t.t}». Трудно, с паузами и обрывами, но ${g(f, 'сам', 'сама')}; один честный кусок, без решения за один пост.]`); continue; }
+        }
+        if (y && !intim && !(heavy && arm.kind === 'want')) {
             if (arm.kind === 'thought') out.push(`[У ${W} на уме: «${y.t}». Пусть это прорвётся само, в ${his} манере: поделится с ${U} ${g(f, 'сам', 'сама')}, без вопроса, — или просто видно по ${g(f, 'нему', 'ней')} (замолчать, выйти на балкон, крутить что-то в руках). Один честный кусок, без решения за один пост.]`);
             else out.push(`[${W} хочется: ${y.t}${y.with ? ` (с ${y.with})` : ''}. Это ${his} собственное желание, не про ${U}: пусть ${g(f, 'сам', 'сама')} заговорит об этом, предложит, договорится или отпросится — к месту.]`);
         }

@@ -515,6 +515,8 @@ async function onCCClick(ev) {
         case 'intim': api.cycleIntim?.(); renderCC(); break;
         case 'tone': api.setTone?.(el.dataset.v); renderCC(); break;
         case 'iopt': api.toggleIntimOpt?.(el.dataset.v); renderCC(); break;
+        case 'bond': api.cycleBond?.(); renderCC(); break;
+        case 'btone': api.setBondTone?.(el.dataset.v); renderCC(); break;
         case 'sheet-close': closeSheet(); break;
         case 'scene': goLife('scene'); break;
         case 'map': goLife('map'); break;

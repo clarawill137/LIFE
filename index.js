@@ -11,13 +11,13 @@ import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSe
 import { initErrors } from './errors.js';
 import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson } from './people.js';
 import { agendaClick, agendaCfgHtml } from './agenda.js';
-import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
+import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2598,7 +2598,9 @@ async function onClick(ev) {
 
     if (act === 'mood') { setMood(el.dataset.v); render(); toast('info', el.dataset.v ? 'Тон уйдёт модели до конца главы' : 'Тон — сам, по ходу сцены', '✦ Настроение', { timeOut: 1600 }); return; }
     if (act === 'intim') { cycleIntim(); render(); return; }
-    if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
+    if (act === 'tone') { const t = setTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца этой сцены' : 'Оттенок — сам, по ходу сцены', '✦ Секс', { timeOut: 1600 }); return; }
+    if (act === 'bond') { cycleBond(); render(); return; }
+    if (act === 'btone') { const t = setBondTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца главы' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
     if (act.startsWith('ag-')) {
         try { await agendaClick(act, el); } catch (e) { console.warn('[Life] Закулисье', e); toast('warning', esc(String(e?.message || e)), '✦ Закулисье'); }
@@ -3312,6 +3314,8 @@ const controlApi = {
     cycleIntim: () => cycleIntim(),
     setTone: (v) => setTone(v),
     toggleIntimOpt: (v) => toggleIntimOpt(v),
+    cycleBond: () => cycleBond(),
+    setBondTone: (v) => setBondTone(v),
     modesHtml: (tt) => (hasChat() && settings().enabled ? modesHtml(esc, tt) : ''),
     toggleMode: (v) => toggleMode(v),
     armOnce: (v) => armOnce(v),

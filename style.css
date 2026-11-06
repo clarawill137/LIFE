@@ -1534,3 +1534,11 @@ body.lf-modes-on #send_textarea::placeholder { color: var(--lf-mode-color, #f2a7
 body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot { margin: 16px calc(-16px - var(--lf-mtpr, 0px)) 16px -16px; border-radius: 0; }
 body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot.wait { margin: 16px 0; border-radius: 14px; }
 @media (prefers-reduced-motion: reduce) { #chat .lf-shot-f.on { animation: none !important; } }
+
+/* ───── 0.14: эмоциональная близость — тёплое золото, секс остаётся розовым ───── */
+.lf-intim.lf-bond.on { border-color: rgba(232, 195, 122, .55); background: linear-gradient(100deg, rgba(118, 86, 38, .38), var(--lf-card) 70%); }
+.lf-intim.lf-bond.on .lf-intim-ic { background: #e8c37a; color: #2a1a1e; box-shadow: 0 0 16px rgba(232, 195, 122, .45); }
+.lf-btones.on { border-color: rgba(232, 195, 122, .35); background: linear-gradient(160deg, rgba(118, 86, 38, .16), transparent 60%); }
+.lf-btones .lf-tone-d .lf-i { color: #e8c37a; }
+.lf-btones .lf-chip.on, .lf-btones .cc-chip.on { border-color: rgba(232, 195, 122, .7) !important; background: rgba(232, 195, 122, .2) !important; color: #f3dfb4 !important; }
+.lf-btones .lf-tone-g > span { font-size: 10px; }
