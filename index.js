@@ -13,10 +13,11 @@ import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPers
 import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
+import { initShots, paintShots, onShotClick, shoot as shootShot } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.12.5';
+const VERSION = '0.13.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -39,6 +40,7 @@ const DEFAULTS = {
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
     detail: { on: true, auto: true, motion: true },
+    shot: { suggest: true, btn: true },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -56,6 +58,8 @@ function settings() {
     for (const [k, v] of Object.entries(DEFAULTS.music)) if (s.music[k] === undefined) s.music[k] = clone(v);
     if (!s.detail || typeof s.detail !== 'object') s.detail = clone(DEFAULTS.detail);
     for (const [k, v] of Object.entries(DEFAULTS.detail)) if (s.detail[k] === undefined) s.detail[k] = v;
+    if (!s.shot || typeof s.shot !== 'object') s.shot = clone(DEFAULTS.shot);
+    for (const [k, v] of Object.entries(DEFAULTS.shot)) if (s.shot[k] === undefined) s.shot[k] = v;
     if (!s.migr02) migrate01(s);
     if (!s.migr03) { s.chatMarks = 'off'; delete s.dividers; delete s.focusDefault; s.migr03 = true; }
     if (!Array.isArray(s.regions)) s.regions = [];
@@ -813,7 +817,8 @@ async function runChron(i, { force = false } = {}) {
             chapterTitle: ch?.title, sim: so?.input, extra: ext.map(x => x.input).filter(Boolean),
         });
         const askDetail = !!s.detail.on;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
+        const askShot = !!s.shot.suggest;
+        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext, shot: askShot }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (askShot ? 150 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
         const j = extractJson(out);
         if (!j) throw new Error('Летописец ответил не JSON');
         const res = normalizeResult(j);
@@ -834,6 +839,8 @@ async function runChron(i, { force = false } = {}) {
         store[key] = { chips: res.chips, ops: res.items, rel: s.chron.relations ? res.relations : [], sec: s.chron.secrets ? res.secrets : [], place: res.place, title: res.title, scene: normalizeScene(j), undo, at: Date.now() };
         if (old?.detImg && old.det) { store[key].det = old.det; store[key].detImg = old.detImg; }
         else if (askDetail && res.detail) store[key].det = res.detail;
+        if (old?.shotUsed || old?.shotX) { store[key].shot = old.shot; store[key].shotUsed = old.shotUsed; store[key].shotX = old.shotX; }
+        else if (askShot && res.shot) store[key].shot = res.shot;
         trimChron();
         await ctx().saveChat();
         saveMeta();
@@ -1212,6 +1219,7 @@ function nameKeys(n) { const c = canonName(n); return [n, c, ...(aliasTable()[c]
 const cuts = () => (Array.isArray(chatMeta().cuts) ? chatMeta().cuts : []);
 function cutTile(c) {
     const f = (c.frames || []).find(x => x.img);
+    if (c.kind === 'frame' && f) return `<button class="lf-cuttile" data-act="lightbox" data-src="${esc(f.img)}" data-mes="${c.mes}"><span class="lf-cuttile-img" style="background-image:url('${esc(f.img)}')"></span><small>${esc(cut(f.caption || c.title || 'Кадр', 26))}</small></button>`;
     return `<button class="lf-cuttile" data-act="cut-play" data-id="${esc(c.id)}">${f ? `<span class="lf-cuttile-img" style="background-image:url('${esc(f.img)}')"></span>` : '<span class="lf-cuttile-img"></span>'}<span class="lf-cuttile-play">${icon('play')}</span><small>${esc(cut(c.title || 'Кат-сцена', 26))}</small></button>`;
 }
 
@@ -1231,7 +1239,7 @@ function chipsHtml(i) {
 }
 
 function cutCardHtml(i) {
-    const cs = cuts().filter(c => c.mes === i && c.frames?.some(f => f.img));
+    const cs = cuts().filter(c => !c.key && c.mes === i && c.frames?.some(f => f.img)); // старые кат-сцены, снятые до 0.13 — под постом
     if (!cs.length) return '';
     return cs.map(c => `<div class="lf-cutcard" data-cut="${esc(c.id)}" role="button">
         <span class="lf-cutcard-strip">${c.frames.filter(f => f.img).map(f => `<i style="background-image:url('${esc(f.img)}')"></i>`).join('')}</span>
@@ -1244,6 +1252,7 @@ function paintChips() {
     if (!chatEl || !settings().enabled) return;
     chatEl.querySelectorAll(':scope > .mes[mesid]').forEach(el => {
         const id = Number(el.getAttribute('mesid'));
+        try { paintShots(el, id); } catch (e) { console.warn('[Life] кадры в посте', e); }
         const host0 = el.querySelector('.mes_block') || el;
         const oldCut = host0.querySelector(':scope > .lf-cutcards');
         const cutHtml = cutCardHtml(id);
@@ -1283,7 +1292,7 @@ function decorate() {
         const s = settings();
         const mesEls = chatEl.querySelectorAll(':scope > .mes[mesid]');
         if (!s.enabled || !hasChat()) {
-            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelector('.lf-pchips')?.remove(); });
+            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelectorAll('.lf-pchips, .lf-shot, .lf-shot-sug, .lf-shot-btn').forEach(x => x.remove()); });
             return;
         }
         // чат остаётся сплошным: только прячем служебные отметки Life и (по желанию) ставим тонкую черту, где сменилось место
@@ -1324,6 +1333,7 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
+    if (onShotClick(ev)) return;
     const det = ev.target.closest('.lf-detail');
     if (det) {
         const db = ev.target.closest('[data-det]');
@@ -2140,6 +2150,8 @@ function renderCfg() {
         ${sw('on', 'Деталь крупным планом к каждому посту', s.detail, 'detail.on')}
         ${sw('auto', 'Рисовать деталь сразу (иначе — по нажатию)', s.detail, 'detail.auto')}
         ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
+        ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
+        ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
         ${sec('Жизнь вокруг')}
         ${sw('on', 'Персонажи проявляют инициативу сами', simCfg(), 'sim.on')}
         ${sw('tease', 'Их задумки — сюрприз (размыто)', simCfg(), 'sim.tease')}
@@ -2263,7 +2275,7 @@ function directorSheet() {
         ${sec(`${icon('image')} Кат-сцена`, 'ключевые кадры в стиле истории')}
         ${cs.length ? `<div class="lf-strip">${cs.map(cutTile).join('')}</div>` : ''}
         ${busyCut || `<button class="lf-btn primary serif full big" data-act="cut-make">${icon('sparkles')} Снять по последнему посту</button>`}
-        <div class="lf-hint">Три кадра через SLAY: общий план и два крупных — по последнему посту. Модель кат-сцену не видит, она только для тебя. Играет на весь экран с музыкой.</div>
+        <div class="lf-hint">3–4 кадра через SLAY по последнему посту — встанут прямо в пост, в тот момент, где всё происходит, и будут листаться сами. Тап по кат-сцене — на весь экран с музыкой. Модель её не видит. Одиночный кадр — кнопка ${icon('film')} у любого поста.</div>
         ${cs.length ? `<div class="lf-actions tight">${cs.slice(0, 3).map(c => `<button class="lf-btn small ghost" data-act="cut-del" data-id="${esc(c.id)}">${icon('trash')} ${esc(cut(c.title || 'кат-сцена', 18))}</button>`).join('')}</div>` : ''}`);
 }
 
@@ -2271,44 +2283,17 @@ function directorSheet() {
 
 let cutBusy = '';
 let cutStep = 0;
-const CUT_SYSTEM = `You are a film director's storyboard assistant. From one roleplay post you pick 3 key frames for a short cutscene and write image prompts.
-Return ONLY JSON: {"title":"short Russian title of the moment, 2-4 words","frames":[{"title":"Общий план","who":["exact names in frame"],"caption":"one short Russian line from or about the post, max 90 chars","prompt":"English image prompt, 45-70 words: shot type and angle, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), pose, expression, clothing, setting, light, mood; cinematic film still"}]}
-Frame 1 is a wide establishing shot of the place and the people. Frames 2 and 3 are close-ups or medium shots of the two most important reactions or gestures. Follow the post exactly: same place, time of day, weather, clothes. Never explicit.`;
-
-async function makeCut(btn) {
+/** Кат-сцена по последнему посту — теперь встаёт прямо в пост, в тот момент, где всё происходит. */
+async function makeCut() {
     if (cutBusy) return;
     const i = lastAiIndex();
     if (i < 0) { toast('info', 'Нет поста, по которому снимать'); return; }
-    const m = chatArr()[i];
-    const st = worldState();
-    const cast = castNames(st);
     cutBusy = 'Раскадровка…'; cutStep = 0.4; directorSheet();
     try {
-        const raw = await askModel([{ role: 'system', content: CUT_SYSTEM }, { role: 'user', content: `Place: ${st.scene?.location || '?'}. Time: ${st.timestamp?.story_time || '?'}, ${st.timestamp?.story_date || ''}. Weather: ${st.scene?.atmosphere || '?'}.\nPeople in the story: ${cast.join(', ')}.\nClothes now: ${Object.entries(st.costumes || {}).map(([k, v]) => `${k}: ${v}`).join('; ') || '?'}\n\nPOST by ${m.name}:\n${cut(plainText(m.mes), 4000)}` }], 1600);
-        const j = extractJson(raw);
-        const frames = (j?.frames || []).filter(f => f?.prompt).slice(0, 3);
-        if (!frames.length) throw new Error('раскадровка не вышла');
-        const cutObj = { id: uid(), mes: i, title: String(j.title || 'Кат-сцена').slice(0, 40), at: Date.now(), frames: [] };
-        for (let k = 0; k < frames.length; k++) {
-            cutBusy = `Кадр ${k + 1} из ${frames.length} · генерация…`; cutStep = k + 1; directorSheet();
-            const f = frames[k];
-            const who = (Array.isArray(f.who) ? f.who : []).map(canonName).filter(Boolean);
-            const refs = [];
-            for (const n of who.slice(0, 2)) { try { const r = await faceRef(n); if (r) refs.push(r); } catch { /* без лица */ } }
-            const img = await drawPicture(`${f.prompt}\nStyle: ${style()}. Cinematic 16:9 film still, shallow depth of field, no text, no letterbox.`, { aspect: '16:9', refs, prefix: 'life_cut', max: 1600 });
-            cutObj.frames.push({ title: String(f.title || '').slice(0, 30), caption: String(f.caption || '').slice(0, 120), img, prompt: f.prompt });
-        }
-        const cm = chatMeta();
-        cm.cuts = [...cuts(), cutObj].slice(-40);
-        saveMeta();
+        await shootShot(i, { kind: 'cut', play: true, onStep: (label, frac) => { cutBusy = cap(label); cutStep = frac * 4; if (document.querySelector('[data-act="cut-make"], .lf-progress')) directorSheet(); } });
+    } finally {
         cutBusy = ''; cutStep = 0;
-        paintChips();
-        directorSheet();
-        playCut(cutObj, { music: cutMusic(cutObj) });
-    } catch (e) {
-        cutBusy = ''; cutStep = 0;
-        directorSheet();
-        toast('error', esc(e?.message || e), '✦ Кат-сцена');
+        if (document.querySelector('.lf-progress')) directorSheet();
     }
 }
 
@@ -3124,7 +3109,7 @@ async function onChange(ev) {
         if (k === 'showFab' || k === 'enabled') syncFab();
         if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
         if (k === 'sceneBg' || k === 'enabled') updateSceneBg();
-        if (path[0] === 'detail') paintChips();
+        if (path[0] === 'detail' || path[0] === 'shot') paintChips();
         if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
@@ -3360,6 +3345,7 @@ globalThis.LifeBridge = {
 jQuery(async () => {
     settings();
     initSim(simApi);
+    initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
     initMood(moodApi);
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }

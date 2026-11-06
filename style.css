@@ -1479,3 +1479,58 @@ body.lf-modes-on #send_textarea::placeholder { color: var(--lf-mode-color, #f2a7
 .lf-pet-fam-in input[type=text] { min-width: 0; }
 .lf-chip.static.no { opacity: .75; text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .3); }
 .lf-petwords span { white-space: normal; text-align: center; line-height: 1.15; padding: 8px 8px; }
+
+/* ───── 0.13: кадры и кат-сцены внутри поста ───── */
+#chat .mes_text > .lf-shot { position: relative; display: block; margin: 14px 0 14px; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 9; background: #120d0f; cursor: pointer; isolation: isolate; box-shadow: 0 12px 34px rgba(0, 0, 0, .34); -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; animation: lf-rise .5s cubic-bezier(.2, .8, .2, 1) both; font-style: normal; text-indent: 0; }
+#chat .mes_text > .lf-shot > img { position: absolute; inset: 0; width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; object-fit: cover; display: block; transform-origin: 50% 50%; }
+#chat .mes_text > .lf-shot::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(180deg, transparent 58%, rgba(0, 0, 0, .6)); box-shadow: inset 0 0 70px rgba(0, 0, 0, .38); }
+#chat .mes_text > .lf-shot figcaption { position: absolute; left: 14px; bottom: 11px; right: 14px; z-index: 4; margin: 0; color: #fff; font-family: var(--t-serif, var(--lf-serif)); font-style: italic; font-size: 15px; letter-spacing: .02em; line-height: 1.25; text-shadow: 0 1px 10px rgba(0, 0, 0, .85), 0 0 2px rgba(0, 0, 0, .6); pointer-events: none; }
+#chat .lf-shot-btns { position: absolute; top: 8px; right: 8px; z-index: 6; display: flex; gap: 6px; opacity: .5; transition: opacity .2s; }
+#chat .lf-shot:hover .lf-shot-btns, #chat .lf-shot:focus-within .lf-shot-btns { opacity: 1; }
+#chat .lf-shot-btns button { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; margin: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#chat .lf-shot-btns svg { width: 14px; height: 14px; }
+#chat .lf-shot-btns [data-sh="up"] svg { transform: rotate(90deg); }
+#chat .lf-shot-btns [data-sh="down"] svg { transform: rotate(90deg); }
+/* кат-сцена в посте */
+#chat .lf-shot.cut .lf-shot-st { position: absolute; inset: 0; z-index: 0; }
+#chat .lf-shot-f { position: absolute; inset: 0; background: #120d0f center 30% / cover no-repeat; opacity: 0; transition: opacity 1.3s ease; transform-origin: 50% 50%; }
+#chat .lf-shot-f.on { opacity: 1; animation: lf-kb0 7.5s ease-out both; }
+#chat .lf-shot-f.k1.on { animation-name: lf-kb1; } #chat .lf-shot-f.k2.on { animation-name: lf-kb2; } #chat .lf-shot-f.k3.on { animation-name: lf-kb3; }
+#chat .lf-shot.cut:not(.play) .lf-shot-f { animation-play-state: paused !important; }
+#chat .lf-shot-bar { position: absolute; left: 0; right: 0; z-index: 2; height: 7%; background: #000; pointer-events: none; }
+#chat .lf-shot-bar.top { top: 0; } #chat .lf-shot-bar.bot { bottom: 0; }
+#chat .lf-shot-sub { position: absolute; left: 12%; right: 12%; bottom: 12%; z-index: 4; display: grid; pointer-events: none; }
+#chat .lf-shot-sub span { grid-area: 1 / 1; align-self: end; text-align: center; color: #fff; font-family: var(--t-serif, var(--lf-serif)); font-style: italic; font-size: 14.5px; line-height: 1.3; text-shadow: 0 1px 10px rgba(0, 0, 0, .95), 0 0 3px rgba(0, 0, 0, .8); opacity: 0; transform: translateY(4px); transition: opacity .8s ease .5s, transform .8s ease .5s; }
+#chat .lf-shot-sub span.on { opacity: 1; transform: none; }
+#chat .lf-shot-dots { position: absolute; left: 50%; bottom: 2.4%; z-index: 5; display: flex; gap: 5px; transform: translateX(-50%); }
+#chat .lf-shot-dots b { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, .35); transition: background .4s, transform .4s; }
+#chat .lf-shot-dots b.on { background: #fff; transform: scale(1.25); }
+#chat .lf-shot-t { position: absolute; left: 10px; top: calc(7% + 8px); z-index: 5; display: flex; align-items: center; gap: 7px; padding: 4px 10px 4px 4px; border-radius: 999px; background: rgba(0, 0, 0, .42); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #fff; font: 500 13px var(--t-serif, var(--lf-serif)); pointer-events: none; max-width: 60%; }
+#chat .lf-shot-t .lf-i, #chat .lf-shot-t svg { flex: none; width: 22px; height: 22px; padding: 5px 4px 5px 6px; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #2a1a1e; }
+#chat .lf-shot-t b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chat .lf-shot.cut .lf-shot-btns { top: calc(7% + 8px); }
+#chat .lf-shot.cut::after { background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, .55)); }
+/* снимается */
+#chat .mes_text > .lf-shot.wait { display: grid; place-items: center; box-shadow: none; cursor: default; border: 1px dashed var(--t-line2, rgba(234, 179, 188, .3)); background: color-mix(in srgb, var(--t-card, #1a1315) 70%, transparent); color: var(--t-dim, #b9a9ad); }
+#chat .mes_text > .lf-shot.wait::after { display: none; }
+#chat .lf-shot.wait > span { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; font-family: var(--t-serif, var(--lf-serif)); font-style: italic; font-size: 15px; }
+#chat .lf-shot.wait > span svg { width: 17px; height: 17px; flex: none; }
+#chat .lf-shot.wait small { font-family: inherit; font-style: normal; font-size: 12px; opacity: .7; margin-left: 4px; }
+/* подсказка Летописца — тонкая строчка прямо между абзацами */
+#chat .mes_text > .lf-shot-sug { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 10px 0; padding: 8px 8px 8px 12px; border-radius: 14px; border: 1px dashed rgba(217, 104, 123, .38); background: linear-gradient(90deg, rgba(94, 31, 44, .2), rgba(94, 31, 44, .06)); user-select: none; -webkit-user-select: none; font-style: normal; text-indent: 0; animation: lf-rise .45s cubic-bezier(.2, .8, .2, 1) both; }
+#chat .lf-shot-sug-t { flex: 1 1 160px; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--t-text, #ede4df); font-family: var(--t-serif, var(--lf-serif)); font-size: 14.5px; line-height: 1.25; }
+#chat .lf-shot-sug-t svg { flex: none; width: 16px; height: 16px; color: var(--lf-rose, #d9687b); }
+#chat .lf-shot-sug-t b { font-weight: 500; font-style: italic; }
+#chat .lf-shot-sug-t small { display: block; margin-top: 2px; font: 11.5px/1.2 -apple-system, system-ui, sans-serif; color: var(--t-dim, #b9a9ad); }
+#chat .lf-shot-sug-t > span { min-width: 0; }
+#chat .lf-shot-sug-b { display: flex; gap: 6px; margin-left: auto; }
+#chat .lf-shot-sug-b button { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; margin: 0; border-radius: 999px; border: 1px solid rgba(234, 179, 188, .28); background: rgba(0, 0, 0, .2); color: var(--t-text, #ede4df); font: 500 12.5px -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+#chat .lf-shot-sug-b button.on { border-color: transparent; background: var(--lf-rose, #d9687b); color: #fff; }
+#chat .lf-shot-sug-b button[data-sh="sug-x"] { width: 30px; padding: 0; justify-content: center; }
+#chat .lf-shot-sug-b svg { width: 14px; height: 14px; }
+/* кнопка «кадр» у поста */
+#chat .mes_button.lf-shot-btn { display: inline-flex; align-items: center; justify-content: center; }
+#chat .mes_button.lf-shot-btn svg { width: 1em; height: 1em; }
+body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot { margin: 16px calc(-16px - var(--lf-mtpr, 0px)) 16px -16px; border-radius: 0; }
+body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot.wait { margin: 16px 0; border-radius: 14px; }
+@media (prefers-reduced-motion: reduce) { #chat .lf-shot-f.on { animation: none !important; } }

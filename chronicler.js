@@ -57,6 +57,10 @@ detail — ещё одна картинка к посту: эстетичная 
 motion — какое движение оживит этот кадр: дождь на стекле — rain, пар от кофе — steam, сигаретный дым — smoke, свеча или неон — flicker, тёплый свет — glow, сердцебиение или пульс — heartbeat, экран УЗИ или монитора — scan, снег — snow, всё остальное — drift.
 В интимных, откровенных или жестоких сценах — только символ и атмосфера: запотевшее стекло, капли, силуэты за матовым стеклом, смятые простыни в тени, сплетённые пальцы, дым свечи, огни города не в фокусе. Никакой наготы и ничего откровенного. Если деталь не нужна — null.`;
 
+const SHOT_RULE = `
+
+shot — если в посте есть момент, который сам просится на экран картинкой: первый поцелуй, признание, взгляд через комнату, слёзы, драка, жест, который всё меняет, красивый вид, смешная сцена, — предложи кадр: {"at":"6–12 слов ДОСЛОВНО из того абзаца, где этот момент","kind":"frame|cut","caption":"2–6 слов по-русски, подпись к кадру","why":"3–8 слов, чем момент хорош"}. frame — один застывший кадр; cut — момент в движении, где 3–4 кадра расскажут больше (поворот, обмен взглядами, действие). Проходной пост, бытовая реплика, перечень дел — null. Сколько постов подряд уже было с кадром — неважно: смотри только на этот пост.`;
+
 export function detailSystem() {
     return `Ты подбираешь к посту ролевой истории на русском один вставной кадр — деталь крупным планом. Ответь только JSON без пояснений: {"detail": {...}}.${DETAIL_RULE}`;
 }
@@ -106,6 +110,7 @@ export function chronSystem(askTitle, askDetail = false, sim = {}) {
     const keys = [];
     let rules = '';
     if (askDetail) { keys.push('"detail": null'); rules += DETAIL_RULE; }
+    if (sim.shot) { keys.push('"shot": null'); rules += SHOT_RULE; }
     if (sim.prefs) { keys.push('"prefs": []'); rules += PREFS_RULE; }
     if (sim.ideas) { keys.push('"ideas": []', '"done": []'); rules += IDEAS_RULE; }
     if (sim.traces) { keys.push('"traces": []'); rules += TRACES_RULE; }
@@ -218,6 +223,10 @@ export function normalizeResult(j) {
                 done: arr(x.done).map(Number).filter(Number.isFinite).slice(0, 4), spark: str(x.spark).slice(0, 100),
             };
         }).slice(0, 6),
+        shot: j?.shot && typeof j.shot === 'object' && str(j.shot.at).length > 8 ? {
+            at: str(j.shot.at).slice(0, 200), kind: str(j.shot.kind).toLowerCase() === 'cut' ? 'cut' : 'frame',
+            caption: str(j.shot.caption).slice(0, 60), why: str(j.shot.why).slice(0, 80),
+        } : null,
         detail: j?.detail && typeof j.detail === 'object' && str(j.detail.prompt).length > 20 ? {
             prompt: str(j.detail.prompt).slice(0, 700),
             motion: MOTIONS.includes(str(j.detail.motion).toLowerCase()) ? str(j.detail.motion).toLowerCase() : 'drift',
