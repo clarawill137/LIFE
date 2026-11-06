@@ -13,7 +13,7 @@ import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cyc
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.9.0';
+const VERSION = '0.9.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 

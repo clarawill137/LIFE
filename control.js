@@ -25,8 +25,22 @@ const MASKS = [
     ['#leftNavDrawerIcon', 'sliders'], ['#API-status-top', 'plug'], ['#advanced-formatting-button .drawer-icon', 'type'],
     ['#WIDrawerIcon', 'book'], ['#user-settings-button .drawer-icon', 'settings'], ['#backgrounds-button .drawer-icon', 'image'],
     ['#extensions-settings-button .drawer-icon', 'puzzle'], ['#persona-management-button .drawer-icon', 'user'],
-    ['#rightNavDrawerIcon', 'idcard'], ['#options_button', 'menu'], ['#extensionsMenuButton', 'wand'],
+    ['#rightNavDrawerIcon', 'idcard'], ['#options_button', 'menu'], ['#extensionsMenuButton', 'sparkles'],
     ['#send_but', 'arrowUp'], ['#mes_continue', 'right'], ['#mes_impersonate', 'feather'],
+    // чужие кнопки у поля ввода и в верхней панели — тем же тонким контуром, чтобы ряд был ровный
+    ['#top-settings-holder :is(.fa-clock, .fa-clock-rotate-left, .fa-hourglass, .fa-hourglass-half, .fa-hourglass-start)', 'clock'],
+    ['#leftSendForm :is(.fa-shirt, .fa-shirt-long-sleeve, .fa-vest)', 'shirt'],
+    ['#leftSendForm :is(.fa-book, .fa-book-open, .fa-book-bookmark, .fa-book-atlas, .fa-book-open-reader)', 'book'],
+    ['#leftSendForm :is(.fa-clock, .fa-clock-rotate-left, .fa-hourglass, .fa-hourglass-half)', 'clock'],
+    ['#leftSendForm :is(.fa-chevron-down, .fa-angle-down, .fa-caret-down, .fa-circle-chevron-down, .fa-angles-down)', 'chevD'],
+    ['#leftSendForm :is(.fa-chevron-up, .fa-angle-up, .fa-caret-up, .fa-circle-chevron-up, .fa-angles-up)', 'chevU'],
+    ['#leftSendForm :is(.fa-magic-wand-sparkles, .fa-wand-magic-sparkles, .fa-wand-magic)', 'sparkles'],
+    ['#leftSendForm :is(.fa-image, .fa-images, .fa-camera)', 'image'],
+    ['#leftSendForm :is(.fa-mobile, .fa-mobile-screen, .fa-mobile-screen-button, .fa-phone)', 'smartphone'],
+    ['#leftSendForm :is(.fa-heart, .fa-heart-pulse)', 'heart'], ['#leftSendForm :is(.fa-music, .fa-headphones)', 'music'],
+    ['#leftSendForm :is(.fa-gear, .fa-gears, .fa-sliders)', 'settings'], ['#leftSendForm :is(.fa-brain)', 'brain'],
+    ['#leftSendForm :is(.fa-feather, .fa-feather-pointed, .fa-pen, .fa-pen-nib)', 'feather'], ['#leftSendForm :is(.fa-paw)', 'paw'],
+    ['#leftSendForm :is(.fa-globe, .fa-earth-europe, .fa-map)', 'globe'], ['#leftSendForm :is(.fa-star)', 'star'],
 ];
 
 // кнопки чата из меню-гамбургера ST

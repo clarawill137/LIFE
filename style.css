@@ -788,12 +788,30 @@ body.lf-theme.lf-ava-big #chat .mes .avatar img { border: 0 !important; box-shad
 body.lf-theme #form_sheld { padding: 4px 8px 8px; }
 body.lf-theme #send_form { border-radius: 22px !important; border: 1px solid var(--t-line2) !important; background-color: var(--t-input) !important; box-shadow: 0 8px 28px var(--t-shadow) !important; overflow: hidden; }
 body.lf-theme #send_textarea { color: var(--t-text) !important; font-size: max(16px, var(--mainFontSize)); line-height: 1.4; }
-body.lf-theme #send_textarea::placeholder { color: var(--t-dim); font-style: italic; }
-body.lf-theme #rightSendForm > div:not(.mes_stop), body.lf-theme #leftSendForm > div { border: 0 !important; background-color: transparent !important; box-shadow: none !important; filter: none !important; color: var(--t-text2) !important; transform: none; }
-body.lf-theme #send_but, body.lf-theme #rightSendForm > div#send_but { display: flex !important; align-items: center; justify-content: center; flex: none; color: #fff !important; opacity: 1 !important; background: var(--t-accent) !important; border-radius: 50%; width: 34px !important; height: 34px !important; min-width: 34px; margin: 0 5px; padding: 0 !important; box-shadow: none !important; font-size: 17px !important; line-height: 1 !important; transform: none !important; rotate: none !important; }
+body.lf-theme #send_textarea::placeholder { color: var(--t-dim); font-style: italic; text-align: left !important; }
+/* ввод: сверху текст во всю ширину, снизу ровный ряд кнопок и отправка справа — всё одного размера */
+body.lf-theme #nonQRFormItems { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "text text" "left right"; align-items: center; column-gap: 6px; row-gap: 0; padding: 4px 6px 5px !important; }
+body.lf-theme #send_textarea { grid-area: text; width: 100% !important; min-height: 38px; margin: 0 !important; padding: 8px 10px 2px !important; text-align: left !important; resize: none !important; }
+body.lf-theme #leftSendForm, body.lf-theme #rightSendForm { display: flex !important; flex-wrap: nowrap !important; align-items: center; width: auto !important; height: 40px !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; gap: 2px; order: 0 !important; }
+body.lf-theme #leftSendForm { grid-area: left; justify-content: flex-start; min-width: 0; overflow: hidden; }
+body.lf-theme #rightSendForm { grid-area: right; justify-content: flex-end; }
+body.lf-theme #leftSendForm > *, body.lf-theme #rightSendForm > :is(#mes_continue, #mes_impersonate) {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px !important; height: 38px !important; min-width: 38px !important; margin: 0 !important; padding: 0 !important;
+    border: 0 !important; border-radius: 12px; background: transparent !important; box-shadow: none !important; filter: none !important; transform: none !important; rotate: none !important; opacity: 1 !important;
+    color: var(--t-text2) !important; font-size: 19px !important; line-height: 1 !important; text-align: center; position: relative; top: 0 !important;
+}
+body.lf-theme #leftSendForm > *::before, body.lf-theme #leftSendForm > * > i, body.lf-theme #leftSendForm > * > i::before { font-size: 19px !important; line-height: 1 !important; margin: 0 !important; vertical-align: 0 !important; transform: none !important; }
+body.lf-theme #leftSendForm > * :is(img, svg) { width: 20px !important; height: 20px !important; max-width: 20px; max-height: 20px; margin: 0 !important; object-fit: contain; }
+body.lf-theme #leftSendForm > *:active { background: color-mix(in srgb, var(--t-text) 10%, transparent) !important; }
+/* отправка и стоп — один и тот же круг на одном месте; ST прячет отправку на время ответа */
+body.lf-theme #send_but, body.lf-theme #rightSendForm > div#send_but { align-items: center; justify-content: center; flex: none; color: #fff !important; opacity: 1 !important; background: var(--t-accent) !important; border: 0 !important; border-radius: 50% !important; width: 36px !important; height: 36px !important; min-width: 36px !important; margin: 0 7px 0 4px !important; padding: 0 !important; box-shadow: none !important; font-size: 18px !important; line-height: 1 !important; transform: none !important; rotate: none !important; }
+body.lf-theme #rightSendForm > div#send_but:not(.displayNone) { display: flex !important; }
+body.lf-theme #rightSendForm > div#send_but.displayNone { display: none !important; }
 body.lf-theme #rightSendForm > div#send_but::before, body.lf-theme #send_but::before { width: 18px !important; height: 18px !important; vertical-align: 0 !important; }
 body.lf-theme #send_but:active { transform: scale(.92) !important; }
-body.lf-theme #mes_stop { color: var(--t-accent); }
+body.lf-theme #mes_stop { align-items: center; justify-content: center; flex: none; width: 36px !important; height: 36px !important; min-width: 36px; margin: 0 7px 0 4px !important; padding: 0 !important; border-radius: 50% !important; border: 1.5px solid var(--t-accent) !important; background: transparent !important; color: var(--t-accent) !important; box-shadow: none !important; opacity: 1 !important; font-size: 0 !important; }
+body.lf-theme #mes_stop > i { font-size: 0 !important; width: auto; height: auto; }
+body.lf-theme #mes_stop > i::before { content: '' !important; display: block; width: 11px; height: 11px; border-radius: 3px; background: currentColor; }
 
 /* тосты */
 body.lf-theme #toast-container > div { border-radius: 14px; border: 1px solid var(--t-line2); box-shadow: 0 12px 34px var(--t-shadow); background-color: var(--t-pop) !important; color: var(--t-text) !important; opacity: 1; }
