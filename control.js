@@ -71,6 +71,56 @@ function cc() {
 }
 const PALETTES = [['graphite', 'Графит'], ['paper', 'Бумага'], ['moon', 'Луна']];
 
+// ───────────── низ чата ─────────────
+// Поле ввода Life в два ряда выше, чем рассчитывает таверна (у неё высота чата = экран − один ряд ввода),
+// и на айфоне низ последнего поста уезжал под поле ввода: стрелки свайпа и плашки было не долистать.
+// Меряем, сколько на самом деле перекрыто снизу, и даём чату ровно столько отступа.
+let chatFixOn = false, chatFixTold = false;
+
+function coverBelow(chat) {
+    const cr = chat.getBoundingClientRect();
+    let cover = 0;
+    const form = document.getElementById('form_sheld');
+    if (form) cover = Math.max(cover, Math.ceil(cr.bottom - form.getBoundingClientRect().top));
+    // что-то ещё лежит поверх низа чата (ручка пульта, плавающие кнопки, панели браузера)
+    for (const fx of [0.2, 0.5, 0.8]) {
+        for (const dy of [3, 24, 48]) {
+            const el = document.elementFromPoint(cr.left + cr.width * fx, cr.bottom - dy);
+            if (!el || chat.contains(el) || el.contains(chat)) continue;
+            const r = el.getBoundingClientRect();
+            if (r.height > innerHeight * 0.5) continue; // полноэкранные слои (фон, погода) не в счёт
+            cover = Math.max(cover, Math.ceil(cr.bottom - r.top));
+        }
+    }
+    return Math.min(Math.max(cover, 0), 320);
+}
+
+export function fixChatBottom() {
+    const chat = document.getElementById('chat');
+    if (!chat) return;
+    if (!document.body.classList.contains('lf-theme')) { chat.style.removeProperty('padding-bottom'); return; }
+    const cover = coverBelow(chat);
+    chat.style.setProperty('padding-bottom', `${cover + 14}px`, 'important');
+    if (cover > 24 && !chatFixTold) {
+        chatFixTold = true;
+        console.log(`[Life] низ чата был перекрыт на ${cover}px — добавлен отступ`);
+    }
+}
+
+function watchChatBottom() {
+    if (chatFixOn) return;
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('form_sheld');
+    if (!chat || !form) return;
+    chatFixOn = true;
+    let t = 0;
+    const soon = () => { clearTimeout(t); t = setTimeout(fixChatBottom, 120); };
+    try { const ro = new ResizeObserver(soon); ro.observe(form); ro.observe(chat); } catch { /* */ }
+    window.addEventListener('resize', soon);
+    window.visualViewport?.addEventListener('resize', soon);
+    soon();
+}
+
 // ───────────── тема ─────────────
 
 export function applyTheme() {
@@ -112,6 +162,8 @@ export function applyTheme() {
     const cs = document.getElementById('custom-style');
     if (cs) cs.disabled = on && c.theme && c.killCustom;
     syncEdge();
+    watchChatBottom();
+    requestAnimationFrame(() => requestAnimationFrame(fixChatBottom));
 }
 
 // ───────────── аватарки в полном размере ─────────────

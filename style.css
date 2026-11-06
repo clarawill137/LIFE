@@ -742,6 +742,8 @@ body.lf-theme a { color: var(--t-accent); }
 
 /* сообщения: карточки поверх фона */
 body.lf-theme #chat { border-color: transparent !important; background: none !important; scrollbar-width: thin; }
+/* таверна считает высоту чата под ввод в один ряд, у Life он в два: чат берёт ровно оставшееся место, не больше */
+body.lf-theme #chat { max-height: none !important; min-height: 0 !important; flex: 1 1 0 !important; }
 body.lf-theme #chat .mes { width: auto !important; margin: 8px 8px !important; padding: 12px 12px 10px !important; border-radius: 18px !important; border: 1px solid var(--t-line) !important; background: var(--t-card) !important; box-shadow: 0 6px 22px var(--t-shadow) !important; color: var(--t-text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 body.lf-theme #chat .mes[is_user="true"] { background: var(--t-card-user) !important; }
 body.lf-theme #chat .mes.lf-marker { display: none !important; }
