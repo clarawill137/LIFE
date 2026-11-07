@@ -20,7 +20,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.17.0';
+const VERSION = '0.17.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -410,6 +410,23 @@ function groupMembers() {
     }
     if (c.characterId !== undefined && c.characters?.[c.characterId]) return [c.characters[c.characterId].name];
     return [];
+}
+
+/** Кто из своих (ты + группа) упомянут в тексте — по именам и алиасам; «Наташи» ловится по «Наташа». */
+function namesInText(text) {
+    const t = ` ${norm(text)} `;
+    const out = [];
+    const c = ctx();
+    const esc = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const card of [c.name1, ...groupMembers()].filter(Boolean)) {
+        if (out.includes(card)) continue;
+        const list = [card, ...(aliasTable()[card] || [])].map(norm).filter(Boolean);
+        const keys = [...new Set(list.flatMap(a => [a, a.split(' ')[0]]))]
+            .filter(k => k.length >= 3)
+            .map(k => (k.length >= 5 && /[аяйьоеиыу]$/.test(k) ? k.slice(0, -1) : k));
+        if (keys.some(k => new RegExp(`(^|[^a-zа-я0-9])${esc(k)}`).test(t))) out.push(card);
+    }
+    return out;
 }
 
 function castNames(st = worldState()) {
@@ -3376,6 +3393,8 @@ jQuery(async () => {
     initSim(simApi);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
     initPress({ ...simApi, faceRef });
+    // для патча телефона (phone-draw): те же лица, что в кадрах и СМИ
+    globalThis.LifeFaces = { face: faceRef, canon: canonName, inText: namesInText };
     initPlates(simApi);
     platesSync().then(() => updateMovePrompt()).catch(e => console.warn('[Life] плашки', e));
     initMood(moodApi);
