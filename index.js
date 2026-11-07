@@ -20,7 +20,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.17.2';
+const VERSION = '0.17.3';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1738,7 +1738,9 @@ function wardrobeWorn(name) {
 }
 
 function wardrobeSets(name) {
-    const sets = ctx().extensionSettings?.wardrobe?.sets || [];
+    // Гардероб 1.7+: только комплекты облика этой эпохи (его же фильтр, «все эпохи» — тоже его); старый — все, как было
+    const api = window.Wardrobe?.setsFor;
+    const sets = (typeof api === 'function' ? api() : ctx().extensionSettings?.wardrobe?.sets) || [];
     return sets.filter(x => !x.owner || sameName(x.owner, name));
 }
 
