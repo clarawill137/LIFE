@@ -13,11 +13,12 @@ import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPers
 import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
+import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.15.0';
+const VERSION = '0.15.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2152,6 +2153,7 @@ function renderCfg() {
         ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
+        ${(() => { const f = fmStatus(s.fmBackup); return `<div class="lf-hint">Fetish Manager (его настройки живут только в браузере): сейчас своих фетишей — ${f.cur ? f.cur.custom : 'нет настроек'}${f.old ? `, в старой версии было — ${f.old.custom}` : ''}${f.backup ? `; копия на сервере от ${new Date(f.backup.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '; копии на сервере пока нет'}.</div>`; })()}
         <div class="lf-field"><label>Стиль кадров по умолчанию <small>(в чате — Режиссёр → Стиль кадров)</small></label><select data-set="shot.style">${SHOT_STYLES.map(([id, label]) => `<option value="${id}" ${id === (s.shot.style || 'story') ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
         ${sec('Жизнь вокруг')}
         ${sw('on', 'Персонажи проявляют инициативу сами', simCfg(), 'sim.on')}
@@ -3353,6 +3355,13 @@ globalThis.LifeBridge = {
 };
 
 jQuery(async () => {
+    // страховка Fetish Manager: его настройки живут только в браузере
+    try {
+        const fmSave = (b) => { settings().fmBackup = b; saveSettings(); };
+        const said = fmRescue(settings().fmBackup, fmSave);
+        if (said) setTimeout(() => toast('success', said, '✦ Fetish Manager', { timeOut: 6000 }), 2500);
+        fmWatch(() => settings().fmBackup, fmSave);
+    } catch (e) { console.warn('[Life] страховка FM', e); }
     settings();
     initSim(simApi);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });

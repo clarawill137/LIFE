@@ -52,7 +52,7 @@ const CHAT_ACTS = [
 
 // плавающие кнопки чужих расширений — в пульте они живут плитками
 const FABS = [
-    ['#fmt_fab', '#fmt_fab_btn', 'brain', 'Факты'], ['#fm-mini-btn', '#fm-mini-btn', 'heart', 'FM'], ['#kab-handle', '#kab-handle', 'book', 'Кабинет'],
+    ['#fmt_fab', '#fmt_fab_btn', 'brain', 'Факты'], ['#fm-mini-btn', '#fm-mini-btn', 'flame', 'Фетиши'], ['#kab-handle', '#kab-handle', 'book', 'Кабинет'],
 ];
 
 // стили Moonlit: основной и extension.css, свой CSS, мобильные блоки css-block-*
