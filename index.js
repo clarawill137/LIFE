@@ -15,11 +15,12 @@ import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cyc
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
+import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.16.0';
+const VERSION = '0.17.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -43,6 +44,7 @@ const DEFAULTS = {
     sceneBg: true,
     detail: { on: true, auto: true, motion: true },
     shot: { suggest: true, btn: true, style: 'story', custom: '' },
+    plates: { on: true },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -60,6 +62,7 @@ function settings() {
     for (const [k, v] of Object.entries(DEFAULTS.music)) if (s.music[k] === undefined) s.music[k] = clone(v);
     if (!s.detail || typeof s.detail !== 'object') s.detail = clone(DEFAULTS.detail);
     for (const [k, v] of Object.entries(DEFAULTS.detail)) if (s.detail[k] === undefined) s.detail[k] = v;
+    if (!s.plates || typeof s.plates !== 'object') s.plates = clone(DEFAULTS.plates);
     if (!s.shot || typeof s.shot !== 'object') s.shot = clone(DEFAULTS.shot);
     for (const [k, v] of Object.entries(DEFAULTS.shot)) if (s.shot[k] === undefined) s.shot[k] = v;
     if (!s.migr02) migrate01(s);
@@ -657,6 +660,7 @@ function updateMovePrompt(type, consume = false) {
         try { const pp = peoplePrompt(type); if (pp) parts.push(pp); } catch (e) { console.warn('[Life] люди: заметка', e); }
         try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
         try { const pr = pressPrompt(); if (pr) parts.push(pr); } catch (e) { console.warn('[Life] СМИ', e); }
+        try { const pl = platesPrompt(); if (pl) parts.push(pl); } catch (e) { console.warn('[Life] плашки', e); }
         parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
     }
     const text = parts.join('\n');
@@ -2155,6 +2159,8 @@ function renderCfg() {
         ${sw('motion', 'Живые детали: дождь, дым, пульс, УЗИ', s.detail, 'detail.motion')}
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
+        ${sw('on', 'Плашки газет и писем в постах (старая бумага, сургуч)', s.plates, 'plates.on')}
+        <div class="lf-hint">${s.plates.found ? 'Плашки на сервере есть: модель вставляет газету после громких событий и письмо, когда кто-то пишет. Старые посты перерисуются после обновления страницы.' : 'Файла плашек на сервере нет (user/files/life-plates.json) — его кладёт команда из чата с Claude.'}</div>
         ${(() => { const f = fmStatus(s.fmBackup); return `<div class="lf-hint">Fetish Manager (его настройки живут только в браузере): сейчас своих фетишей — ${f.cur ? f.cur.custom : 'нет настроек'}${f.old ? `, в старой версии было — ${f.old.custom}` : ''}${f.backup ? `; копия на сервере от ${new Date(f.backup.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '; копии на сервере пока нет'}.</div>`; })()}
         <div class="lf-field"><label>Стиль кадров по умолчанию <small>(в чате — Режиссёр → Стиль кадров)</small></label><select data-set="shot.style">${SHOT_STYLES.map(([id, label]) => `<option value="${id}" ${id === (s.shot.style || 'story') ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
         ${sec('Жизнь вокруг')}
@@ -3123,6 +3129,7 @@ async function onChange(ev) {
         if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
         if (k === 'sceneBg' || k === 'enabled') updateSceneBg();
         if (path[0] === 'detail' || path[0] === 'shot') paintChips();
+        if (path[0] === 'plates') platesSync().then(() => { updateMovePrompt(); render(); });
         if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
@@ -3369,6 +3376,8 @@ jQuery(async () => {
     initSim(simApi);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
     initPress({ ...simApi, faceRef });
+    initPlates(simApi);
+    platesSync().then(() => updateMovePrompt()).catch(e => console.warn('[Life] плашки', e));
     initMood(moodApi);
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }

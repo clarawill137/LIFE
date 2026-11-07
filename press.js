@@ -5,6 +5,7 @@
 
 import { icon } from './icons.js';
 import { chatStyle, styleText } from './shots.js';
+import { gazetteHtml } from './plates.js';
 
 let A = null;
 export function initPress(api) { A = api; }
@@ -12,6 +13,7 @@ export function initPress(api) { A = api; }
 export const PRESS_KINDS = {
     tabloid: { label: 'Таблоид', ic: 'flame', what: 'жёлтая пресса: сплетни, папарацци, опрос' },
     paper: { label: 'Газета', ic: 'news', what: 'серьёзная газета: передовица, колонки, коротко' },
+    gazette: { label: 'Старая газета', ic: 'feather', what: 'плашка на старой бумаге: заголовок, передовица, три заметки' },
     glossy: { label: 'Глянец', ic: 'star', what: 'обложка журнала с громкими анонсами' },
     tv: { label: 'ТВ', ic: 'tv', what: 'срочный выпуск: бегущая строка, прямой эфир' },
     poster: { label: 'Постер', ic: 'image', what: 'весь выпуск одной картинкой (как коллаж)' },
@@ -50,7 +52,7 @@ const PRESS_SYSTEM = (kind) => `Ты — редакция СМИ внутри м
 Подача — от драмы и романтики до полного абсурда (как в жёлтой прессе: «хвост застрахован на 8 000 000», «почему тогда свечи?»). Смешно, живо, с фактами из истории, но глазами чужих людей.
 Издание придумай сам — название под этот мир, эпоху и город (в 1940-е — газеты и радио, без интернета: тогда tweet = null). Даты — по миру истории.
 Ответь только JSON:
-{"outlet":"название","slogan":"девиз мелким шрифтом","kicker":"2–3 слова КАПСОМ над главным («ПРОПАЛА ЗВЕЗДА:», «СРОЧНО», «ЭКСКЛЮЗИВ»)","headline":"главный заголовок до 60 знаков","deck":"подзаголовок, 1 предложение","lead":"главный текст: ${kind === 'paper' ? '5–7 предложений, газетный стиль' : kind === 'tv' ? '2–3 предложения — что говорит ведущий' : '2–3 предложения'}",
+{"outlet":"название","slogan":"девиз мелким шрифтом","kicker":"2–3 слова КАПСОМ над главным («ПРОПАЛА ЗВЕЗДА:», «СРОЧНО», «ЭКСКЛЮЗИВ»)","headline":"главный заголовок до 60 знаков","deck":"подзаголовок, 1 предложение","lead":"главный текст: ${kind === 'paper' || kind === 'gazette' ? '5–7 предложений, газетный стиль' : kind === 'tv' ? '2–3 предложения — что говорит ведущий' : '2–3 предложения'}",
 "bars":["4–5 заголовков-плашек от драмы к абсурду, «СРОЧНО: …», «ИНСАЙДЕР: …»"],
 "photos":[{"who":["точные имена персонажей в кадре"],"prompt":"English, 30-55 words: what the camera caught — who BY NAME ONLY (never describe faces, hair, eye or skin colour), where, action, clothes as in the story, light","caption":"подпись под фото по-русски, со временем: «22:13 — выходит из студии»"}],
 "tweet":{"author":"кто пишет","handle":"@ник","text":"пост до 200 знаков","reposts":"18,7K","quotes":"2,3K","likes":"97,6K","replies":[{"author":"","handle":"@","text":"коротко"}]},
@@ -62,7 +64,7 @@ const PRESS_SYSTEM = (kind) => `Ты — редакция СМИ внутри м
 "ticker":["5–7 строк бегущей строки"],
 "coverlines":["4–6 анонсов на обложку"],
 "stamp":"штамп поверх («ЭКСКЛЮЗИВ ТОЛЬКО У НАС!», «TOP SECRET»)"}
-Фото: ${kind === 'glossy' ? '1 — обложечная фотосессия героя или пары' : kind === 'poster' ? '0' : kind === 'tabloid' ? '3 — главный кадр и два снимка «из засады»' : '1–2'}. Опрос — 3–4 варианта, проценты в сумме 100. Без пошлости.`;
+Фото: ${kind === 'glossy' ? '1 — обложечная фотосессия героя или пары' : kind === 'poster' || kind === 'gazette' ? '0' : kind === 'tabloid' ? '3 — главный кадр и два снимка «из засады»' : '1–2'}. Опрос — 3–4 варианта, проценты в сумме 100. Без пошлости.`;
 
 async function generate(kind) {
     const out = await A.askModel([{ role: 'system', content: PRESS_SYSTEM(kind) }, { role: 'user', content: digest() }], 2600);
@@ -76,7 +78,7 @@ async function generate(kind) {
     return {
         outlet: n(j.outlet, 50) || 'Сплетни 24/7', slogan: n(j.slogan, 80), kicker: n(j.kicker, 40), headline: n(j.headline, 90), deck: n(j.deck, 200), lead: n(j.lead, 1400),
         bars: arr(j.bars).map(x => n(x, 120)).filter(Boolean).slice(0, 5),
-        photos: arr(j.photos).filter(p => str(p?.prompt).length > 15).slice(0, kind === 'tabloid' ? 3 : 2).map(p => ({ who: arr(p.who).map(A.canonName).filter(Boolean).slice(0, 3), prompt: n(p.prompt, 600), caption: n(p.caption, 90), img: '' })),
+        photos: arr(j.photos).filter(p => str(p?.prompt).length > 15).slice(0, kind === 'tabloid' ? 3 : kind === 'gazette' || kind === 'poster' ? 0 : 2).map(p => ({ who: arr(p.who).map(A.canonName).filter(Boolean).slice(0, 3), prompt: n(p.prompt, 600), caption: n(p.caption, 90), img: '' })),
         tweet: tw,
         dossier: arr(j.dossier).slice(0, 2).map(d => ({ name: n(d?.name, 40), facts: arr(d?.facts).map(x => n(x, 80)).filter(Boolean).slice(0, 5) })).filter(d => d.name && d.facts.length),
         poll, rumor: n(j.rumor, 260),
@@ -273,7 +275,7 @@ function posterHtml(item) {
         <div class="lf-pr-cap"><b>${esc(d.outlet)}:</b> ${esc(d.headline)}</div></article>`;
 }
 
-const RENDER = { tabloid: tabloidHtml, paper: paperHtml, glossy: glossyHtml, tv: tvHtml, poster: posterHtml };
+const RENDER = { tabloid: tabloidHtml, paper: paperHtml, glossy: glossyHtml, tv: tvHtml, poster: posterHtml, gazette: (item) => { const h = gazetteHtml(item.data); return h ? `<article class="lf-press gazette">${h}</article>` : paperHtml(item); } };
 
 function cardHtml(item) {
     const d = item.data;

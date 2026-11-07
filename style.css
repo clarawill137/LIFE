@@ -1743,3 +1743,5 @@ body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot-pick { margin: -16px calc(-
 .lf-pr-poster.empty { display: grid; place-items: center; align-content: center; gap: 6px; color: rgba(255, 255, 255, .75); font: 12px -apple-system, system-ui, sans-serif; position: relative; overflow: hidden; }
 .lf-pr-poster.empty svg { width: 24px; height: 24px; }
 .lf-pr-cap { padding: 8px 12px 10px; color: #ddd; font: 13px/1.35 -apple-system, system-ui, sans-serif; }
+.lf-press.gazette { background: none; overflow: visible; color: inherit; padding: 4px 0; }
+.lf-pr-tile.gazette .lf-pr-tile-img { background: radial-gradient(ellipse at 35% 25%, #dccfa6, #c8b78a 62%, #a58f5b); color: #3a2b1b; }
