@@ -14,11 +14,12 @@ import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
+import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.15.1';
+const VERSION = '0.16.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -655,6 +656,7 @@ function updateMovePrompt(type, consume = false) {
         try { const rp = relPrompt(); if (rp) parts.push(rp); } catch (e) { console.warn('[Life] отношения: заметка', e); }
         try { const pp = peoplePrompt(type); if (pp) parts.push(pp); } catch (e) { console.warn('[Life] люди: заметка', e); }
         try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
+        try { const pr = pressPrompt(); if (pr) parts.push(pr); } catch (e) { console.warn('[Life] СМИ', e); }
         parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
     }
     const text = parts.join('\n');
@@ -2112,7 +2114,7 @@ function renderWorld() {
         <div class="lf-list">${rows.join('') || '<div class="lf-empty small">Летописец ещё ничего не записал.</div>'}</div>
         ${ag.length ? `${sec('Планы')}<div class="lf-list">${ag.map(a => `<button class="lf-row" data-act="jump" data-mes="${a.messageIndex}">${icon('calendar')}<span>${a.date ? `<b>${esc(a.date)}</b> · ` : ''}${esc(a.text)}</span>${icon('chevR', 'dim')}</button>`).join('')}</div>` : ''}`;
     } else if (tab === 'rumors') {
-        body = renderRumors();
+        body = renderPress(renderRumors());
     } else if (tab === 'time') {
         body = `<section class="lf-clock">
             <span class="lf-clock-d">${esc([weekday(st.timestamp?.story_date), st.timestamp?.story_date].filter(Boolean).join(', ') || 'дата не записана')}</span>
@@ -2124,7 +2126,7 @@ function renderWorld() {
         <div class="lf-hint">Скачок времени — это новая глава со строчкой для модели. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['events', 'События'], ['rumors', 'Слухи'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2610,6 +2612,7 @@ async function onClick(ev) {
     if (act === 'btone') { const t = setBondTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца главы' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
     if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
+    if (act.startsWith('press-')) { await pressClick(act, el); return; }
     if (act.startsWith('ag-')) {
         try { await agendaClick(act, el); } catch (e) { console.warn('[Life] Закулисье', e); toast('warning', esc(String(e?.message || e)), '✦ Закулисье'); }
         return;
@@ -3365,6 +3368,7 @@ jQuery(async () => {
     settings();
     initSim(simApi);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
+    initPress({ ...simApi, faceRef });
     initMood(moodApi);
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }

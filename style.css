@@ -1562,3 +1562,184 @@ body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot.wait { margin: 16px 0; bord
 #chat .lf-shot-pick-b svg { width: 14px; height: 14px; }
 body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot-pick { margin: -16px calc(-16px - var(--lf-mtpr, 0px)) 16px -16px; border-radius: 0; border-left: 0; border-right: 0; padding-left: 16px; padding-right: 16px; }
 .lf-shot-styles .lf-chip .lf-i, .lf-shot-styles .lf-chip svg { width: 14px; height: 14px; }
+
+/* ───── 0.16: Мир → СМИ ───── */
+.lf-pr-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin: 4px 0 6px; }
+.lf-pr-kind { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 74px; padding: 10px 10px 9px; border-radius: 14px; border: 1px solid var(--lf-line); background: var(--lf-card); color: var(--lf-text); text-align: left; cursor: pointer; overflow: hidden; }
+.lf-pr-kind .lf-i, .lf-pr-kind svg { width: 18px; height: 18px; color: var(--lf-rose); }
+.lf-pr-kind b { font: 500 15px var(--lf-serif); }
+.lf-pr-kind small { font-size: 11px; line-height: 1.2; color: var(--lf-dim); }
+.lf-pr-kind.wait { opacity: .85; }
+.lf-pr-stand { display: flex; flex-direction: column; gap: 10px; }
+.lf-pr-tile { position: relative; display: flex; align-items: stretch; gap: 0; min-height: 84px; padding: 0; border-radius: 14px; border: 1px solid var(--lf-line); background: var(--lf-card); color: var(--lf-text); text-align: left; cursor: pointer; overflow: hidden; }
+.lf-pr-tile-img { flex: none; width: 104px; display: grid; place-items: center; background: #120d0f center / cover no-repeat; color: var(--lf-dim); }
+.lf-pr-tile-img svg { width: 26px; height: 26px; }
+.lf-pr-tile-t { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px 12px; min-width: 0; }
+.lf-pr-tile-t small { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--lf-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-pr-tile-t small svg { width: 12px; height: 12px; flex: none; }
+.lf-pr-tile-t b { font: 600 15.5px/1.2 var(--lf-serif); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lf-pr-tile.tabloid .lf-pr-tile-t b, .lf-pr-tile.tv .lf-pr-tile-t b { font-family: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .01em; }
+.lf-pr-pushed { position: absolute; top: 8px; right: 8px; color: var(--lf-rose); }
+.lf-pr-pushed svg { width: 15px; height: 15px; }
+.lf-pr-open { display: flex; flex-direction: column; gap: 8px; }
+.lf-pr-open > .lf-actions { flex-wrap: wrap; }
+.lf-press { --cond: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", "Oswald", Impact, sans-serif; --hand: "Marker Felt", "Noteworthy", "Bradley Hand", "Segoe Print", cursive; --didot: "Didot", "Bodoni 72", "Playfair Display", Georgia, serif; position: relative; border-radius: 14px; overflow: hidden; color: #1b1214; -webkit-user-select: text; user-select: text; }
+.lf-press button { -webkit-tap-highlight-color: transparent; }
+.lf-pr-ph { display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; margin: 0; border: 0; background: #2a2024 center 30% / cover no-repeat; cursor: pointer; }
+.lf-pr-ph.empty { display: grid; place-items: center; align-content: center; gap: 6px; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .04) 0 10px, rgba(255, 255, 255, .08) 10px 20px), #2a2024; color: rgba(255, 255, 255, .7); font: 12px -apple-system, system-ui, sans-serif; position: relative; overflow: hidden; }
+.lf-pr-ph.empty svg { width: 22px; height: 22px; }
+.lf-pr-ph.wait small { opacity: .8; }
+
+/* таблоид */
+.lf-press.tabloid { padding: 10px 10px 12px; color: #f4ece6; background:
+    radial-gradient(circle at 15% 8%, rgba(255, 220, 180, .14), transparent 35%), radial-gradient(circle at 85% 30%, rgba(217, 104, 123, .16), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(80, 160, 160, .12), transparent 45%), #171012; }
+.lf-press.tabloid::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .5; background-image: radial-gradient(rgba(255, 255, 255, .5) 1px, transparent 1.4px); background-size: 34px 34px; mask-image: linear-gradient(180deg, #000, transparent 30%, transparent 70%, #000); -webkit-mask-image: linear-gradient(180deg, #000, transparent 30%, transparent 70%, #000); }
+.lf-pr-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; margin-bottom: 8px; background: #0c0809; font: 800 10.5px/1.2 var(--cond); letter-spacing: .06em; text-transform: uppercase; color: #f2c14e; }
+.lf-pr-top span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-pr-live { flex: none; padding: 2px 7px 2px 16px; border-radius: 4px; background: #fff; color: #c8102e; font: 800 11px var(--cond); position: relative; }
+.lf-pr-live::before { content: ''; position: absolute; left: 6px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #e3122f; animation: lf-pr-blink 1.2s infinite; }
+@keyframes lf-pr-blink { 50% { opacity: .2; } }
+.lf-pr-hero { position: relative; margin: 0 -2px; }
+.lf-pr-hero .lf-pr-ph { aspect-ratio: 4 / 3.2; }
+.lf-pr-ph.torn { clip-path: polygon(0 2%, 6% 0, 14% 1.5%, 22% 0, 31% 2%, 40% .5%, 50% 2%, 60% 0, 70% 1.5%, 80% .5%, 90% 2%, 100% 0, 100% 97%, 93% 100%, 85% 98%, 76% 100%, 66% 98.5%, 57% 100%, 47% 98%, 38% 100%, 28% 98.5%, 18% 100%, 9% 98%, 0 100%); }
+.lf-pr-kick { position: absolute; left: 6px; top: 12px; max-width: 70%; padding: 6px 10px 5px; background: #8f1022; color: #fff; font: 800 26px/0.95 var(--cond); text-transform: uppercase; transform: rotate(-3deg); box-shadow: 3px 4px 0 rgba(0, 0, 0, .45); }
+.lf-pr-stamp { position: absolute; right: 8px; bottom: 16px; padding: 6px 10px; border: 3px solid #e3122f; border-radius: 6px; color: #e3122f; font: 800 15px/1 var(--cond); text-transform: uppercase; transform: rotate(-9deg); background: rgba(255, 240, 235, .82); box-shadow: inset 0 0 0 2px rgba(227, 18, 47, .3); mix-blend-mode: normal; }
+.lf-pr-bn { margin: 10px 2px 2px; padding: 8px 10px 7px; background: #f3ebe1; color: #111; font: 800 30px/0.98 var(--cond); text-transform: uppercase; letter-spacing: -.005em; transform: rotate(-.6deg); box-shadow: 0 6px 0 #8f1022; }
+.lf-press.tabloid .lf-pr-deck { margin: 12px 4px 0; font: italic 14px/1.35 var(--lf-serif); color: #e9dcd4; }
+.lf-pr-bars { display: flex; flex-direction: column; gap: 5px; margin: 10px 0 0; }
+.lf-pr-bars-i { padding: 7px 10px 6px; font: 700 15.5px/1.15 var(--cond); text-transform: none; }
+.lf-pr-bars-i b { text-transform: uppercase; }
+.lf-pr-bars-i.red { background: #8f1022; color: #fff; }
+.lf-pr-bars-i.red b { color: #fff; }
+.lf-pr-bars-i.teal { background: #112a2c; color: #7ee0d6; }
+.lf-pr-bars-i.paper { background: #f1e8dc; color: #141010; transform: rotate(.5deg); }
+.lf-pr-bars-i.ink { background: #0c0809; color: #fff; }
+.lf-pr-bars-i.ink b { color: #f2c14e; }
+.lf-pr-bars-i.ink2 { background: #0c0809; color: #fff; }
+.lf-pr-bars-i.ink2 b { color: #ff4d5e; }
+.lf-pr-pol { display: flex; gap: 10px; justify-content: center; margin: 14px 0 4px; }
+.lf-pr-polaroid { flex: 1 1 0; max-width: 48%; margin: 0; padding: 6px 6px 4px; background: #fbf7ef; box-shadow: 0 6px 14px rgba(0, 0, 0, .45); }
+.lf-pr-polaroid.r0 { transform: rotate(-3deg); } .lf-pr-polaroid.r1 { transform: rotate(2.5deg); }
+.lf-pr-polaroid .lf-pr-ph { aspect-ratio: 1; }
+.lf-pr-polaroid figcaption { margin-top: 4px; color: #8f1022; font: 13px/1.15 var(--hand); }
+.lf-pr-tw { margin: 12px 2px 0; padding: 10px 12px; border-radius: 14px; background: #fff; color: #111; font: 13.5px/1.35 -apple-system, system-ui, sans-serif; box-shadow: 0 8px 20px rgba(0, 0, 0, .35); }
+.lf-pr-tw-h { display: flex; align-items: center; gap: 8px; }
+.lf-pr-tw-h > span:last-child { display: flex; flex-direction: column; }
+.lf-pr-tw-h small { color: #6b6b6b; font-size: 12px; }
+.lf-pr-tw-av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #8f1022; color: #fff; font: 800 15px var(--cond); }
+.lf-pr-ver { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: #1d9bf0; color: #fff; font: 700 9px sans-serif; font-style: normal; vertical-align: 1px; }
+.lf-pr-tw p { margin: 7px 0; font-size: 15px; }
+.lf-pr-tw-s { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 6px; border-top: 1px solid #ececec; color: #555; font-size: 12px; }
+.lf-pr-tw-s b { color: #111; }
+.lf-pr-tw-r { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.lf-pr-tw-r div { padding: 6px 8px; border-radius: 10px; background: #f3f3f3; font-size: 12.5px; }
+.lf-pr-tw-r small { color: #777; }
+.lf-pr-tw-r span { display: block; }
+.lf-press.tabloid .lf-pr-lead { margin: 12px 4px 0; font: 14.5px/1.45 var(--lf-serif); color: #efe5de; }
+.lf-pr-notes { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 0; }
+.lf-pr-note { position: relative; flex: 1 1 140px; padding: 14px 12px 10px; background: #f0e6d2; color: #2a1f18; box-shadow: 0 6px 12px rgba(0, 0, 0, .4); transform: rotate(-1.2deg); font: 13px/1.3 "American Typewriter", "Courier New", monospace; }
+.lf-pr-note:nth-child(2n) { transform: rotate(1.4deg); }
+.lf-pr-note.y { background: #f4e7a1; }
+.lf-pr-note h4 { margin: 0 0 6px; font: 800 16px/1 var(--cond); text-transform: uppercase; letter-spacing: .02em; }
+.lf-pr-note ul { margin: 0; padding-left: 16px; }
+.lf-pr-note li { margin: 2px 0; }
+.lf-pr-note p { margin: 0; font: 15px/1.25 var(--hand); }
+.lf-pr-tape { position: absolute; left: 50%; top: -8px; width: 60px; height: 18px; margin-left: -30px; background: rgba(255, 255, 255, .55); transform: rotate(-4deg); box-shadow: 0 1px 2px rgba(0, 0, 0, .15); }
+.lf-pr-film { display: flex; align-items: center; gap: 8px; margin: 16px -10px 0; padding: 9px 10px; background: #0b0809; border-block: 6px dashed #2b2326; }
+.lf-pr-film i { flex: 1; height: 1px; background: rgba(255, 255, 255, .2); }
+.lf-pr-film span { padding: 3px 8px; background: #8f1022; color: #fff; font: 800 11px var(--cond); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.lf-pr-poll { margin: 14px 2px 0; padding: 10px 12px; background: #f1e8dc; color: #1b1214; box-shadow: 0 6px 14px rgba(0, 0, 0, .35); }
+.lf-pr-poll-h { display: inline-block; padding: 2px 8px; background: #8f1022; color: #fff; font: 800 13px var(--cond); text-transform: uppercase; }
+.lf-pr-poll p { margin: 6px 0; font: 600 14px -apple-system, system-ui, sans-serif; }
+.lf-pr-poll-b { display: flex; align-items: center; gap: 10px; }
+.lf-pr-poll ol { flex: 1; margin: 0; padding: 0; list-style: none; font: 13.5px/1.6 -apple-system, system-ui, sans-serif; counter-reset: p; }
+.lf-pr-poll li { display: flex; align-items: center; gap: 6px; }
+.lf-pr-poll li i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.lf-pr-pie { position: relative; flex: none; width: 104px; height: 104px; border-radius: 50%; box-shadow: 0 0 0 3px #fff; }
+.lf-pr-pie b { position: absolute; left: 50%; top: 50%; width: 40px; height: 16px; margin: -8px 0 0 -20px; text-align: center; transform: rotate(var(--a)) translateY(-31px) rotate(calc(var(--a) * -1)); font: 800 12px/16px var(--cond); color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.lf-pr-latest { margin: 12px 2px 0; padding: 10px 12px; background: #0c0809; color: #eee; border: 1px solid rgba(255, 255, 255, .12); }
+.lf-pr-latest h4 { margin: 0 0 6px; font: 800 14px var(--cond); text-transform: uppercase; color: #fff; }
+.lf-pr-latest ul { margin: 0; padding-left: 16px; font: 13px/1.4 -apple-system, system-ui, sans-serif; }
+.lf-pr-foot { display: flex; align-items: center; gap: 10px; margin: 14px 2px 0; padding: 8px 10px; background: #e9e1d7; color: #1b1214; font: 11px/1.25 var(--cond); text-transform: uppercase; }
+.lf-pr-foot > span:nth-child(2) { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.lf-pr-foot b { font-size: 12.5px; }
+.lf-pr-bar { flex: none; display: inline-block; width: 70px; height: 30px; background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 3px, #111 3px 4px, transparent 4px 7px, #111 7px 10px, transparent 10px 11px, #111 11px 12px, transparent 12px 15px); }
+.lf-pr-stamp2 { flex: none; padding: 3px 6px; border: 2px solid #c8102e; color: #c8102e; font: 800 12px var(--cond); transform: rotate(-8deg); }
+
+/* газета */
+.lf-press.paper { padding: 12px 14px 14px; background: #f3eee3; color: #1a1a1a; font: 14px/1.45 Georgia, "Times New Roman", serif; box-shadow: inset 0 0 60px rgba(120, 90, 40, .12); }
+.lf-pr-mast { text-align: center; border-bottom: 3px double #1a1a1a; padding-bottom: 6px; }
+.lf-pr-mast small { display: block; font: italic 11px Georgia, serif; color: #555; }
+.lf-pr-mast h1 { margin: 2px 0 4px; font: 700 34px/1 var(--didot); letter-spacing: -.01em; }
+.lf-pr-dl { display: flex; justify-content: space-between; gap: 6px; padding-top: 4px; border-top: 1px solid #1a1a1a; font: 10.5px Georgia, serif; text-transform: uppercase; letter-spacing: .04em; }
+.lf-pr-kick2 { margin: 10px 0 0; font: 700 11px -apple-system, system-ui, sans-serif; color: #8f1022; text-transform: uppercase; letter-spacing: .1em; }
+.lf-press.paper h2 { margin: 4px 0 6px; font: 800 26px/1.08 var(--didot); }
+.lf-press.paper .lf-pr-deck { margin: 0 0 10px; font: italic 15px/1.35 Georgia, serif; color: #333; }
+.lf-pr-fig { margin: 0 0 10px; }
+.lf-pr-fig .lf-pr-ph { filter: grayscale(1) contrast(1.08); }
+.lf-pr-fig figcaption { margin-top: 3px; font: italic 11.5px Georgia, serif; color: #555; }
+.lf-pr-cols { column-count: 1; column-gap: 16px; column-rule: 1px solid #c9c2b4; text-align: left; hyphens: auto; -webkit-hyphens: auto; }
+@media (min-width: 640px) { .lf-pr-cols { column-count: 2; text-align: justify; } }
+.lf-pr-cols p { margin: 0 0 8px; }
+.lf-pr-drop::first-letter { float: left; margin: 4px 6px 0 0; font: 700 44px/0.8 var(--didot); }
+.lf-pr-cols blockquote { break-inside: avoid; margin: 6px 0 8px; padding: 6px 0; border-block: 1px solid #1a1a1a; font: italic 15px/1.3 var(--didot); text-align: left; }
+.lf-pr-cols cite { display: block; margin-top: 3px; font: 11px Georgia, serif; font-style: normal; color: #555; }
+.lf-pr-side { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 2px solid #1a1a1a; }
+.lf-pr-side h4 { margin: 0 0 4px; font: 800 13px -apple-system, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .06em; }
+.lf-pr-side ul { margin: 0; padding-left: 16px; font-size: 13.5px; }
+.lf-pr-side p { margin: 0; font-size: 13.5px; font-style: italic; }
+.lf-pr-side .lf-pr-ph { filter: grayscale(1); aspect-ratio: 4 / 3; }
+.lf-pr-side small { font: italic 11px Georgia, serif; color: #555; }
+.lf-pr-also { margin-top: 10px; padding: 6px 8px; background: #1a1a1a; color: #f3eee3; font: 12px/1.35 Georgia, serif; }
+
+/* глянец */
+.lf-press.glossy { background: #111; color: #fff; }
+.lf-pr-cover { position: relative; aspect-ratio: 3 / 4; overflow: hidden; }
+.lf-pr-cover .lf-pr-ph.cover { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; background-position: center 20%; }
+.lf-pr-cover::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, .35), transparent 25%, transparent 55%, rgba(0, 0, 0, .7)); }
+.lf-pr-cover h1 { position: absolute; z-index: 2; left: 0; right: 0; top: 8px; margin: 0; white-space: nowrap; overflow: hidden; text-align: center; font: 700 56px/0.95 var(--didot); letter-spacing: -.02em; text-transform: uppercase; color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .35); pointer-events: none; }
+.lf-pr-cl { position: absolute; z-index: 2; top: 24%; width: 38%; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.lf-pr-cl.l { left: 10px; } .lf-pr-cl.r { right: 10px; text-align: right; top: 40%; }
+.lf-pr-cl p { margin: 0; font: 700 13px/1.15 -apple-system, system-ui, sans-serif; text-transform: uppercase; text-shadow: 0 1px 8px rgba(0, 0, 0, .8); }
+.lf-pr-cl p.big { font: 800 20px/1 var(--cond); color: #ffd36b; }
+.lf-pr-main { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: 34px; pointer-events: none; }
+.lf-pr-main span { display: inline-block; padding: 2px 8px; background: #e3122f; font: 800 12px var(--cond); text-transform: uppercase; letter-spacing: .06em; }
+.lf-pr-main b { display: block; margin-top: 4px; font: 800 28px/0.98 var(--cond); text-transform: uppercase; text-shadow: 0 2px 12px rgba(0, 0, 0, .7); }
+.lf-pr-dot { position: absolute; z-index: 2; right: 12px; top: 22%; width: 74px; height: 74px; display: grid; place-items: center; padding: 6px; border-radius: 50%; background: #ffd36b; color: #111; font: 800 11px/1.05 var(--cond); text-transform: uppercase; text-align: center; transform: rotate(12deg); pointer-events: none; }
+.lf-pr-iss { position: absolute; z-index: 2; right: 10px; bottom: 6px; display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; background: #fff; color: #111; font: 10px -apple-system, system-ui, sans-serif; pointer-events: none; }
+.lf-pr-iss .lf-pr-bar { width: 50px; height: 18px; }
+.lf-press.glossy .lf-pr-lead { margin: 0; padding: 12px 14px; font: 14.5px/1.45 var(--lf-serif); color: #eee; }
+.lf-pr-qs { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
+.lf-pr-qs blockquote { margin: 0; padding-left: 10px; border-left: 3px solid #ffd36b; font: italic 15px/1.3 var(--didot); }
+.lf-pr-qs cite { display: block; font: 11px -apple-system, system-ui, sans-serif; font-style: normal; color: #aaa; }
+
+/* ТВ */
+.lf-press.tv { background: #0b0d12; color: #e8ecf2; padding-bottom: 10px; }
+.lf-pr-screen { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+.lf-pr-screen .lf-pr-ph.tvph { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; }
+.lf-pr-screen::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, .45)); }
+.lf-pr-bug { position: absolute; z-index: 2; left: 8px; top: 8px; padding: 3px 7px; border-radius: 4px; background: rgba(0, 0, 0, .55); color: #fff; font: 800 11px var(--cond); text-transform: uppercase; letter-spacing: .05em; pointer-events: none; }
+.lf-pr-onair { position: absolute; z-index: 2; right: 8px; top: 8px; display: flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 4px; background: #c8102e; color: #fff; font: 800 10.5px var(--cond); pointer-events: none; }
+.lf-pr-onair i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: lf-pr-blink 1.2s infinite; }
+.lf-pr-l3 { position: absolute; z-index: 2; left: 0; right: 0; bottom: 22px; display: flex; align-items: stretch; pointer-events: none; }
+.lf-pr-l3 b { flex: none; display: grid; place-items: center; padding: 0 9px; background: #c8102e; color: #fff; font: 800 13px var(--cond); text-transform: uppercase; }
+.lf-pr-l3 span { flex: 1; padding: 5px 9px; background: rgba(250, 250, 250, .94); color: #0b0d12; font: 800 14px/1.1 var(--cond); text-transform: uppercase; }
+.lf-pr-tick { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: 22px; overflow: hidden; background: #10141c; color: #ffd36b; font: 700 12px/22px var(--cond); white-space: nowrap; pointer-events: none; }
+.lf-pr-tick > div { display: inline-flex; animation: lf-pr-crawl 38s linear infinite; }
+.lf-pr-tick span { padding-right: 40px; }
+@keyframes lf-pr-crawl { to { transform: translateX(-50%); } }
+.lf-pr-anchor { margin: 10px 12px 0; font: 14.5px/1.45 -apple-system, system-ui, sans-serif; }
+.lf-pr-anchor b { color: #ff6b7d; }
+.lf-pr-vox { display: flex; flex-direction: column; gap: 6px; margin: 10px 12px 0; }
+.lf-pr-vox div { display: flex; flex-direction: column; padding: 7px 9px; border-left: 3px solid #c8102e; background: rgba(255, 255, 255, .05); font-size: 13.5px; }
+.lf-pr-vox b { font: 800 11px var(--cond); text-transform: uppercase; color: #9aa4b2; }
+.lf-pr-rundown { margin: 10px 12px 0; padding-left: 18px; font-size: 13.5px; line-height: 1.45; color: #c7cdd6; }
+.lf-press.tv .lf-pr-tw { margin: 10px 12px 0; }
+
+/* постер */
+.lf-press.poster { background: #111; }
+.lf-pr-poster { display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; border: 0; background: #1b1416 center / cover no-repeat; cursor: pointer; }
+.lf-pr-poster.empty { display: grid; place-items: center; align-content: center; gap: 6px; color: rgba(255, 255, 255, .75); font: 12px -apple-system, system-ui, sans-serif; position: relative; overflow: hidden; }
+.lf-pr-poster.empty svg { width: 24px; height: 24px; }
+.lf-pr-cap { padding: 8px 12px 10px; color: #ddd; font: 13px/1.35 -apple-system, system-ui, sans-serif; }
