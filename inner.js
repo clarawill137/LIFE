@@ -3,7 +3,7 @@
 // Летописец ведёт это по постам, всё можно поставить руками. Модели — короткая заметка, когда персонаж в сцене.
 
 import { icon } from './icons.js';
-import { rpNow, hoursSince, nowSlot, simCfg } from './sim.js';
+import { rpNow, hoursSince, nowSlot, simCfg, lifeKey } from './sim.js';
 import { moodNow, BOND_HEAVY } from './mood.js';
 import { agendaCardHtml } from './agenda.js';
 
@@ -51,7 +51,7 @@ const WASH_RE = /душ|ванн|умыва/i;
 export function prof(who) {
     const c = simCfg();
     if (!c.prof || typeof c.prof !== 'object') c.prof = {};
-    const k = A.canonName(who);
+    const k = lifeKey(who);   // в другой эпохе — профиль облика (ядро «Священный таймлайн»)
     const p = c.prof[k] || (c.prof[k] = {});
     if (!Array.isArray(p.hobbies)) p.hobbies = [];
     if (!Array.isArray(p.turnons)) p.turnons = [];

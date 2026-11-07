@@ -98,6 +98,26 @@ function prefsLine(names) {
 const FREQ = { off: [0, 0, 'Выкл'], rare: [0.12, 14, 'Редко'], mid: [0.25, 7, 'Умеренно'], often: [0.45, 3, 'Часто'] };
 const KIND_ICON = { care: 'coffee', court: 'heart', flirt: 'flame', touch: 'handshake', spicy: 'sparkles', gift: 'gift', own: 'briefcase', talk: 'message', plot: 'feather' };
 
+// ───────────── облик (ядро «Священный таймлайн») ─────────────
+
+let lkMemo = { at: 0, cx: null };
+/**
+ * Ключ профиля персонажа (увлечения, распорядок, как часто делится): один человек в разных эпохах — разные профили.
+ * В эпохе мира по умолчанию — просто имя (всё, что уже заполнено, остаётся на месте); в других эпохах — «имя@облик».
+ * Без ядра и вне мира — имя, как раньше.
+ */
+export function lifeKey(who) {
+    const k = A.canonName(who) || who;
+    try {
+        if (Date.now() - lkMemo.at > 500) lkMemo = { at: Date.now(), cx: globalThis.SacredTimeline?.context?.() || null };
+        const cx = lkMemo.cx;
+        if (!cx?.era || !cx.world || String(cx.era.id) === String(cx.world.defaultEra || '')) return k;
+        const people = cx.people || {};
+        const hit = people[who] || Object.entries(people).find(([n]) => A.sameName(n, who))?.[1];
+        return hit?.slice ? `${k}@${hit.slice}` : k;
+    } catch { return k; }
+}
+
 function aiChars() {
     const out = [];
     for (const n of A.groupMembers().map(A.canonName)) if (n && !isUser(n) && !out.some(x => A.sameName(x, n))) out.push(n);
@@ -105,7 +125,7 @@ function aiChars() {
 }
 function whoCfg(n) {
     const c = simCfg();
-    const w = c.who[A.canonName(n)] || {};
+    const w = c.who[lifeKey(n)] || {};
     return { freq: c.on ? (w.freq || c.freq) : 'off', kinds: Array.isArray(w.kinds) ? w.kinds : c.kinds };
 }
 function initChars() { return aiChars().filter(n => whoCfg(n).freq !== 'off'); }
@@ -283,7 +303,7 @@ const SCHED_SYSTEM = `Ты составляешь распорядок обыч�
 6–10 пунктов на сутки, без дыр: сон, работа или служба, тренировки, дела, привычки, время с близкими. Всё в его характере и обстоятельствах.
 Ответь только JSON: {"items":[{"from":"07:00","to":"08:00","what":"пробежка","where":"Центральный парк"}]}. what — 1–4 слова, where — место или пусто.`;
 
-function schedOf(who) { return simCfg().sched[A.canonName(who)] || []; }
+function schedOf(who) { return simCfg().sched[lifeKey(who)] || []; }
 const toMin = (t) => { const m = String(t || '').match(/(\d{1,2})[:.](\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
 
 export function nowSlot(who, now = rpNow()) {
@@ -308,7 +328,7 @@ async function genSched(who) {
     const list = items.map(x => ({ from: String(x.from || '').trim(), to: String(x.to || '').trim(), what: String(x.what || '').trim().slice(0, 60), where: String(x.where || '').trim().slice(0, 60) }))
         .filter(x => toMin(x.from) != null && toMin(x.to) != null && x.what);
     if (!list.length) throw new Error('модель не прислала распорядок');
-    simCfg().sched[A.canonName(who)] = list;
+    simCfg().sched[lifeKey(who)] = list;
     A.saveSettings();
 }
 
@@ -943,10 +963,10 @@ export async function simClick(act, el, ev) {
     if (act.startsWith('in-')) return innerClick(act, el);
     switch (act) {
         case 'sim-ltab': A.ui.lifeTab = el.dataset.v; A.render(); return true;
-        case 'sim-freq': { const n = A.canonName(el.dataset.name); c.who[n] = { ...(c.who[n] || {}), freq: el.dataset.v }; A.saveSettings(); A.render(); return true; }
+        case 'sim-freq': { const n = lifeKey(el.dataset.name); c.who[n] = { ...(c.who[n] || {}), freq: el.dataset.v }; A.saveSettings(); A.render(); return true; }
         case 'sim-kind': {
-            const n = A.canonName(el.dataset.name);
-            const kinds = new Set(whoCfg(n).kinds);
+            const n = lifeKey(el.dataset.name);
+            const kinds = new Set(whoCfg(el.dataset.name).kinds);
             kinds.has(el.dataset.v) ? kinds.delete(el.dataset.v) : kinds.add(el.dataset.v);
             c.who[n] = { ...(c.who[n] || {}), kinds: [...kinds] };
             A.saveSettings(); A.render(); return true;
@@ -1002,7 +1022,7 @@ export async function simClick(act, el, ev) {
                 <button class="lf-btn primary serif full" data-act="sim-sched-save" data-name="${esc(el.dataset.name)}">${icon('check')} Сохранить</button>`);
             return true;
         }
-        case 'sim-sched-save': { c.sched[A.canonName(el.dataset.name)] = parseSched(box?.querySelector('[data-in="sched"]')?.value || ''); A.saveSettings(); A.closeSheet(); A.render(); return true; }
+        case 'sim-sched-save': { c.sched[lifeKey(el.dataset.name)] = parseSched(box?.querySelector('[data-in="sched"]')?.value || ''); A.saveSettings(); A.closeSheet(); A.render(); return true; }
         // питомцы
         case 'sim-pet': ui.who = `pet:${el.dataset.id}`; ui.tab = 'person'; A.closeSheet(); A.render(); return true;
         case 'sim-pet-new': petEditSheet({ id: '', name: '', kind: 'cat', look: '', traits: [], home: homeLoc(), on: true, fav: {}, needs: {} }); return true;
