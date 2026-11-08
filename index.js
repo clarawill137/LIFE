@@ -22,7 +22,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.0';
+const VERSION = '0.18.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -442,6 +442,17 @@ function castNames(st = worldState()) {
     Object.keys(st.costumes || {}).forEach(add);
     Object.keys(st.mood || {}).forEach(add);
     return names;
+}
+
+/** Вкладка «Персонаж»: ты, группа и те, у кого есть карточка. Врачи, бармены и прочие NPC сцены — в «Людях», не здесь. */
+function personNames(st = worldState()) {
+    const c = ctx();
+    const cards = (c.characters || []).map(x => x?.name).filter(Boolean);
+    const group = groupMembers();
+    const keep = (n) => sameName(n, c.name1) || group.some(g => sameName(g, n)) || cards.some(x => sameName(x, n));
+    const all = castNames(st);
+    // в группе — строго свои; в одиночном чате NPC из «Людей» тоже убираем, остальных оставляем как было
+    return c.groupId ? all.filter(keep) : all.filter(n => keep(n) || !findPerson(n));
 }
 
 /** Имя так, как его пишет Horae (чтобы он сопоставил одежду и настроение). */
@@ -1752,7 +1763,7 @@ function wardrobeSets(name) {
 
 function renderPerson() {
     const st = worldState();
-    const names = castNames(st);
+    const names = personNames(st);
     const bm = bridgeOf(ui.who);
     const petMode = String(ui.who || '').startsWith('pet:') || !!bm;
     if (!petMode && (!ui.who || !names.some(n => sameName(n, ui.who)))) ui.who = (st.scene?.characters_present || []).map(canonName).find(n => !sameName(n, ctx().name1)) || names.find(n => !sameName(n, ctx().name1)) || names[0] || '';
