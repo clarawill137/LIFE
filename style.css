@@ -1772,3 +1772,14 @@ body.lf-theme.lf-ava-wide #chat .mes_text > .lf-shot-pick { margin: -16px calc(-
 .lf-kn-row input { width: 100%; box-sizing: border-box; }
 .lf-kn-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .lf-kn-acts .lf-btn { flex: 1; }
+
+/* ───── 0.18.8: на айфоне блок «За кадром» раздувался, пока Safari не падал ─────
+   iOS сам увеличивает шрифт там, где строка шире экрана (text autosizing). Бегущая строка «За кадром»
+   (GC-регекс: white-space: nowrap + padding-left: 100%) и была такой строкой: шрифт рос, строка от этого
+   становилась ещё шире, шрифт ещё больше — и так до вылета. Автоувеличение выключено, а бегущая строка
+   вынесена из потока: тянет себя, а не пост. */
+html, body { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }
+#chat .mes_text .gco-tick { position: relative !important; display: block !important; height: 25px !important; overflow: hidden !important; contain: strict; }
+#chat .mes_text .gco-tick-in { position: absolute !important; left: 0 !important; top: 0 !important; padding-left: 100vw !important; white-space: nowrap !important; }
+#chat .mes_text .gcx { max-width: 100% !important; min-width: 0 !important; }
+#chat .mes .mes_block { min-width: 0 !important; }
