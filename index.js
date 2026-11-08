@@ -18,11 +18,12 @@ import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
+import { initTidy, tidyRecent } from './tidy.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.3';
+const VERSION = '0.18.4';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -48,6 +49,7 @@ const DEFAULTS = {
     shot: { suggest: true, btn: true, style: 'story', custom: '' },
     plates: { on: true },
     cast: { on: true },
+    tidy: true,
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -2230,6 +2232,7 @@ function renderCfg() {
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
         ${sw('on', 'В группе каждый пишет за себя (остальные — коротко, кого нет в сцене — не появляются)', s.cast, 'cast.on')}
+        ${sw('tidy', 'Срезать обрезанный блок в конце поста (иначе он глотает блоки ExtBlocks в «Подробнее»)', s, 'tidy')}
         ${sw('on', 'Плашки газет и писем в постах (старая бумага, сургуч)', s.plates, 'plates.on')}
         <div class="lf-hint">${s.plates.found ? 'Плашки на сервере есть: модель вставляет газету после громких событий и письмо, когда кто-то пишет. Старые посты перерисуются после обновления страницы.' : 'Файла плашек на сервере нет (user/files/life-plates.json) — его кладёт команда из чата с Claude.'}</div>
         ${(() => { const f = fmStatus(s.fmBackup); return `<div class="lf-hint">Fetish Manager (его настройки живут только в браузере): сейчас своих фетишей — ${f.cur ? f.cur.custom : 'нет настроек'}${f.old ? `, в старой версии было — ${f.old.custom}` : ''}${f.backup ? `; копия на сервере от ${new Date(f.backup.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '; копии на сервере пока нет'}.</div>`; })()}
@@ -3385,6 +3388,7 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
+    setTimeout(() => { tidyRecent(40).catch(() => {}); }, 1800);
 }
 
 function lastAiIndex() {
@@ -3457,6 +3461,7 @@ jQuery(async () => {
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     initCast(simApi);
     initKnock(simApi);
+    initTidy(simApi);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
@@ -3471,6 +3476,9 @@ jQuery(async () => {
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
     const onAi = (id, type) => {
         later();
+        // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки
+        setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 1200);
+        setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 6000);
         if (type === 'impersonate') return;
         const i = Number(id);
         if (Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
