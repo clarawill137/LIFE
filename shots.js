@@ -240,7 +240,7 @@ export function onShotClick(ev) {
         if (Number.isFinite(i)) shoot(i, { kind: 'frame' });
         return true;
     }
-    const fig = ev.target.closest('.lf-shot, .lf-shot-sug, .lf-shot-pick');
+    const fig = ev.target.closest('.lf-shot, .lf-shot-sug, .lf-shot-pick:not(.lf-detpick)');
     if (!fig) return false;
     ev.stopPropagation();
     if (ev.target.closest('input')) return true; // поле «что поправить» — дать фокус

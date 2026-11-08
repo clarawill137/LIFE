@@ -20,11 +20,12 @@ import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
-import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
+import { initArt, onArtClick, artOnReceived } from './art.js';
+import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.10';
+const VERSION = '0.18.11';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -955,12 +956,13 @@ async function runChron(i, { force = false } = {}) {
 const detBusy = new Set();
 const detQueue = [];
 let detRunning = false;
+let detPick = null; // открытая под деталью панель «перерисовать»: { key, style, fix }
 
-function detailPrompt(d) {
+function detailPrompt(d, sid = '', fix = '') {
     const look = d.motion === 'scan'
         ? 'Look: grainy black-and-white medical ultrasound sonogram, fan-shaped scan sector on a dark monitor, soft speckle noise'
-        : `Style: ${(() => { try { return styleText(); } catch { return style(); } })()}`;
-    return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}\n${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
+        : `Style: ${(() => { try { return styleText(sid || chatStyle()); } catch { return style(); } })()}`;
+    return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}${fix ? `\nCorrection from the player (follow it exactly): ${fix}` : ''}\n${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
 }
 
 function queueDetail(key) {
@@ -981,7 +983,7 @@ async function drawDetail(key) {
     detBusy.add(key);
     paintChips();
     try {
-        const img = await drawPicture(detailPrompt(e.det), { aspect: '16:9', max: 1400, prefix: 'life_det' });
+        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix), { aspect: '16:9', max: 1400, prefix: 'life_det' });
         if (chatMeta() !== cm) return; // чат сменился, пока рисовала
         const e2 = chronStore()[key];
         if (e2) { e2.detImg = img; saveMeta(); }
@@ -1017,6 +1019,30 @@ function detailHtml(i) {
     </figure>`;
 }
 
+/** Панель «перерисовать» под деталью — стиль, правка, другая деталь (как у кадров). */
+function detPickHtml(i) {
+    const m = chatArr()[i];
+    if (!detPick || !m) return '';
+    const key = `${i}:${msgKey(m)}`;
+    if (detPick.key !== key) return '';
+    const e = chronStore()[key];
+    if (!e?.det || !e.detImg || e.detHidden || e.undone) return '';
+    const cur = detPick.style;
+    const scan = e.det.motion === 'scan';
+    const custom = cur === 'custom' && !String(settings().shot?.custom || '').trim();
+    return `<div class="lf-shot-pick lf-detpick" data-key="${esc(key)}" contenteditable="false">
+        <div class="lf-shot-pick-h">${icon('palette')}<b>Перерисовать деталь</b><small>сейчас: ${esc(scan ? 'снимок УЗИ' : styleName(e.detStyle || chatStyle()).toLowerCase())}</small></div>
+        ${scan ? '<div class="lf-shot-pick-note">Это снимок УЗИ — он и рисуется как УЗИ, стиль на него не влияет.</div>' : `<div class="lf-shot-pick-st">${styleChips('pk-style', cur, 'data-det')}</div>`}
+        ${custom ? '<div class="lf-shot-pick-note">Свой стиль пустой — впиши его в Режиссёре (Стиль кадров → Свой), пока будет как у истории.</div>' : ''}
+        <input type="text" class="lf-shot-fix" placeholder="Что поправить (можно пусто): крупнее, мужская рука, на столе чашка…" value="${esc(detPick.fix || '')}">
+        <div class="lf-shot-pick-b">
+            <button data-det="pk-go" class="on">${icon('refresh')} Перерисовать</button>
+            <button data-det="pk-new" title="Летописец выберет из поста другой момент">${icon('sparkles')} Другая деталь</button>
+            <button data-det="pk-x" title="Закрыть">${icon('x')}</button>
+        </div>
+    </div>`;
+}
+
 async function newDetail(i) {
     const m = chatArr()[i];
     const st = worldState();
@@ -1043,7 +1069,28 @@ async function onDetailClick(b, el) {
     const act = b.dataset.det;
     if (act === 'open') { lightbox(el.dataset.src, el.dataset.cap || '', null, settings().detail.motion ? el.dataset.motion : ''); return; }
     if (act === 'hide') { e.detHidden = true; saveMeta(); paintChips(); toast('info', 'Деталь убрана. Вернуть — в карточке Летописца.'); return; }
-    if (act === 'redo' || act === 'draw') { if (act === 'redo') delete e.detImg; queueDetail(key); }
+    if (act === 'draw') { queueDetail(key); return; }
+    if (act === 'redo') {
+        detPick = detPick?.key === key ? null : { key, style: e.detStyle || chatStyle(), fix: e.detFix || '' };
+        paintChips();
+        if (detPick) requestAnimationFrame(() => document.querySelector(`#chat .lf-detpick[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+        return;
+    }
+    if (!act.startsWith('pk-') || detPick?.key !== key) return;
+    detPick.fix = el.querySelector('.lf-shot-fix')?.value?.trim() || detPick.fix || '';
+    if (act === 'pk-x') { detPick = null; paintChips(); return; }
+    if (act === 'pk-style') { if (b.dataset.v) detPick.style = b.dataset.v; paintChips(); return; }
+    const { style: sid, fix } = detPick;
+    detPick = null;
+    e.detStyle = sid;
+    e.detFix = fix;
+    if (act === 'pk-new') {
+        paintChips();
+        toast('info', 'Летописец ищет в посте другую деталь…', '✦ Деталь', { timeOut: 4000 });
+        try { e.det = await newDetail(Number(key.split(':')[0])); } catch (err) { toast('warning', esc(String(err?.message || err)), '✦ Деталь', { timeOut: 5000 }); return; }
+    }
+    saveMeta();
+    queueDetail(key); // старая картинка остаётся под шиммером, пока рисуется новая
 }
 
 /** Летописец сказал, где сцена: отнести место к району (новый район — завести). */
@@ -1362,6 +1409,20 @@ function paintChips() {
             node.dataset.sig = detSig;
             if (anchor) anchor.after(node); else host0.append(node);
         }
+        const oldPick = host0.querySelector(':scope > .lf-detpick');
+        const pickHtml = detPickHtml(id);
+        if (!pickHtml) oldPick?.remove();
+        else if (!oldPick || oldPick.dataset.sig !== hash(pickHtml)) {
+            const typed = oldPick?.querySelector('.lf-shot-fix')?.value;
+            oldPick?.remove();
+            const tmp = document.createElement('div');
+            tmp.innerHTML = pickHtml.trim();
+            const node = tmp.firstElementChild;
+            node.dataset.sig = hash(pickHtml);
+            if (typed != null && node.querySelector('.lf-shot-fix')) node.querySelector('.lf-shot-fix').value = typed;
+            const det = host0.querySelector(':scope > .lf-detail');
+            if (det) det.after(node); else host0.append(node);
+        }
         const old = el.querySelector('.lf-pchips');
         const html = chipsHtml(id);
         if (!html) { old?.remove(); return; }
@@ -1424,9 +1485,11 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
+    if (onArtClick(ev)) return;
     if (onShotClick(ev)) return;
-    const det = ev.target.closest('.lf-detail');
+    const det = ev.target.closest('.lf-detail, .lf-detpick');
     if (det) {
+        if (ev.target.closest('input')) { ev.stopPropagation(); return; } // поле «что поправить» — дать фокус
         const db = ev.target.closest('[data-det]');
         if (!db) return;
         ev.preventDefault();
@@ -3481,6 +3544,7 @@ jQuery(async () => {
     initKnock(simApi);
     initTidy(simApi);
     initMend(simApi);
+    initArt({ ...simApi, icon, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
@@ -3506,6 +3570,8 @@ jQuery(async () => {
         if (!mending && Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
         setTimeout(() => { updateSceneBg(); runAutopay(); }, 2200);
     };
+    // карточке-«артефакту» своя картинка модуля (снимок УЗИ из Зёрнышка) — до того, как SLAY начнёт рисовать другую
+    if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, (id) => { try { artOnReceived(Number(id)); } catch (e) { console.warn('[Life] карточки', e); } });
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
     if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, () => { ui.focus = 'last'; later(); });

@@ -43,7 +43,11 @@ export function tidyMessage(i) {
     if (Array.isArray(m.swipes) && m.swipes[m.swipe_id] === old) m.swipes[m.swipe_id] = r.fixed;
     const dt = m.extra?.display_text;
     if (typeof dt === 'string') m.extra.display_text = dt.startsWith(old) ? r.fixed + dt.slice(old.length) : dt.replace(r.tail, '');
-    if (rendered(i)) { try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] перерисовать пост', e); } }
+    if (rendered(i)) {
+        try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] перерисовать пост', e); }
+        // перерисовка стирает то, что скрипты дорисовали в пост (карточки артефактов, плашки) — пусть вернут
+        try { c.eventSource.emit(c.eventTypes.MESSAGE_UPDATED, i); } catch { /* */ }
+    }
     console.info(`[Life] пост #${i}: срезала обрезанный блок в конце (${r.tail.slice(0, 60)}…)`);
     return true;
 }

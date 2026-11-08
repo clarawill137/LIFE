@@ -1783,3 +1783,13 @@ html, body { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !
 #chat .mes_text :is(.gco-tick-in, .custom-gco-tick-in) { position: absolute !important; left: 0 !important; top: 0 !important; padding-left: 100vw !important; white-space: nowrap !important; }
 #chat .mes_text :is(.gcx, .custom-gcx) { max-width: 100% !important; min-width: 0 !important; contain: inline-size; }
 #chat .mes .mes_block { min-width: 0 !important; }
+
+/* ───── 0.18.11: «перерисовать» под деталью (как у кадров) ───── */
+#chat .mes_block > .lf-detpick { margin: -8px 0 14px; padding: 12px 12px 10px; border-radius: 0 0 16px 16px; border: 1px solid rgba(234, 179, 188, .22); border-top: 0; background: color-mix(in srgb, var(--t-card, #1a1315) 88%, transparent); user-select: none; -webkit-user-select: none; font-style: normal; text-indent: 0; animation: lf-rise .35s cubic-bezier(.2, .8, .2, 1) both; }
+#chat .lf-detpick .lf-shot-pick-b button[data-det="pk-x"] { flex: none; width: 34px; padding: 0; }
+body.lf-theme.lf-ava-wide #chat .mes_block > .lf-detpick { margin: -10px -16px 16px; border-radius: 0; border-left: 0; border-right: 0; padding-left: 16px; padding-right: 16px; }
+
+/* ───── 0.18.11: фото в карточке-артефакте так и не проявилось — кнопка ───── */
+#chat .gca-ph.lf-gca-stuck { flex-direction: column; gap: 10px; animation: none !important; background: #11151d !important; }
+#chat .gca-ph .lf-gca-dev { display: inline-flex; align-items: center; gap: 6px; max-width: 90%; height: 34px; padding: 0 14px; margin: 0; border-radius: 999px; border: 1px solid rgba(234, 179, 188, .35); background: rgba(217, 104, 123, .2); color: #f4dfe3; font: 500 13px -apple-system, system-ui, sans-serif; letter-spacing: 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#chat .gca-ph .lf-gca-dev svg { flex: none; width: 14px; height: 14px; }
