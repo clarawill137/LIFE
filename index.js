@@ -24,7 +24,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.5';
+const VERSION = '0.18.6';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3393,7 +3393,8 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
-    setTimeout(() => { tidyRecent(40).catch(() => {}); }, 1800);
+    // огрызки в последних постах — поправить в памяти (без сохранения), когда чат уже загрузился
+    setTimeout(() => { tidyRecent(40).catch(() => {}); }, 4000);
 }
 
 function lastAiIndex() {

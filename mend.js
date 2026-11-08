@@ -6,6 +6,7 @@
 //   · пост цел, но заметок нет, хотя в этом чате они всегда есть — модель пишет только заметки;
 //   · оборвался на полуслове — модель продолжает с места обрыва (начиная с последних слов, чтобы шов сошёлся).
 // Если не вышло — огрызок срезается (tidy), как раньше, а дописать можно ещё раз: /life fix.
+// Чат сохраняется один раз, в конце починки (он ~40 МБ — каждое сохранение на айфоне ощутимо).
 
 import { cutTail, tidyMessage, tidyHold } from './tidy.js';
 
@@ -161,10 +162,13 @@ export function stitch(base, cont) {
 
 // ───────────── пост ─────────────
 
-async function apply(i, m, text, { edited = false } = {}) {
+const rendered = (i) => !!document.querySelector(`#chat .mes[mesid="${i}"]`);
+
+/** Поменять текст поста в памяти и на экране. Чат НЕ сохраняет — сохранение одно, в конце (чат ~40 МБ). */
+async function apply(i, m, text) {
     const c = A.ctx();
     const old = m.mes;
-    if (old === text) return;
+    if (old === text) return false;
     m.mes = text;
     if (Array.isArray(m.swipes) && m.swipe_id != null && m.swipes[m.swipe_id] === old) m.swipes[m.swipe_id] = text;
     const dt = m.extra?.display_text;
@@ -172,16 +176,14 @@ async function apply(i, m, text, { edited = false } = {}) {
         if (dt.startsWith(old)) m.extra.display_text = text + dt.slice(old.length);
         else delete m.extra.display_text;
     }
-    try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] дописать: перерисовать', e); }
+    if (rendered(i)) { try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] дописать: перерисовать', e); } }
     try { A.rekeyMessage?.(i, old); } catch { /* */ }
-    try { await c.saveChat(); } catch (e) { console.warn('[Life] дописать: сохранить', e); }
+    // ExtBlocks пересоберёт текст показа (пост + свои блоки)
     try { await c.eventSource.emit(c.eventTypes.MESSAGE_UPDATED, i); } catch { /* */ }
-    if (edited) { try { await c.eventSource.emit(c.eventTypes.MESSAGE_EDITED, i); } catch { /* */ } }
-    if (typeof c.updateMessageBlock !== 'function') { try { await c.reloadCurrentChat?.(); } catch { /* */ } }
+    return true;
 }
 
 function generating() {
-    try { if (typeof window.SillyTavern?.isGenerating === 'function') return window.SillyTavern.isGenerating(); } catch { /* */ }
     const stop = document.getElementById('mes_stop');
     return !!stop && getComputedStyle(stop).display !== 'none';
 }
@@ -215,6 +217,7 @@ export async function mendPost(i, { auto = false, after = null } = {}) {
     busy.add(i);
     tidyHold.add(i);
     let ok = false;
+    const orig = m.mes;
     try {
         if (auto && !(await waitIdle())) return false;
         if (!auto && generating()) { A.toast('info', 'Подожди, пока таверна допишет текущий ответ.'); ok = true; return false; }
@@ -226,8 +229,8 @@ export async function mendPost(i, { auto = false, after = null } = {}) {
         const name = m.name || 'the character';
         const chid = chidOf(m);
         const notes = expectsNotes(i) || d.wasNotes || d.kind === 'notes';
-        const edited = d.kind === 'prose';
-        const done = edited ? 'Дописала пост.' : (d.wasNotes || d.kind === 'notes') ? 'Дописала заметки.' : 'Дописала конец поста.';
+        const prose = d.kind === 'prose';
+        const done = prose ? 'Дописала пост.' : (d.wasNotes || d.kind === 'notes') ? 'Дописала заметки.' : 'Дописала конец поста.';
         // огрызок блока убрать сразу — чтобы не глотал блоки ExtBlocks, пока ждём ответ
         if (d.base !== m.mes.replace(/\s+$/, '')) await apply(i, m, d.base);
         if (d.kind === 'trim') { ok = true; return true; }
@@ -253,7 +256,7 @@ export async function mendPost(i, { auto = false, after = null } = {}) {
             // вдруг и продолжение оборвалось — срезать огрызок и ещё круг (модель увидит уже сшитый пост)
             const nd = diagnose(text, { expectNotes: notes });
             if (nd && (nd.kind === 'trim' || nd.kind === 'block')) text = nd.base;
-            if (text !== m.mes) await apply(i, m, text, { edited });
+            if (text !== m.mes) await apply(i, m, text);
             d = nd && nd.kind !== 'trim' ? { ...nd, base: text } : null;
         }
         ok = !d;
@@ -266,9 +269,16 @@ export async function mendPost(i, { auto = false, after = null } = {}) {
     } finally {
         busy.delete(i);
         tidyHold.delete(i);
-        if (!ok && A.ctx().chat === chat && chat[i] === m) {
-            if (tidyMessage(i)) { try { await A.ctx().saveChat(); } catch { /* */ } }
+        const same = A.ctx().chat === chat && chat[i] === m;
+        if (!ok && same) {
+            tidyMessage(i);
             if (check(i)) A.toast('warning', 'Пост так и остался оборванным. Ещё раз — <b>/life fix</b> или нажми сюда.', '✦ Life', { timeOut: 12000, escapeHtml: false, onclick: () => mendPost(i) });
+        }
+        // одно сохранение на всю починку
+        if (same && m.mes !== orig) {
+            try { await A.ctx().saveChat(); } catch (e) { console.warn('[Life] дописать: сохранить', e); }
+            // в дописанном куске теги Horae — пусть перечитает пост (сам и сохранит)
+            if (/<horae/i.test(m.mes) && !/<horae/i.test(orig)) { try { const c = A.ctx(); await c.eventSource.emit(c.eventTypes.MESSAGE_EDITED, i); } catch { /* */ } }
         }
         try { after?.(i, ok); } catch { /* */ }
     }
