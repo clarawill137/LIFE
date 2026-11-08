@@ -18,13 +18,13 @@ import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
-import { initTidy, tidyRecent } from './tidy.js';
+import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.6';
+const VERSION = '0.18.7';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3393,8 +3393,8 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
-    // огрызки в последних постах — поправить в памяти (без сохранения), когда чат уже загрузился
-    setTimeout(() => { tidyRecent(40).catch(() => {}); }, 4000);
+    // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
+    // как только долистывали до конца чата (перерисованный последний пост). Огрызок чинится только у нового поста.
 }
 
 function lastAiIndex() {
@@ -3488,8 +3488,8 @@ jQuery(async () => {
         const mending = Number.isFinite(i) && i === lastAiIndex() && mendWanted(i, type);
         if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) setTimeout(() => queueChron(j), 300); } });
         // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки (кроме того, что дописываем)
-        setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 1200);
-        setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 6000);
+        // только этот новый пост — старые не трогаем (см. onChatChanged)
+        if (Number.isFinite(i)) for (const ms of [1200, 6000]) setTimeout(() => { try { if (tidyMessage(i)) later(); } catch { /* */ } }, ms);
         if (type === 'impersonate') return;
         if (!mending && Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
         setTimeout(() => { updateSceneBg(); runAutopay(); }, 2200);
