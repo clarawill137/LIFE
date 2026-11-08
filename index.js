@@ -22,7 +22,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.2';
+const VERSION = '0.18.3';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -479,16 +479,15 @@ function castNames(st = worldState()) {
     return names;
 }
 
-/** Вкладка «Персонаж»: ты, группа и те, у кого есть карточка. Врачи, бармены и прочие NPC сцены — в «Людях», не здесь. */
-function personNames(st = worldState()) {
+/** Свои: ты, группа и те, у кого есть карточка. Врачи, бармены и прочие NPC сцены живут в «Людях»;
+ *  в группе — строго свои, в одиночном чате убираем только тех, кто записан в «Людях». */
+function isOwn(n) {
     const c = ctx();
-    const cards = (c.characters || []).map(x => x?.name).filter(Boolean);
-    const group = groupMembers();
-    const keep = (n) => sameName(n, c.name1) || group.some(g => sameName(g, n)) || cards.some(x => sameName(x, n));
-    const all = castNames(st);
-    // в группе — строго свои; в одиночном чате NPC из «Людей» тоже убираем, остальных оставляем как было
-    return c.groupId ? all.filter(keep) : all.filter(n => keep(n) || !findPerson(n));
+    if (sameName(n, c.name1) || groupMembers().some(g => sameName(g, n)) || (c.characters || []).some(x => x?.name && sameName(x.name, n))) return true;
+    return !c.groupId && !findPerson(n);
 }
+/** Вкладка «Персонаж» — только свои. */
+function personNames(st = worldState()) { return castNames(st).filter(isOwn); }
 
 /** Имя так, как его пишет Horae (чтобы он сопоставил одежду и настроение). */
 function horaeName(n, st = worldState()) {
@@ -1593,7 +1592,7 @@ function renderScene() {
     const weather = isCur ? weatherWord(st.scene?.atmosphere) : '';
     const post = lastPost(fch);
     const ch = lastChron(fch.end, fch.start);
-    const present = isCur ? (st.scene?.characters_present || []).map(canonName).filter(Boolean) : [];
+    const present = isCur ? (st.scene?.characters_present || []).map(canonName).filter(Boolean).filter(isOwn) : [];
     const warn = horaeOn() ? '' : `<div class="lf-note">${icon('activity')} Horae выключен или не найден — места и время беру только из уже записанного.</div>`;
     const shown = [...list].reverse().slice(0, ui.chShow);
     return `${warn}
@@ -1669,7 +1668,7 @@ function placeCardHtml(loc, { inline = false } = {}) {
     const curKey = placeKey(st.scene?.location);
     const key = placeKey(loc);
     const here = curKey === key || curKey.startsWith(key + '·');
-    const present = here ? (st.scene?.characters_present || []).map(canonName) : [];
+    const present = here ? (st.scene?.characters_present || []).map(canonName).filter(isOwn) : [];
     const chs = chaptersAt(loc);
     const p = getPlace(loc);
     const desc = placeDesc(loc);
@@ -3418,7 +3417,7 @@ const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: 
 
 const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
-    castNames, groupMembers, chatCards, cardOf, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
+    castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
     hasChat, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },

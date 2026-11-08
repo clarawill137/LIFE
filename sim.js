@@ -844,7 +844,7 @@ export function renderRoom(key) {
     const siblings = key.includes('·') ? [...A.knownLocations()].filter(([k]) => k !== key && k.startsWith(key.split('·').slice(0, -1).join('·') + '·') && k.split('·').length === key.split('·').length) : [];
     const items = Object.entries(st.items || {}).filter(([, it]) => !it?.holder && it?.location && (A.placeKey(it.location) === key || A.placeKey(it.location).startsWith(key + '·') || A.norm(it.location).includes(A.norm(A.locLeaf(raw)))));
     const offs = M().offscreen.filter(e => A.placeKey(e.where || '') === key || topKey(e.where || '') === key).slice(-4).reverse();
-    const present = here ? (st.scene?.characters_present || []).map(A.canonName) : [];
+    const present = here ? (st.scene?.characters_present || []).map(A.canonName).filter(n => !A.isOwn || A.isOwn(n)) : [];
     const pets = M().pets.filter(x => x.home && (topKey(x.home) === key || A.placeKey(x.home) === key));
     const sig = traces.map(t => t.t).join('|');
     const stale = traces.length && p?.img && p?.imgNow?.sig !== sig;
