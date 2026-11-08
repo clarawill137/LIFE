@@ -19,11 +19,12 @@ import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyRecent } from './tidy.js';
+import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.4';
+const VERSION = '0.18.5';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -50,6 +51,7 @@ const DEFAULTS = {
     plates: { on: true },
     cast: { on: true },
     tidy: true,
+    mend: { on: true, tries: 2 },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -69,6 +71,7 @@ function settings() {
     for (const [k, v] of Object.entries(DEFAULTS.detail)) if (s.detail[k] === undefined) s.detail[k] = v;
     if (!s.plates || typeof s.plates !== 'object') s.plates = clone(DEFAULTS.plates);
     if (!s.cast || typeof s.cast !== 'object') s.cast = clone(DEFAULTS.cast);
+    if (!s.mend || typeof s.mend !== 'object') s.mend = clone(DEFAULTS.mend);
     if (!s.shot || typeof s.shot !== 'object') s.shot = clone(DEFAULTS.shot);
     for (const [k, v] of Object.entries(DEFAULTS.shot)) if (s.shot[k] === undefined) s.shot[k] = v;
     if (!s.migr02) migrate01(s);
@@ -2232,7 +2235,8 @@ function renderCfg() {
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
         ${sw('on', 'В группе каждый пишет за себя (остальные — коротко, кого нет в сцене — не появляются)', s.cast, 'cast.on')}
-        ${sw('tidy', 'Срезать обрезанный блок в конце поста (иначе он глотает блоки ExtBlocks в «Подробнее»)', s, 'tidy')}
+        ${sw('on', 'Дописывать оборванный пост: модель оборвала заметки или текст на полуслове — Life допишет тихим запросом тем же подключением (вручную — /life fix)', s.mend, 'mend.on')}
+        ${sw('tidy', 'Срезать обрезанный блок в конце поста, если дописать не вышло (иначе он глотает блоки ExtBlocks в «Подробнее»)', s, 'tidy')}
         ${sw('on', 'Плашки газет и писем в постах (старая бумага, сургуч)', s.plates, 'plates.on')}
         <div class="lf-hint">${s.plates.found ? 'Плашки на сервере есть: модель вставляет газету после громких событий и письмо, когда кто-то пишет. Старые посты перерисуются после обновления страницы.' : 'Файла плашек на сервере нет (user/files/life-plates.json) — его кладёт команда из чата с Claude.'}</div>
         ${(() => { const f = fmStatus(s.fmBackup); return `<div class="lf-hint">Fetish Manager (его настройки живут только в браузере): сейчас своих фетишей — ${f.cur ? f.cur.custom : 'нет настроек'}${f.old ? `, в старой версии было — ${f.old.custom}` : ''}${f.backup ? `; копия на сервере от ${new Date(f.backup.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '; копии на сервере пока нет'}.</div>`; })()}
@@ -3346,7 +3350,7 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
             unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
@@ -3360,6 +3364,7 @@ function registerSlash() {
                     toast('info', c.theme ? `Тема Life: ${({ graphite: 'Графит', paper: 'Бумага', moon: 'Луна' })[c.palette] || ''}` : 'Тема Life выключена');
                     return '';
                 }
+                if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
                 openHub(['map', 'person', 'people', 'world'].includes(v) ? v : 'scene');
                 return '';
@@ -3424,7 +3429,7 @@ const simApi = {
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
-    hasChat, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
+    hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
 };
 
 globalThis.LifeBridge = {
@@ -3462,6 +3467,7 @@ jQuery(async () => {
     initCast(simApi);
     initKnock(simApi);
     initTidy(simApi);
+    initMend(simApi);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
@@ -3476,12 +3482,15 @@ jQuery(async () => {
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
     const onAi = (id, type) => {
         later();
-        // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки
+        const i = Number(id);
+        // оборванный пост (Gemini рвёт хвост) — дописать; Летописец — уже по целому посту
+        const mending = Number.isFinite(i) && i === lastAiIndex() && mendWanted(i, type);
+        if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) setTimeout(() => queueChron(j), 300); } });
+        // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки (кроме того, что дописываем)
         setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 1200);
         setTimeout(() => { tidyRecent(3).then(k => { if (k) later(); }).catch(() => {}); }, 6000);
         if (type === 'impersonate') return;
-        const i = Number(id);
-        if (Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
+        if (!mending && Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
         setTimeout(() => { updateSceneBg(); runAutopay(); }, 2200);
     };
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);

@@ -8,6 +8,8 @@ let A = null;
 export function initTidy(api) { A = api; }
 
 const on = () => A.settings().tidy !== false;
+/** Посты, которые сейчас дописывает mend.js, — их огрызок не трогать, он сам разберётся. */
+export const tidyHold = new Set();
 
 /** Текст без огрызка в конце, или null — если всё цело. */
 export function cutTail(text) {
@@ -23,7 +25,7 @@ export function cutTail(text) {
 
 /** Починить пост i: текст, свайп, текст показа ExtBlocks; перерисовать. */
 export function tidyMessage(i) {
-    if (!A || !on()) return false;
+    if (!A || !on() || tidyHold.has(i)) return false;
     const c = A.ctx();
     const m = c.chat?.[i];
     if (!m || m.is_user || m.is_system || typeof m.mes !== 'string') return false;
