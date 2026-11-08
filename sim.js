@@ -8,6 +8,7 @@ import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
 import { knockSceneHtml } from './knock.js';
 import { loreAbout } from './inner.js';
+import { hurtSection } from './hurt.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
 let A = null;
@@ -647,6 +648,7 @@ export function renderLife(who) {
         const homes = [...A.knownLocations()].filter(([k]) => !k.includes('·')).slice(0, 30);
         return `<div class="lf-pagehead"><h1>Жизнь</h1><span class="lf-subtitle">Что о тебе знают и что творится вокруг</span></div>
         ${unseen.length ? `${A.sec('Пока тебя не было')}${offHtml(unseen)}` : ''}
+        ${(() => { try { return hurtSection(who); } catch (e) { console.warn('[Life] раны', e); return ''; } })()}
         ${A.sec('Что о тебе знают', 'вкусы для подарков и заботы')}${prefsHtml(who)}
         ${A.sec('Подарки')}${giftsHtml(who)}
         ${A.sec('Дом', 'сюда идут записки и питомцы')}

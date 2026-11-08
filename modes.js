@@ -1,5 +1,5 @@
 // Режимы — кнопки в пульте: 💗 нежнятинка, 🫦 огонь, 😂 ржака, ⚔️ боевка (держатся, пока не выключишь),
-// 🎲 событие / 🌙 без событий (на один ответ).
+// 🌙 без событий (на один ответ); 🎲 событие теперь в твистах (twists.js), старое оставлено для совместимости.
 // Текст режима уходит модели в самый конец промпта (глубина 0, свой ключ сортируется последним),
 // чтобы его держала модель, а не забывала через пару постов. Пресет не трогаем.
 // Нежнятинка перенесена из скрипта Tavern Helper «🎛 Режимы» (God Complex v1.4.1) — тот же текст.
@@ -95,6 +95,12 @@ export function toggleMode(id) {
     return m.on.includes(id);
 }
 
+/** Снять «на один ответ» (твист взвели — «без событий» уже не к месту). */
+export function disarmOnce() {
+    if (!armed.id) return;
+    armed = { chat: '', id: '' };
+}
+
 export function armOnce(id) {
     const cur = onceArmed();
     armed = cur === id || !onceById(id) ? { chat: '', id: '' } : { chat: chatKey(), id };
@@ -139,7 +145,7 @@ export function modesHtml(esc, ttScript = false) {
         ${MODES.map(([id, emo, label]) => chip('mode', id, on.includes(id), emo, label)).join('')}
     </div>
     <div class="cc-chips wrap lf-modes lf-once">
-        ${ONCE.map(([id, emo, label]) => chip('once', id, once === id, emo, `${label}${once === id ? ' · в следующем' : ''}`)).join('')}
+        ${ONCE.filter(([id]) => id !== 'event' || once === 'event').map(([id, emo, label]) => chip('once', id, once === id, emo, `${label}${once === id ? ' · в следующем' : ''}`)).join('')}
     </div>
     ${ttScript ? '<div class="lf-modes-warn">В Tavern Helper ещё включён скрипт «🎛 Режимы» — выключи его, режимы теперь здесь, иначе нежнятинка придёт модели дважды.</div>' : ''}`;
 }

@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { rpNow, hoursSince, nowSlot, simCfg, lifeKey } from './sim.js';
 import { moodNow, BOND_HEAVY } from './mood.js';
 import { agendaCardHtml } from './agenda.js';
+import { hurtSection, hurtCap, hurtCount } from './hurt.js';
 
 let A = null;
 export function initInner(api) { A = api; }
@@ -107,7 +108,7 @@ function needOf(x, k, now = rpNow(), metab = 1) {
     const e = x.body?.[k];
     if (!e) return k === 'health' ? 100 : 80;
     const h = hoursSince(e.at, now);
-    if (k === 'health') return clamp(e.v + h * 1.5 * metab);
+    if (k === 'health') return clamp(e.v + h * 1.5 * metab);   // потолок от ран — в bodyState (hurt.js)
     return clamp(e.v - h * DECAY[k] * (k === 'food' ? metab : 1));
 }
 function setNeed(x, k, v, now = rpNow()) { x.body = x.body || {}; x.body[k] = { v: clamp(v), at: { t: now.t, mes: now.mes } }; }
@@ -123,18 +124,17 @@ function bodyState(who, now = rpNow()) {
     const x = I(who);
     const p = prof(who);
     const metab = p.metab, fem = p.fem;
-    // старые раны у суперсолдата заживают быстрее
-    const heal = 48 / metab;
-    x.wounds = x.wounds.filter(w => hoursSince(w.at, now) < heal);
-    const needs = NEEDS.map(([k, label, ic]) => { const v = needOf(x, k, now, metab); return { k, label, ic, v, word: needWord(k, v, metab, fem) }; });
+    // раны и травмы теперь ведёт hurt.js: здесь — только потолок самочувствия от них
+    const cap = hurtCap(who);
+    const needs = NEEDS.map(([k, label, ic]) => { const v = k === 'health' ? Math.min(needOf(x, k, now, metab), cap) : needOf(x, k, now, metab); return { k, label, ic, v, word: needWord(k, v, metab, fem) }; });
     const urgent = [];
     const val = (k) => needs.find(n => n.k === k).v;
     const fast = metab >= 2 ? ' (ускоренный метаболизм — ест много и часто)' : metab > 1 ? ' (быстрый метаболизм)' : '';
     if (val('food') < 35) urgent.push(val('food') < 18 ? `зверски ${g(fem, 'голоден', 'голодна')}${fast}` : `${g(fem, 'голоден', 'голодна')}${fast}`);
     if (val('energy') < 30) urgent.push(val('energy') < 15 ? 'валится с ног от усталости' : `${g(fem, 'устал', 'устала')}, клюёт носом`);
     if (val('clean') < 28) urgent.push(`давно не ${g(fem, 'был', 'была')} в душе — хочется помыться`);
-    if (val('health') < 75 || x.wounds.length) urgent.push(x.wounds.length ? `болит: ${x.wounds.slice(-2).map(w => w.t).join(', ')}` : 'нездоровится');
-    return { needs, urgent, wounds: x.wounds };
+    if (val('health') < 75 && !hurtCount(who)) urgent.push('нездоровится');   // раны модель получает от hurt.js
+    return { needs, urgent };
 }
 
 // ───────────── мысли и желания ─────────────
@@ -204,8 +204,6 @@ export function innerAfterPost(i, res, msg) {
             setNeed(x, 'energy', needOf(x, 'energy', now, metab) - r.tired, now);
             if (r.tired >= 10 && !r.washed) setNeed(x, 'clean', needOf(x, 'clean', now, metab) - 15, now);
         }
-        if (r.hurt) { x.wounds.push({ id: ++x.seq, t: r.hurt, mes: i, at: { t: now.t, mes: i } }); setNeed(x, 'health', needOf(x, 'health', now, metab) - 25, now); }
-        if (r.healed && x.wounds.length) { x.wounds.shift(); setNeed(x, 'health', needOf(x, 'health', now, metab) + 20, now); }
         if (r.state && !x.state?.manual) x.state = r.state === 'ok' ? null : { id: r.state, why: r.why || '', mes: i };
         if (r.thought) addThought(who, r.thought, i, 'ai');
         if (r.want) addWant(who, r.want, r.with, i, 'ai');
@@ -487,7 +485,7 @@ export function renderInner(who) {
     ${st ? `<div class="lf-in-now">${icon(st[3])}<span><b>${stLabel(st, f)}</b>${x.state.why ? ` — ${esc(x.state.why)}` : ''}<small>${esc(A.cap(st[4].replace(/^[^:]+:\s*/, '')))}</small></span></div>` : ''}
     ${A.sec('Тело', p.metab >= 2 ? 'метаболизм ×2' : '')}
     <div class="lf-bars lf-in-body" data-act="in-body" data-name="${esc(who)}">${b.needs.map(n => `<div class="lf-bar-row${n.v < 30 ? ' low' : ''}">${icon(n.ic)}<span>${esc(n.word)}</span><i class="lf-meter"><b style="width:${n.v}%"></b></i><small>${n.v}</small></div>`).join('')}</div>
-    ${b.wounds.length ? `<div class="lf-chips wrap">${b.wounds.map(w => `<span class="lf-pref no">${icon('activity')}${esc(w.t)}<button data-act="in-heal" data-name="${esc(who)}" data-id="${w.id}" title="Зажило">${icon('check')}</button></span>`).join('')}</div>` : ''}
+    ${(() => { try { return hurtSection(who); } catch (e) { console.warn('[Life] раны', e); return ''; } })()}
     ${A.sec('На уме', th.length ? 'что тяготит и занимает' : '')}
     ${th.length ? th.map(t => `<div class="lf-idea${arm === t ? ' armed' : ''}"><span class="lf-idea-ic" data-act="in-w" data-name="${esc(who)}" data-id="${t.id}">${dots(t.w)}</span>
         <span class="lf-idea-t"><small>${arm === t ? 'поделится в следующем ответе' : t.shared ? `${g(f, 'делился', 'делилась')} · #${t.shared}` : SRC[t.src] || ''}</small><b>${esc(t.t)}</b></span>
@@ -534,9 +532,8 @@ export function renderCharacter(who) {
 function bodySheet(who) {
     const b = bodyState(who);
     A.openSheet(`${icon('activity')} Тело · ${esc(short(who))}`, `${b.needs.map(n => `<div class="lf-field"><label>${n.label}: <b data-out>${n.v}</b></label><input type="range" min="0" max="100" value="${n.v}" data-rng="${n.k}"></div>`).join('')}
-        <div class="lf-field"><label>Новая рана или травма</label><input type="text" data-in="in-wound" placeholder="ножевое в бок, ушиб плеча…"></div>
         <button class="lf-btn primary full" data-act="in-body-save" data-name="${esc(who)}">${icon('check')} Сохранить</button>
-        <div class="lf-hint">Голод, усталость и душ тают по времени истории; ест, спит и моется — в постах (Летописец заметит) или по распорядку, пока его нет рядом.</div>`);
+        <div class="lf-hint">Раны и травмы — ниже, в «Раны и травмы». Голод, усталость и душ тают по времени истории; ест, спит и моется — в постах (Летописец заметит) или по распорядку, пока его нет рядом.</div>`);
 }
 
 // ───────────── клики ─────────────
@@ -560,8 +557,6 @@ export async function innerClick(act, el) {
         case 'in-body-save': {
             const now = rpNow();
             for (const [k] of NEEDS) { const v = box.querySelector(`[data-rng="${k}"]`)?.value; if (v != null) setNeed(x, k, Number(v), now); }
-            const w = box.querySelector('[data-in="in-wound"]')?.value?.trim();
-            if (w) x.wounds.push({ id: ++x.seq, t: w, mes: i, at: { t: now.t, mes: now.mes } });
             A.closeSheet();
             return done();
         }

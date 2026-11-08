@@ -9,10 +9,12 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
 import { initErrors } from './errors.js';
-import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson } from './people.js';
+import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
-import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, syncBody } from './modes.js';
+import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
+import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
+import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -25,7 +27,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.13';
+const VERSION = '0.19.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -740,6 +742,7 @@ function updateMovePrompt(type, consume = false) {
     // режимы — отдельным ключом, который сортируется последним: самый конец промпта
     let modes = '';
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
+    try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
@@ -2798,6 +2801,14 @@ async function onClick(ev) {
     if (act === 'btone') { const t = setBondTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца главы' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
     if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
+    if (act.startsWith('tw-')) {
+        try { await twistClick(act, el, { at: 'data-act', openSheet, closeSheet, rerender: render, busy: withBusy }); } catch (e) { console.warn('[Life] твист', e); toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
+        return;
+    }
+    if (act.startsWith('hu-')) {
+        try { await hurtClick(act, el); } catch (e) { console.warn('[Life] раны', e); toast('warning', esc(String(e?.message || e)), '🩸 Раны'); }
+        return;
+    }
     if (act.startsWith('press-')) { await pressClick(act, el); return; }
     if (act.startsWith('kn-')) { try { knockClick(act, el); } catch (e) { console.warn('[Life] стук', e); } return; }
     if (act.startsWith('ag-')) {
@@ -3452,7 +3463,7 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
             unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
@@ -3467,6 +3478,16 @@ function registerSlash() {
                     return '';
                 }
                 if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
+                if (v === 'twist' || v.startsWith('twist ') || v.startsWith('твист')) {
+                    const arg = v.split(/\s+/).slice(1).join(' ');
+                    if (arg === 'off' || arg === 'нет') { clearTwist(); toast('info', 'Твист отменён', '✦ Твист'); return ''; }
+                    const k = twistByWord(arg);
+                    if (!k) { toast('warning', `Нет такого твиста. Есть: ${TWISTS.map(t => t[0]).join(', ')}`, '✦ Твист', { timeOut: 6000 }); return ''; }
+                    armTwist(k); disarmOnce();
+                    const t = TWISTS.find(x => x[0] === k);
+                    toast('info', `${t[1]} ${esc(t[2])} — в следующем ответе`, '✦ Твист', { timeOut: 1800 });
+                    return '';
+                }
                 if (v === 'chron') { const chat = chatArr(); let i = chat.length - 1; while (i >= 0 && (chat[i].is_user || chat[i].is_system)) i--; if (i >= 0) queueChron(i, { force: true }); return ''; }
                 openHub(['map', 'person', 'people', 'world'].includes(v) ? v : 'scene');
                 return '';
@@ -3523,7 +3544,9 @@ const controlApi = {
     setBondTone: (v) => setBondTone(v),
     modesHtml: (tt) => (hasChat() && settings().enabled ? modesHtml(esc, tt) : ''),
     toggleMode: (v) => toggleMode(v),
-    armOnce: (v) => armOnce(v),
+    armOnce: (v) => { const id = armOnce(v); if (id) clearTwist(); return id; },
+    twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
+    twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
 };
 
@@ -3569,6 +3592,23 @@ jQuery(async () => {
     platesSync().then(() => updateMovePrompt()).catch(e => console.warn('[Life] плашки', e));
     initMood(moodApi);
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
+    initTwists({ ...simApi, plainText, peopleList, onArm: () => disarmOnce() });
+    initHurt(simApi);
+    try {
+        globalThis.LifeBridge.register({
+            id: 'life-twist',
+            chron: () => twistChron(),
+            afterPost: (i, j) => twistAfterPost(i, j),
+            sceneHtml: () => `${sec('Твист', 'на следующий ответ')}${twistsHtml({ log: true })}`,
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-hurt',
+            prompt: (type) => hurtPrompt(type),
+            chron: () => hurtChron(),
+            afterPost: (i, j, m) => hurtAfterPost(i, j, m),
+            sceneHtml: () => hurtSceneHtml(),
+        });
+    } catch (e) { console.warn('[Life] твисты/раны: мост', e); }
     initCast(simApi);
     initKnock(simApi);
     initTidy(simApi);

@@ -432,6 +432,8 @@ function renderCC() {
 
     ${api.modesHtml ? (() => { const h = api.modesHtml(ttModes()); return h ? `<div class="cc-label">Режимы</div>${h}` : ''; })() : ''}
 
+    ${api.twistsHtml ? (() => { const h = api.twistsHtml(); return h ? `<div class="cc-label">Твист — на следующий ответ</div>${h}` : ''; })() : ''}
+
     ${api.moodHtml ? (() => { const h = api.moodHtml(); return h ? `<div class="cc-label">Настроение сцены</div>${h}` : ''; })() : ''}
 
     <div class="cc-label">Чат</div>
@@ -495,6 +497,10 @@ async function onCCClick(ev) {
     const act = el.dataset.cc;
     const c = cc();
     const goLife = (tab, after) => { closeCC(); setTimeout(() => { api.openHub(tab); if (after) setTimeout(after, 380); }, 280); };
+    if (act.startsWith('tw-')) {
+        try { await api.twistCC?.(act, el, { openSheet, closeSheet, rerender: renderCC }); } catch (e) { console.warn('[Life] твист', e); api.toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
+        return;
+    }
     switch (act) {
         case 'close': closeCC(); break;
         case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
