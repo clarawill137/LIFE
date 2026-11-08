@@ -24,7 +24,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.9';
+const VERSION = '0.18.10';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -42,7 +42,7 @@ const DEFAULTS = {
     looks: {},
     pairs: {},
     autoMaps: 'ask',
-    chron: { on: true, profile: '', effort: 'low', tokens: 4000, timeoutSec: 120, titles: true, relations: true, secrets: true },
+    chron: { on: true, profile: '', backup: '', effort: 'low', tokens: 4000, timeoutSec: 120, titles: true, relations: true, secrets: true },
     money: { autopay: true },
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
@@ -795,17 +795,28 @@ async function askModel(messages, maxTokens) {
     const c = ctx();
     const s = settings();
     if (!c.ConnectionManagerRequestService?.sendRequest) throw new Error('в таверне нет Connection Manager');
-    const name = chronProfile();
-    const p = profiles().find(x => x.name === name) || profiles().find(x => x.id === name);
+    const find = (name) => (name ? profiles().find(x => x.name === name) || profiles().find(x => x.id === name) : null);
+    const p = find(chronProfile());
     if (!p) throw new Error('Выбери профиль Летописца: Мир → ⚙');
+    const alt = find(s.chron.backup) || p;
     const override = s.chron.effort ? { reasoning_effort: s.chron.effort } : {};
-    const r = await Promise.race([
-        c.ConnectionManagerRequestService.sendRequest(p.id, messages, Number(maxTokens) || 2000, {}, override),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Летописец не ответил вовремя')), (Number(s.chron.timeoutSec) || 75) * 1000)),
-    ]);
-    const text = typeof r === 'string' ? r : (r?.content ?? '');
-    if (!String(text).trim()) throw new Error('пустой ответ Летописца');
-    return text;
+    const base = Number(maxTokens) || 2000;
+    const once = async (prof, tokens) => {
+        const r = await Promise.race([
+            c.ConnectionManagerRequestService.sendRequest(prof.id, messages, tokens, {}, override),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('Летописец не ответил вовремя')), (Number(s.chron.timeoutSec) || 75) * 1000)),
+        ]);
+        return { text: String(typeof r === 'string' ? r : (r?.content ?? '')), thought: !!String(r?.reasoning || '').trim() };
+    };
+    const a = await once(p, base);
+    if (a.text.trim()) return a.text;
+    // Пусто — обычно фильтр модели или мысли съели токены. Один раз переспросить сами: с запасом токенов и запасным профилем, если он задан.
+    console.warn(`[Life] Летописец: пустой ответ${a.thought ? ' (одни размышления)' : ''} — переспрашиваю${alt !== p ? ` через «${alt.name}»` : ''}`);
+    await new Promise(res => setTimeout(res, 1200));
+    const b = await once(alt, Math.min(Math.round(base * 1.5), 16000));
+    if (b.text.trim()) return b.text;
+    if (a.thought || b.thought) throw new Error('пустой ответ Летописца: всё ушло в размышления — прибавь токенов (Мир → ⚙)');
+    throw new Error(alt !== p ? 'пустой ответ Летописца — и у запасного профиля' : 'пустой ответ Летописца дважды — похоже, фильтр модели; помогает запасной профиль (Мир → ⚙)');
 }
 
 async function waitHorae(i) {
@@ -930,7 +941,7 @@ async function runChron(i, { force = false } = {}) {
         if (ext.length) { bridgeEach(x => x.afterPost?.(i, j, m), 'после поста'); updateMovePrompt(); }
     } catch (e) {
         console.warn('[Life] Летописец:', e);
-        toast('warning', esc(String(e?.message || e)), '✦ Летописец', { timeOut: 6000 });
+        toast('warning', `${esc(String(e?.message || e))}<br><small>Тапни сюда — перечитает пост #${i}</small>`, '✦ Летописец', { timeOut: 12000, escapeHtml: false, onclick: () => { queueChron(i, { force: true }); toast('info', `Летописец перечитывает #${i}…`); } });
     } finally {
         chronBusy.delete(i);
         paintChips();
@@ -2223,6 +2234,7 @@ function renderCfg() {
         ${sec('Летописец')}
         ${sw('on', 'Летописец после каждого поста', s.chron, 'chron.on')}
         <div class="lf-field"><label>Модель (профиль подключения)</label><select data-set="chron.profile">${profOpts(s.chron.profile)}</select></div>
+        <div class="lf-field"><label>Запасной профиль <small>(если ответ пустой, Летописец сам переспросит — этим профилем; без него — тем же)</small></label><select data-set="chron.backup"><option value="">— тот же —</option>${profiles().map(p => `<option value="${esc(p.name)}" ${p.name === s.chron.backup ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Reasoning effort</label><select data-set="chron.effort">${['', 'low', 'medium', 'high'].map(v => `<option value="${v}" ${v === s.chron.effort ? 'selected' : ''}>${v || 'из профиля'}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Токенов на ответ <small>(думающим моделям — 4000–8000, иначе мысли съедят ответ)</small></label><input type="number" min="1000" max="32000" step="500" data-set="chron.tokens" value="${esc(s.chron.tokens)}"></div>
         <div class="lf-field"><label>Ждать ответа, сек</label><input type="number" min="30" max="600" step="10" data-set="chron.timeoutSec" value="${esc(s.chron.timeoutSec)}"></div>
