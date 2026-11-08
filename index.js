@@ -20,12 +20,12 @@ import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
-import { initArt, onArtClick, artOnReceived } from './art.js';
+import { initArt, onArtClick, artOnReceived, artTidy } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.11';
+const VERSION = '0.18.12';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3468,6 +3468,8 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
+    // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
+    setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
     // как только долистывали до конца чата (перерисованный последний пост). Огрызок чинится только у нового поста.
 }
@@ -3545,6 +3547,7 @@ jQuery(async () => {
     initTidy(simApi);
     initMend(simApi);
     initArt({ ...simApi, icon, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });
+    setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();

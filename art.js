@@ -32,17 +32,23 @@ function attrs(s) {
 
 /** Карточки поста по порядку: { full, attrs, body, img: { tag, src, ins } | null }. Разбор — как у самого движка. */
 export function artBlocks(text) {
+    const s = String(text || '');
     const out = [];
     const re = new RegExp(BLOCK.source, 'gi');
     let m;
-    while ((m = re.exec(String(text || '')))) {
-        const t = (m[2].match(IMG) || [])[0] || '';
+    while ((m = re.exec(s))) {
+        let full = m[0];
+        let t = (m[2].match(IMG) || [])[0] || '';
+        if (!t) { // модель поставила картинку сразу за карточкой — движок всё равно заберёт её в карточку
+            const nx = s.slice(m.index + m[0].length).match(/^\s*(<img\b[^>]*data-iig-instruction[^>]*>)/i);
+            if (nx) { t = nx[1]; full = m[0] + nx[0]; }
+        }
         const img = t ? {
             tag: t,
             src: (t.match(/\bsrc\s*=\s*["']([^"']*)["']/i) || [])[1] || '',
             ins: (t.match(/data-iig-instruction\s*=\s*'([^']*)'/i) || t.match(/data-iig-instruction\s*=\s*"([^"]*)"/i) || [])[1] || '',
         } : null;
-        out.push({ full: m[0], attrs: attrs(m[1]), body: m[2], img });
+        out.push({ full, attrs: attrs(m[1]), body: m[2], img });
     }
     return out;
 }
@@ -70,17 +76,26 @@ function textOf(b) {
 
 const own = (i, b, auto = false) => { try { return A.artImage?.({ i, text: textOf(b), attrs: b.attrs, auto }) || null; } catch { return null; } };
 
+/** Инструкция картинки для движка: без неё он не забирает <img> в карточку — и картинка висит в посте второй раз. */
+function insAttr(prompt) {
+    const p = String(prompt || 'photo').replace(/\s+/g, ' ').trim().slice(0, 400);
+    return JSON.stringify({ style: 'photo', prompt: p, aspect_ratio: '4:3' }).replace(/'/g, '’').replace(/</g, '‹').replace(/>/g, '›');
+}
+
+function withSrc(tag, src, prompt) {
+    let t = /\bsrc\s*=/i.test(tag)
+        ? tag.replace(/\bsrc\s*=\s*(["'])[^"']*\1/i, () => `src="${src}"`)
+        : tag.replace(/^<img\b/i, () => `<img src="${src}"`);
+    if (!/data-iig-instruction\s*=/i.test(t)) t = t.replace(/^<img\b/i, () => `<img data-iig-instruction='${insAttr(prompt)}'`);
+    return t;
+}
+
 /** Поставить картинку в карточку: src у её <img> (или новый <img>) — в тексте поста и во всех его копиях. */
-function put(m, b, src) {
-    let nb;
-    if (b.img) {
-        const tag = /\bsrc\s*=/i.test(b.img.tag)
-            ? b.img.tag.replace(/\bsrc\s*=\s*(["'])[^"']*\1/i, () => `src="${src}"`)
-            : b.img.tag.replace(/^<img\b/i, () => `<img src="${src}"`);
-        nb = b.full.replace(b.img.tag, () => tag);
-    } else {
-        nb = b.full.replace(/<\/art>\s*$/i, () => `<img src="${src}">\n</art>`);
-    }
+function put(m, b, src, prompt = '') {
+    const p = prompt || textOf(b);
+    const nb = b.img
+        ? b.full.replace(b.img.tag, () => withSrc(b.img.tag, src, p))
+        : b.full.replace(/<\/art>\s*$/i, () => `${withSrc('<img>', src, p)}\n</art>`);
     if (nb === b.full) return false;
     const swap = (t) => (typeof t === 'string' && t.includes(b.full) ? t.replace(b.full, () => nb) : t);
     const old = m.mes;
@@ -173,9 +188,10 @@ async function develop(i, k, btn) {
     try {
         const o = own(i, b);
         let src = o?.src || '';
+        let what = o?.prompt || '';
         if (!src) {
             const ins = parseIns(b.img?.ins);
-            const what = ins?.prompt || `Photo for a story scene: ${textOf(b)}`;
+            what = ins?.prompt || `Photo for a story scene: ${textOf(b)}`;
             const style = ins?.style ? `\nStyle: ${String(ins.style).replace(/_/g, ' ')}.` : '';
             src = await A.drawPicture(`${what}${style}\nNo text, no letters, no watermark.`, { aspect: ins?.aspect_ratio || '4:3', prefix: 'life_art', max: 1600 });
         }
@@ -183,7 +199,7 @@ async function develop(i, k, btn) {
         const b2 = artBlocks(m.mes)[k];
         if (!b2 || !waiting(b2)) { await refresh(i, m, true); return; } // пока рисовала — дорисовал SLAY
         const old = m.mes;
-        if (!put(m, b2, src)) return;
+        if (!put(m, b2, src, what)) return;
         try { A.rekeyMessage?.(i, old); } catch { /* */ }
         await A.ctx().saveChat();
         await refresh(i, m, true);
@@ -207,9 +223,33 @@ export function artOnReceived(i) {
     for (const b of artBlocks(m.mes)) {
         if (!b.img || isPath(b.img.src)) continue; // картинку модель не просила или она уже есть
         const o = own(i, b, true);
-        if (o?.src && put(m, b, o.src)) n++;
+        if (o?.src && put(m, b, o.src, o.prompt)) n++;
     }
     if (!n) return;
     if (rendered(i)) { try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] карточка: перерисовать пост', e); } }
     console.info(`[Life] пост #${i}: в карточку — своя картинка модуля (${n})`);
+}
+
+/**
+ * Открыли чат: картинка в карточке без инструкции (так её вставляла 0.18.11, бывает и у модели) — движок не забирает её
+ * в карточку, и она висит в посте второй раз. Дописать инструкцию и перерисовать только такие посты (из последних 30).
+ * Без сохранения — правка уедет со следующим.
+ */
+export function artTidy() {
+    if (!A || !on()) return 0;
+    const chat = A.ctx().chat || [];
+    let k = 0;
+    for (let i = Math.max(0, chat.length - 30); i < chat.length; i++) {
+        const m = chat[i];
+        if (!m || m.is_user || typeof m.mes !== 'string' || !/<art\b/i.test(m.mes)) continue;
+        const old = m.mes;
+        let n = 0;
+        for (const b of artBlocks(m.mes)) if (b.img && !b.img.ins && isPath(b.img.src) && put(m, b, b.img.src)) n++;
+        if (!n) continue;
+        k++;
+        try { A.rekeyMessage?.(i, old); } catch { /* */ }
+        if (rendered(i)) refresh(i, m, true);
+        console.info(`[Life] пост #${i}: картинке в карточке дописана инструкция — второй копии не будет`);
+    }
+    return k;
 }
