@@ -25,7 +25,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.12';
+const VERSION = '0.18.13';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -958,11 +958,24 @@ const detQueue = [];
 let detRunning = false;
 let detPick = null; // открытая под деталью панель «перерисовать»: { key, style, fix }
 
-function detailPrompt(d, sid = '', fix = '') {
+function detailPrompt(d, sid = '', fix = '', note = '') {
     const look = d.motion === 'scan'
         ? 'Look: grainy black-and-white medical ultrasound sonogram, fan-shaped scan sector on a dark monitor, soft speckle noise'
         : `Style: ${(() => { try { return styleText(sid || chatStyle()); } catch { return style(); } })()}`;
-    return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}${fix ? `\nCorrection from the player (follow it exactly): ${fix}` : ''}\n${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
+    return `Extreme close-up insert shot, like a cutaway in a film: ${d.prompt}${fix ? `\nCorrection from the player (follow it exactly): ${fix}` : ''}\n${note}${look}. Macro lens, shallow depth of field, one clear subject, cinematic still. No text, no letters, no watermark, no visible faces, no nudity.`;
+}
+
+/** Рефы к детали: лица тех, чья рука, глаз, кожа в кадре (как у кадров) — чтобы цвет глаз, кожа, волосы, шрамы, кольца были их. */
+async function detailRefs(who) {
+    const refs = [];
+    const names = [];
+    for (const n of (who || []).slice(0, 2)) {
+        try { const r = await faceRef(n); if (r) { refs.push(r); names.push(canonName(n)); } } catch { /* без рефа */ }
+    }
+    const note = refs.length
+        ? `Reference images, in order: ${names.join(', ')} — the people whose hand, eye, skin or hair is in the frame. Keep their skin tone, eye colour, hair colour and texture, scars, rings and other marks exactly as in the references; draw only the small part named above, not the whole person and not a full face — the references are only for who is who, the style is below.\n`
+        : '';
+    return { refs, note };
 }
 
 function queueDetail(key) {
@@ -983,7 +996,8 @@ async function drawDetail(key) {
     detBusy.add(key);
     paintChips();
     try {
-        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix), { aspect: '16:9', max: 1400, prefix: 'life_det' });
+        const { refs, note } = e.det.motion === 'scan' ? { refs: [], note: '' } : await detailRefs(e.det.who);
+        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det' });
         if (chatMeta() !== cm) return; // чат сменился, пока рисовала
         const e2 = chronStore()[key];
         if (e2) { e2.detImg = img; saveMeta(); }
@@ -1034,6 +1048,10 @@ function detPickHtml(i) {
         <div class="lf-shot-pick-h">${icon('palette')}<b>Перерисовать деталь</b><small>сейчас: ${esc(scan ? 'снимок УЗИ' : styleName(e.detStyle || chatStyle()).toLowerCase())}</small></div>
         ${scan ? '<div class="lf-shot-pick-note">Это снимок УЗИ — он и рисуется как УЗИ, стиль на него не влияет.</div>' : `<div class="lf-shot-pick-st">${styleChips('pk-style', cur, 'data-det')}</div>`}
         ${custom ? '<div class="lf-shot-pick-note">Свой стиль пустой — впиши его в Режиссёре (Стиль кадров → Свой), пока будет как у истории.</div>' : ''}
+        ${scan ? '' : (() => {
+            const names = [...new Set([...(detPick.who || []), ...castNames()].map(canonName).filter(Boolean))].slice(0, 6);
+            return names.length ? `<div class="lf-shot-pick-who"><small>Чья рука, глаз, кожа в кадре — их рефы:</small><div class="lf-shot-pick-st">${names.map(n => `<button class="lf-chip${(detPick.who || []).some(w => sameName(w, n)) ? ' on' : ''}" data-det="pk-who" data-v="${esc(n)}">${icon('user')} ${esc(shortName(n))}</button>`).join('')}</div></div>` : '';
+        })()}
         <input type="text" class="lf-shot-fix" placeholder="Что поправить (можно пусто): крупнее, мужская рука, на столе чашка…" value="${esc(detPick.fix || '')}">
         <div class="lf-shot-pick-b">
             <button data-det="pk-go" class="on">${icon('refresh')} Перерисовать</button>
@@ -1046,7 +1064,7 @@ function detPickHtml(i) {
 async function newDetail(i) {
     const m = chatArr()[i];
     const st = worldState();
-    const input = `Место: ${st.scene?.location || '—'}. Время: ${fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time) || '—'}.\nПост (${m?.name || ''}):\n${cut(plainText(m?.mes || ''), 6000)}`;
+    const input = `Место: ${st.scene?.location || '—'}. Время: ${fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time) || '—'}.\nПерсонажи: ${castNames(st).join(', ') || '—'}.\nПост (${m?.name || ''}):\n${cut(plainText(m?.mes || ''), 6000)}`;
     const out = await askModel([{ role: 'system', content: detailSystem() }, { role: 'user', content: input }], 700);
     const j = extractJson(out);
     const d = normalizeResult({ detail: j?.detail || j }).detail;
@@ -1071,7 +1089,7 @@ async function onDetailClick(b, el) {
     if (act === 'hide') { e.detHidden = true; saveMeta(); paintChips(); toast('info', 'Деталь убрана. Вернуть — в карточке Летописца.'); return; }
     if (act === 'draw') { queueDetail(key); return; }
     if (act === 'redo') {
-        detPick = detPick?.key === key ? null : { key, style: e.detStyle || chatStyle(), fix: e.detFix || '' };
+        detPick = detPick?.key === key ? null : { key, style: e.detStyle || chatStyle(), fix: e.detFix || '', who: [...(e.det?.who || [])] };
         paintChips();
         if (detPick) requestAnimationFrame(() => document.querySelector(`#chat .lf-detpick[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
         return;
@@ -1080,14 +1098,23 @@ async function onDetailClick(b, el) {
     detPick.fix = el.querySelector('.lf-shot-fix')?.value?.trim() || detPick.fix || '';
     if (act === 'pk-x') { detPick = null; paintChips(); return; }
     if (act === 'pk-style') { if (b.dataset.v) detPick.style = b.dataset.v; paintChips(); return; }
-    const { style: sid, fix } = detPick;
+    if (act === 'pk-who') {
+        const n = b.dataset.v;
+        const w = detPick.who || [];
+        detPick.who = w.some(x => sameName(x, n)) ? w.filter(x => !sameName(x, n)) : [...w, n].slice(-2);
+        paintChips();
+        return;
+    }
+    const { style: sid, fix, who } = detPick;
     detPick = null;
     e.detStyle = sid;
     e.detFix = fix;
+    if (e.det) e.det.who = who || [];
     if (act === 'pk-new') {
         paintChips();
         toast('info', 'Летописец ищет в посте другую деталь…', '✦ Деталь', { timeOut: 4000 });
         try { e.det = await newDetail(Number(key.split(':')[0])); } catch (err) { toast('warning', esc(String(err?.message || err)), '✦ Деталь', { timeOut: 5000 }); return; }
+        if (!e.det.who?.length && who?.length) e.det.who = who; // выбрала людей сама — пусть остаются
     }
     saveMeta();
     queueDetail(key); // старая картинка остаётся под шиммером, пока рисуется новая
