@@ -319,7 +319,7 @@ export function nowSlot(who, now = rpNow()) {
 
 async function genSched(who) {
     const c = A.ctx();
-    const card = (c.characters || []).find(x => x.name === A.canonName(who));
+    const card = A.cardOf(who);
     const desc = [card?.description, card?.personality, card?.scenario].filter(Boolean).join('\n').replace(/\{\{user\}\}/gi, userName()).replace(/\{\{char\}\}/gi, who).slice(0, 4500);
     const out = await A.askModel([{ role: 'system', content: SCHED_SYSTEM }, {
         role: 'user', content: `Персонаж: ${who}\nИгрок пишет за: ${userName()}\n${desc ? `Карточка персонажа:\n${desc}\n` : ''}${prefsLine([who]) ? `Известно: ${prefsLine([who])}\n` : ''}${innerBrief(who) ? `Он сам: ${innerBrief(who)}` : ''}`,

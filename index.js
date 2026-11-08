@@ -22,7 +22,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.18.1';
+const VERSION = '0.18.2';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -416,6 +416,41 @@ function groupMembers() {
     return [];
 }
 
+/** Карточки этого чата: участники группы (по файлу аватарки) или открытая карточка. */
+function chatCards() {
+    const c = ctx();
+    if (c.groupId) {
+        const g = (c.groups || []).find(x => x.id === c.groupId);
+        return (g?.members || []).map(av => (c.characters || []).find(x => x.avatar === av)).filter(Boolean);
+    }
+    const ch = c.characters?.[c.characterId];
+    return ch ? [ch] : [];
+}
+
+let cxMemo = { at: 0, cx: null };
+function timelineCx() {
+    if (Date.now() - cxMemo.at > 500) cxMemo = { at: Date.now(), cx: globalThis.SacredTimeline?.context?.() || null };
+    return cxMemo.cx;
+}
+
+/**
+ * Карточка человека по имени. У одного человека бывает несколько карточек с одним и тем же именем — эпохи
+ * «Священного таймлайна», по карточке на год, — и первая по списку может оказаться из чужого года. Поэтому: та,
+ * которой он представлен в этом чате (ядро: people[имя].card — с датой, если в группе их несколько), иначе та, что
+ * в этом чате, иначе базовая «Имя.png», иначе первая.
+ */
+function cardOf(name) {
+    const c = ctx();
+    const n = canonName(name);
+    const all = (c.characters || []).filter(x => x.name === n);
+    if (all.length < 2) return all[0] || null;
+    const cx = timelineCx();
+    const want = cx?.chatId && cx.chatId === c.getCurrentChatId?.() ? cx.people?.[n]?.card : null;
+    const here = chatCards().filter(x => x.name === n);
+    return here.find(x => x.avatar === want) || here[0] || all.find(x => x.avatar === want)
+        || all.find(x => x.avatar === `${n}.png`) || all[0];
+}
+
 /** Кто из своих (ты + группа) упомянут в тексте — по именам и алиасам; «Наташи» ловится по «Наташа». */
 function namesInText(text) {
     const t = ` ${norm(text)} `;
@@ -475,7 +510,7 @@ function avatarUrl(name, full = false) {
     }
     const face = c.extensionSettings?.wardrobe?.faces?.[n];
     if (face && !full) return face;
-    const ch = (c.characters || []).find(x => x.name === n);
+    const ch = cardOf(n);
     if (!ch?.avatar) return face || npcImg(n) || '';
     return full ? `/characters/${encodeURIComponent(ch.avatar)}` : `/thumbnail?type=avatar&file=${encodeURIComponent(ch.avatar)}`;
 }
@@ -3383,7 +3418,7 @@ const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: 
 
 const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
-    castNames, groupMembers, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
+    castNames, groupMembers, chatCards, cardOf, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
     hasChat, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },

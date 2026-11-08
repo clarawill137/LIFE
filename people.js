@@ -173,7 +173,7 @@ function activeBooks() {
     const out = new Set();
     const cw = c.chatMetadata?.world_info;
     if (cw) out.add(cw);
-    for (const ch of c.characters || []) { const w = ch?.data?.extensions?.world; if (w && A.castNames().some(n => A.sameName(n, ch.name))) out.add(w); }
+    for (const n of A.castNames()) { const w = A.cardOf(n)?.data?.extensions?.world; if (w) out.add(w); }   // по карточке на человека — из этого чата
     return out;
 }
 

@@ -358,8 +358,7 @@ export async function loreAbout(who, re) {
     const c = A.ctx();
     const books = new Set();
     if (c.chatMetadata?.world_info) books.add(c.chatMetadata.world_info);
-    for (const ch of c.characters || []) {
-        if (!A.groupMembers().some(n => A.sameName(n, ch.name))) continue;
+    for (const ch of A.chatCards()) {   // карточки этого чата — не однофамильцы из других эпох
         if (ch?.data?.extensions?.world) books.add(ch.data.extensions.world);
         const extra = (W.world_info?.charLore || []).find(e => e.name === ch.avatar)?.extraBooks || [];
         extra.forEach(b => books.add(b));
@@ -404,7 +403,7 @@ async function innerSpice(who) {
 
 function cardText(who) {
     const c = A.ctx();
-    const card = (c.characters || []).find(x => x.name === A.canonName(who)) || (c.characters || []).find(x => A.sameName(x.name, who));
+    const card = A.cardOf(who) || (c.characters || []).find(x => A.sameName(x.name, who));
     return [card?.description, card?.personality, card?.scenario].filter(Boolean).join('\n').replace(/\{\{user\}\}/gi, userName()).replace(/\{\{char\}\}/gi, who).slice(0, 6000);
 }
 
