@@ -174,8 +174,9 @@ function systemPrompt(withEvents) {
 - knows — что он знает и чего НЕ знает о последних событиях: знает только то, при чём был или что ему рассказали.
 - Тон живой и приземлённый: бытовуха, работа, отношения, мелкие и средние конфликты, иногда сюжетные крючки. По-русски, коротко: 1–2 предложения на поле.
 Ответ — только JSON без пояснений:
-{"chars":{"<Имя главного>":{"now":"","want":"","hide":"","next":"что сделает сам в ближайшее время, без ${U}","knows":"","mood":""},"<Имя второстепенного>":{"now":"","want":""}},"events":[{"who":"","what":"что произошло за кадром","how":"звонок | СМС | новость | визит | последствие","when":"скоро | позже"}]}
-${withEvents ? 'В events дай 1–2 правдоподобных события за кадром с участием персонажей из состава.' : 'В этот раз events — [].'}`;
+{"chars":{"<Имя главного>":{"now":"","want":"","hide":"","next":"что сделает сам в ближайшее время, без ${U}","knows":"","mood":""},"<Имя второстепенного>":{"now":"","want":""}},"events":[{"who":"","what":"что произошло за кадром","how":"звонок | СМС | новость | визит | последствие","when":"скоро | позже","to_user":false}]}
+${withEvents ? `В events дай 1–2 правдоподобных события за кадром с участием персонажей из состава.` : 'В этот раз events — [].'}
+to_user: true — если это ГЛАВНЫЙ персонаж, которого сейчас нет рядом с ${U}, сам выходит на связь с ней: звонит ей, пишет ей, едет к ней (how — звонок | СМС | визит, what — зачем, одной фразой). ${U} увидит это как «стук» и решит сама, пустить ли его в сцену. Не чаще одного такого на обновление, и только если у него правда есть повод по его повестке.`;
 }
 
 function rosterText() {
@@ -228,7 +229,7 @@ export async function agendaUpdate({ manual = false } = {}) {
             for (const e of a.events) if (e.status === 'new') e.status = 'old';
             for (const e of ev.slice(0, 3)) {
                 const what = str(e?.what || e?.['что'] || (typeof e === 'string' ? e : ''));
-                if (what) a.events.push({ id: A.uid(), who: str(e?.who || e?.['кто']), what: what.slice(0, 300), how: str(e?.how || e?.['как_всплывёт']).slice(0, 80), when: str(e?.when || e?.['когда']) || 'скоро', mes: i, status: 'new' });
+                if (what) a.events.push({ id: A.uid(), who: str(e?.who || e?.['кто']), what: what.slice(0, 300), how: str(e?.how || e?.['как_всплывёт']).slice(0, 80), when: str(e?.when || e?.['когда']) || 'скоро', toUser: e?.to_user === true || e?.toUser === true, mes: i, status: 'new' });
             }
         } else if (!withEvents) {
             const live = a.events.filter(e => e.status === 'new');
@@ -261,6 +262,20 @@ export function agendaTick(i) {
     go();
 }
 
+// ───────────── стук в сцену ─────────────
+
+/** Событие, где главный герой сам выходит на связь с игроком (звонок/СМС/визит к ней) — это «стук», а не вплетание. */
+function isKnockEv(e) {
+    if (!e || !e.who || !mainChars().some(n => A.sameName(n, e.who))) return false;
+    if (e.toUser === true) return true;
+    if (e.toUser === false) return false;
+    const u = A.norm(userName()).split(' ')[0];
+    return /звон|смс|сообщ|визит|приед|приход/i.test(e.how || '') && !!u && A.norm(e.what).includes(u.slice(0, Math.max(3, u.length - 1)));
+}
+function knocksOn() { try { return !!A.ctx().groupId && A.settings().cast?.on !== false; } catch { return false; } }
+export function agendaKnocks() { return M().events.filter(e => e.status === 'new' && isKnockEv(e)); }
+export function agendaEventStatus(id, status) { const e = M().events.find(x => x.id === id); if (e) { e.status = status; A.saveMeta(); } }
+
 // ───────────── заметка модели ─────────────
 
 export function agendaPrompt(type) {
@@ -286,7 +301,8 @@ export function agendaPrompt(type) {
     if (!intim) {
         const others = rosterNames().filter(n => !A.sameName(n, who || '') && !inScene(n)).map(n => { const g = agendaOf(n); return g?.now ? `${short(n)} — ${A.cut(g.now, 140)}` : ''; }).filter(Boolean).slice(0, 6);
         if (others.length) parts.push(`Где сейчас остальные (за кадром): ${others.join('; ')}.`);
-        const ev = a.events.filter(e => e.status === 'new' && (e.push || /скоро/i.test(e.when || 'скоро'))).slice(-2);
+        // в группе «стук» решает игрок (плашка над вводом) — такие события говорящий не вплетает
+        const ev = a.events.filter(e => e.status === 'new' && (e.push || /скоро/i.test(e.when || 'скоро')) && !(knocksOn() && isKnockEv(e))).slice(-2);
         if (ev.length) parts.push(`События за кадром — вплети в ближайшие ответы через деталь (звонок, СМС, новость, визит, последствие), естественно и без объявлений: ${ev.map(e => `${e.who ? `${e.who}: ` : ''}${e.what}${e.how ? ` (всплывёт: ${e.how})` : ''}`).join('; ')}.`);
     }
     return parts.length ? `[Закулисье — для автора, не для текста. ${parts.join(' ')}]` : '';
@@ -340,7 +356,7 @@ export function agendaSceneHtml() {
     if (!ev.length) return '';
     return `<section class="lf-offcard"><div class="lf-offcard-h">${icon('route')} За кадром</div>
         ${ev.map(e => `<div class="lf-off"><span class="lf-ag-ev-ic">${icon(/звон|смс|сообщ/i.test(e.how) ? 'phone' : /новост/i.test(e.how) ? 'news' : /визит/i.test(e.how) ? 'door' : 'sparkles')}</span><span>${e.who ? `<b>${esc(short(e.who))}</b> ` : ''}${esc(e.what)}<small>${esc([e.how, e.push ? 'в следующем ответе' : e.when].filter(Boolean).join(' · '))}</small></span>
-            ${e.push ? '' : `<button class="lf-iconbtn sm" data-act="ag-ev-push" data-id="${esc(e.id)}" title="Пусть всплывёт сейчас">${icon('zap')}</button>`}<button class="lf-iconbtn sm" data-act="ag-ev-del" data-id="${esc(e.id)}" title="Не надо">${icon('x')}</button></div>`).join('')}
+            ${knocksOn() && isKnockEv(e) ? `<button class="lf-iconbtn sm" data-act="kn-in" data-id="${esc(e.id)}" title="Пустить — ход переходит к нему">${icon('door')}</button>` : e.push ? '' : `<button class="lf-iconbtn sm" data-act="ag-ev-push" data-id="${esc(e.id)}" title="Пусть всплывёт сейчас">${icon('zap')}</button>`}<button class="lf-iconbtn sm" data-act="ag-ev-del" data-id="${esc(e.id)}" title="Не надо">${icon('x')}</button></div>`).join('')}
     </section>`;
 }
 

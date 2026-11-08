@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
 import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
+import { knockSceneHtml } from './knock.js';
 import { loreAbout } from './inner.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
@@ -937,6 +938,7 @@ export function simSceneHtml() {
     if (pets.length) html += `<div class="lf-chips wrap">${pets.map(p => { const s = petState(p, now); const w = s.urgent.length ? s.needs.find(n => n.v < 30)?.word : s.sleepy ? pg(p, 'Сонный', 'Сонная') : s.needs[0].word; return `<button class="lf-chip${s.urgent.length ? ' warn' : ''}" data-act="sim-pet" data-id="${esc(p.id)}">${icon('paw')} ${esc(p.name)} · ${esc(w)}</button>`; }).join('')}</div>`;
     if (c.on && a) html += `<button class="lf-teaser" data-act="who" data-name="${esc(a.who)}">${A.ava(a.who, 'xs')}<span>${esc(short(a.who))} ${c.tease ? 'что-то затевает…' : `затевает: ${esc(a.text)}`}</span>${icon('sparkles')}</button>`;
     try { html += agendaSceneHtml(); } catch (e) { console.warn('[Life] закулисье: сцена', e); }
+    try { html += knockSceneHtml(); } catch (e) { console.warn('[Life] стук: сцена', e); }
     try {
         const inn = innerSceneChips();
         if (inn.length) html += `<div class="lf-chips wrap">${inn.map(x => `<button class="lf-chip" data-act="who" data-name="${esc(x.who)}">${icon(x.ic)} ${esc(short(x.who))} · ${esc(x.text)}</button>`).join('')}</div>`;

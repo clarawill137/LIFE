@@ -3,13 +3,16 @@
 // монологов и цепочек действий; кого нет в сцене (по Horae) — не появляются, не говорят и не получают
 // «тем временем за триста миль отсюда». Рассказчик/мастер — пишет всех, как раньше.
 // Текст уходит в конец промпта вместе с режимами (там модель его держит).
+// Кого нет рядом, но кто хочет войти, — «стучится» (knock.js): ты пускаешь, и в его ход модель знает, как он входит.
+
+import { knockPromptFor } from './knock.js';
 
 let A = null;
 export function initCast(api) { A = api; }
 
 const NARRATOR = /рассказчик|narrator|мастер|game ?master|(^|[^a-z])gm([^a-z]|$)|мнемозина/i;
 
-export function castPrompt(type) {
+export function castPrompt(type, consume = false) {
     if (!A?.hasChat?.() || type === 'quiet' || type === 'impersonate') return '';
     if (A.settings().cast?.on === false) return '';
     const c = SillyTavern.getContext();
@@ -33,7 +36,10 @@ export function castPrompt(type) {
     else if (here.length) L.push(`- ${here.join(', ')} ${here.length > 1 ? 'are' : 'is'} in the scene but ${here.length > 1 ? 'speak and act' : 'speaks and acts'} in their own turns: ${only}`);
     else L.push(`- Other main characters speak and act in their own turns: if one is around, ${only}`);
     if (away.length) L.push(`- Not in this scene: ${away.join(', ')}. They don't appear, walk in, speak or act in this reply, and there are no cutaways to what they are doing elsewhere («тем временем…», «за триста миль отсюда…»). At most ${S} thinks of them or mentions them.`);
-    if (speakerAway) L.push(`- ${S} is not with ${U} right now: write ${S} where ${S} actually is (or reaching ${U} by phone) — no teleporting into the scene.`);
+    let enter = '';
+    try { enter = knockPromptFor(S, U, consume); } catch { /* */ }
+    if (enter) L.push(enter);
+    else if (speakerAway) L.push(`- ${S} is not with ${U} right now: write ${S} where ${S} actually is (or reaching ${U} by phone) — no teleporting into the scene.`);
     L.push(`- Never write ${U}'s words, actions or thoughts.]`);
     return L.join('\n');
 }

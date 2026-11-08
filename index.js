@@ -17,11 +17,12 @@ import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initCast, castPrompt } from './cast.js';
+import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.17.4';
+const VERSION = '0.18.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -688,7 +689,8 @@ function updateMovePrompt(type, consume = false) {
     // режимы — отдельным ключом, который сортируется последним: самый конец промпта
     let modes = '';
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
-    try { const cp = settings().enabled && hasChat() ? castPrompt(type) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
+    try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
+    try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
     return [text, modes].filter(Boolean).join('\n');
 }
@@ -2643,6 +2645,7 @@ async function onClick(ev) {
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
     if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
     if (act.startsWith('press-')) { await pressClick(act, el); return; }
+    if (act.startsWith('kn-')) { try { knockClick(act, el); } catch (e) { console.warn('[Life] стук', e); } return; }
     if (act.startsWith('ag-')) {
         try { await agendaClick(act, el); } catch (e) { console.warn('[Life] Закулисье', e); toast('warning', esc(String(e?.message || e)), '✦ Закулисье'); }
         return;
@@ -3408,6 +3411,7 @@ jQuery(async () => {
     initMood(moodApi);
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     initCast(simApi);
+    initKnock(simApi);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
     renderSettingsDrawer();
