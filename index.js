@@ -38,6 +38,10 @@ import { initRitual, ritualPrompt, ritualChron, ritualAfterPost, ritualHtml, rit
 import { initSteps, stepsPrompt, stepsChron, stepsAfterPost, stepsHtml, stepsClick } from './steps.js';
 import { initSee, seeWarm, seeReady, seePrompt, paintSee, seeClick } from './see.js';
 import { initSeason, seasonPrompt, applySeason, seasonHtml, seasonClick } from './season.js';
+import { initTriggers, trigPrompt, trigChron, trigAfterPost, trigHtml, trigClick } from './triggers.js';
+import { initShards, shardsPrompt, shardsChron, shardsAfterPost, shardsHtml, shardsClick } from './shards.js';
+import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
+import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
@@ -52,7 +56,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.32.0';
+const VERSION = '0.34.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2023,7 +2027,7 @@ function renderPerson() {
     if (ui.pTab === 'money' && !me) ui.pTab = 'life';
     const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(me ? [['money', 'Деньги']] : [])];
     const tabs = seg(tabList, ui.pTab, 'p-tab').replace('lf-seg', `lf-seg${tabList.length > 5 ? ' many' : ''}`);
-    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}${(() => { try { return voiceHtml(who); } catch (e) { console.warn('[Life] голос', e); return ''; } })()}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
+    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -2075,7 +2079,7 @@ function renderWardrobe(who, st) {
 }
 
 // что точно не носят с собой: недвижимость, брони, мебель, домашняя техника, запасы и упаковки
-const STAY_RE = /квартир|апартамент|\bдом\b|домик|вилл|особняк|коттедж|бронь|брониров|участ|недвиж|кофевар|зеркал|мебел|диван|кроват|шкаф|холодил|плит[аы]\b|продукт|запас|аптечк|коробк|переноск|скотч|сейф|пианино|телевиз|ков[её]р|картин|постер|тест на берем|лубрикант|смазк|упаков|пачк|\(\d+\s*(шт|pack)/i;
+const STAY_RE = /квартир|апартамент|(?<![а-яёa-z0-9])дом(?![а-яёa-z0-9])|домик|вилл|особняк|коттедж|бронь|брониров|участ|недвиж|кофевар|зеркал|мебел|диван|кроват|шкаф|холодил|плит[аы](?![а-яёa-z0-9])|продукт|запас|аптечк|коробк|переноск|скотч|сейф|пианино|телевиз|ков[её]р|картин|постер|тест на берем|лубрикант|смазк|упаков|пачк|\(\d+\s*(шт|pack)/i;
 // где «при себе»: карман, сумка, руки, шея, палец
 const CARRY_RE = /карман|при себе|на себе|в руке|в руках|на шее|на пальц|на руке|запясть|сумк|рюкзак|кошел|бумажник|кобур|за пояс|на поясе|в куртк|в пальто/i;
 const ownerOf = (it) => it?.owner || it?.holder || '';
@@ -3730,7 +3734,16 @@ const simApi = {
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
+    mindHtml: (who) => mindHtml(who),
 };
+
+/** Персонаж → Жизнь → Психика: триггеры, память, привычки, Камни, голос. */
+function mindHtml(who) {
+    const parts = [];
+    for (const f of mindParts) { try { const h = f(who); if (h) parts.push(h); } catch (e) { console.warn('[Life] психика', e); } }
+    return parts.join('') || '<div class="lf-empty small">Пока пусто.</div>';
+}
+const mindParts = [];
 
 globalThis.LifeBridge = {
     version: VERSION,
@@ -3799,6 +3812,13 @@ jQuery(async () => {
     initSteps(extApi);
     initSee(extApi);
     initSeason({ ...extApi, moodNow });
+    initTriggers(extApi);
+    initShards(extApi);
+    hubMods.push({ pre: 'trg-', click: trigClick, label: 'Триггеры' }, { pre: 'shd-', click: shardsClick, label: 'Память' });
+    initHabits(extApi);
+    initCrowd(extApi);
+    hubMods.push({ pre: 'hab-', click: habitsClick, label: 'Привычки' }, { pre: 'crw-', click: crowdClick, label: 'Массовка' });
+    mindParts.push((who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who));
     hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
     painters.push((el, id) => paintSee(el, id));
     chatClicks.push((act, el) => seeClick(act, el));
@@ -3838,6 +3858,27 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-habits',
+            prompt: (type) => habitsPrompt(type),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-crowd',
+            prompt: (type) => crowdPrompt(type),
+            sceneHtml: () => crowdSceneHtml(),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-trig',
+            prompt: (type) => trigPrompt(type),
+            chron: () => trigChron(),
+            afterPost: (i, j, m) => trigAfterPost(i, j, m),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-shards',
+            prompt: (type) => shardsPrompt(type),
+            chron: () => shardsChron(),
+            afterPost: (i, j) => shardsAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-season',

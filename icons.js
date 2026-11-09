@@ -158,7 +158,7 @@ const PLACE_ICONS = [
     ['flask', /лаборатор|лаба|lab/],
     ['utensils', /кухн|kitchen/],
     ['bed', /спальн|bedroom|номер|отел|гостиниц|hotel/],
-    ['sofa', /гостин|зал\b|living/],
+    ['sofa', /гостин|зал(?![а-яёa-z0-9])|living/],
     ['bath', /ванн|душ|bath/],
     ['briefcase', /кабинет|офис|office/],
     ['car', /машин|авто|дорог|шоссе|купе|car|road/],

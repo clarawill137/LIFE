@@ -15,7 +15,8 @@ export const wxLevel = () => cfg().level;
 export function setWxLevel(v) { cfg().level = ['live', 'calm', 'off'].includes(v) ? v : 'live'; A.saveSettings(); updateWeather(true); }
 export function cycleWx() { setWxLevel({ live: 'calm', calm: 'off', off: 'live' }[cfg().level]); return cfg().level; }
 
-const INDOOR = /квартир|дом\b|дома\b|комнат|кухн|спальн|гостин|ванн|душев|офис|кабинет|лаборат|\bбаз[аеуы]\b|штаб|бар\b|кафе|ресторан|отел|номер|машин|салон|самол[её]т|джет|госпитал|больниц|палат|подвал|бункер|склад|ангар|лифт|коридор|магазин|церк|зал\b|клуб|квинджет|кабин/i;
+const OUTSIDE = /лес|парк|сад(?![а-яёa-z0-9])|поле|луг|пляж|берег|улиц|двор|крыш|балкон|мост|набережн|площад|трасс|дорог|озер|река|кладбищ|стоянк|парковк|причал|пирс/i;
+const INDOOR = /квартир|дом(?![а-яёa-z0-9])|дома(?![а-яёa-z0-9])|комнат|кухн|спальн|гостин|ванн|душев|офис|кабинет|лаборат|(?<![а-яёa-z0-9])баз[аеуы](?![а-яёa-z0-9])|штаб|бар(?![а-яёa-z0-9])|кафе|ресторан|отел|номер|машин|салон|самол[её]т|джет|госпитал|больниц|палат|подвал|бункер|склад|ангар|лифт|коридор|магазин|церк|зал(?![а-яёa-z0-9])|клуб|квинджет|кабин/i;
 
 /** Погода из текста Horae: snow | blizzard | rain | storm | fog | '' */
 export function wxKind(atm) {
@@ -78,7 +79,9 @@ export function updateWeather(force = false) {
     const st = A.worldState();
     const kind = wxKind(st.scene?.atmosphere);
     const tint = tintOf(st.timestamp?.story_time);
-    const inside = INDOOR.test(String(st.scene?.location || ''));
+    const loc = String(st.scene?.location || '');
+    const leaf = loc.split(/\s*[·・›>]\s*/).filter(Boolean).slice(-1)[0] || loc;
+    const inside = OUTSIDE.test(leaf) ? false : INDOOR.test(loc);
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     const sig = `${kind}|${tint}|${inside}|${cfg().level}|${reduce}`;
     if (!force && sig === last && host()) return;

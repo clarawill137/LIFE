@@ -552,7 +552,7 @@ function undoComp(id) {
 
 // ───────────── старые травмы из лорбуков ─────────────
 
-const OLD_RE = /травм|ранен|ранил|\bран[аыуе]\b|шрам|перелом|сломал|плеч|хронич|боль|болит|приступ|ожог|трещин|камн|некроз|регенер|контуз|сустав|колен|позвон|спин|scar|injur|wound|fractur|pain|shoulder|chronic|burn/i;
+const OLD_RE = /травм|ранен|ранил|(?<![а-яёa-z0-9])ран[аыуе](?![а-яёa-z0-9])|шрам|перелом|сломал|плеч|хронич|боль|болит|приступ|ожог|трещин|камн|некроз|регенер|контуз|сустав|колен|позвон|спин|scar|injur|wound|fractur|pain|shoulder|chronic|burn/i;
 
 async function wiMod() { try { return await import('/scripts/world-info.js'); } catch { return null; } }
 
@@ -632,14 +632,14 @@ function zoneOf(w) {
     const t = `${w.part || ''} ${w.t || ''}`.toLowerCase();
     // левое у персонажа — справа на картинке (смотрим ему в лицо)
     const side = /лев/.test(t) ? 'L' : /прав/.test(t) ? 'R' : 'L';
-    if (/голов|висок|затыл|лоб|череп|лиц|глаз|скул|челюст|нос|губ|бров|\bух[оа]/.test(t)) return 'head';
-    if (/ше[яюие]\b|шею|горл/.test(t)) return 'neck';
+    if (/голов|висок|затыл|лоб|череп|лиц|глаз|скул|челюст|нос|губ|бров|(?<![а-яёa-z0-9])ух[оа]/.test(t)) return 'head';
+    if (/ше[яюие](?![а-яёa-z0-9])|шею|горл/.test(t)) return 'neck';
     if (/плеч|ключиц/.test(t)) return `shoulder${side}`;
     if (/рёбр|ребр/.test(t)) return `ribs${side}`;
     if (/спин|лопат|поясниц|позвон/.test(t)) return 'back';
     if (/груд/.test(t)) return 'chest';
     if (/живот|брюш|печен|селез|желуд/.test(t)) return 'abdomen';
-    if (/\bбок|бочин/.test(t)) return `side${side}`;
+    if (/(?<![а-яёa-z0-9])бок|бочин/.test(t)) return `side${side}`;
     if (/кист|ладон|пал[еь]ц|запяст|кулак|костяш/.test(t)) return `hand${side}`;
     if (/рук|предплеч|локот|локт/.test(t)) return `arm${side}`;
     if (/таз|пах/.test(t)) return 'hip';

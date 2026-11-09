@@ -162,7 +162,7 @@ function doneIdea(x, i) {
 function homeLoc() {
     const c = simCfg();
     if (c.home) return c.home;
-    const pl = Object.values(A.settings().places || {}).find(p => !String(p.name).includes('·') && (p.icon === 'home' || /квартир|дом\b|апартамент|пентхаус/i.test(p.name)));
+    const pl = Object.values(A.settings().places || {}).find(p => !String(p.name).includes('·') && (p.icon === 'home' || /квартир|дом(?![а-яёa-z0-9])|апартамент|пентхаус/i.test(p.name)));
     return pl ? (pl.raw || pl.name) : '';
 }
 
@@ -415,7 +415,7 @@ function newPet({ name = 'Без имени', kind = 'cat', look = '' } = {}) {
     M().pets.push(p);
     return p;
 }
-const HOME_RE = /квартир|дом\b|домой|апартамент|пентхаус|кухн|спальн|гостин|комнат/i;
+const HOME_RE = /квартир|дом(?![а-яёa-z0-9])|домой|апартамент|пентхаус|кухн|спальн|гостин|комнат/i;
 function petHere(p) {
     const loc = A.worldState().scene?.location || '';
     if (p.home) return !!loc && topKey(p.home) === topKey(loc);
@@ -649,6 +649,7 @@ export function renderLife(who) {
         return `<div class="lf-pagehead"><h1>Жизнь</h1><span class="lf-subtitle">Что о тебе знают и что творится вокруг</span></div>
         ${unseen.length ? `${A.sec('Пока тебя не было')}${offHtml(unseen)}` : ''}
         ${(() => { try { return hurtSection(who); } catch (e) { console.warn('[Life] раны', e); return ''; } })()}
+        ${(() => { try { return A.mindHtml?.(who) || ''; } catch (e) { console.warn('[Life] психика', e); return ''; } })()}
         ${A.sec('Что о тебе знают', 'вкусы для подарков и заботы')}${prefsHtml(who)}
         ${A.sec('Подарки')}${giftsHtml(who)}
         ${A.sec('Дом', 'сюда идут записки и питомцы')}
@@ -664,7 +665,7 @@ export function renderLife(who) {
     const done = m.ideas.filter(x => A.sameName(x.who, who) && x.status === 'done').slice(-8).reverse();
     const wc = whoCfg(who);
     const ui = A.ui;
-    if (!['inner', 'acts', 'char', 'day'].includes(ui.lifeTab)) ui.lifeTab = 'inner';
+    if (!['inner', 'acts', 'char', 'day', 'mind'].includes(ui.lifeTab)) ui.lifeTab = 'inner';
     const t = ui.lifeTab;
     let body = '';
     if (t === 'inner') body = renderInner(who);
@@ -678,11 +679,12 @@ export function renderLife(who) {
     ${A.sec('Подарки')}${giftsHtml(who)}`;
     else if (t === 'char') body = `${renderCharacter(who)}
     ${A.sec(`Любит ${esc(short(who))}`, 'для твоих подарков')}${prefsHtml(who)}`;
+    else if (t === 'mind') body = (() => { try { return A.mindHtml?.(who) || ''; } catch (e) { console.warn('[Life] психика', e); return ''; } })();
     else body = `${A.sec('Распорядок дня', 'живёт по нему, пока его нет рядом')}${schedHtml(who)}`;
     return `<section class="lf-life-now">${A.ava(who, 'md')}<div><span class="lf-kicker">Сейчас</span>
         <b>${here ? `Рядом с ${esc(short(userName()))}` : slot ? esc(A.cap(slot.what)) : 'Живёт своей жизнью'}</b>
         <small>${slot ? `${esc(slot.from)}–${esc(slot.to)}${slot.where ? ` · ${esc(slot.where)}` : ''}` : here ? 'в этой сцене' : 'распорядок не задан'}</small></div></section>
-    ${A.seg([['inner', 'Внутри'], ['acts', 'Поступки'], ['char', 'Характер'], ['day', 'День']], t, 'sim-ltab')}
+    ${A.seg([['inner', 'Внутри'], ['acts', 'Поступки'], ['char', 'Характер'], ['mind', 'Психика'], ['day', 'День']], t, 'sim-ltab').replace('lf-seg', 'lf-seg many')}
     ${body}`;
 }
 
