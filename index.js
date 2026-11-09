@@ -28,6 +28,8 @@ import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './v
 import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput } from './slip.js';
 import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick } from './cal.js';
 import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
+import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageClick } from './stage.js';
+import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -40,7 +42,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.25.0';
+const VERSION = '0.26.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1808,6 +1810,7 @@ function renderScene() {
         const mood = moodOf(n, st);
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
+    ${isCur ? (() => { try { return stageHtml(); } catch (e) { console.warn('[Life] мизансцена', e); return ''; } })() : ''}
     ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
     ${isCur ? bridgeEach(m => m.sceneHtml?.(), 'сцена').join('') : ''}
     ${isCur ? `${sec('Настроение сцены', 'до конца главы')}${moodHtml('life')}` : ''}
@@ -1907,12 +1910,14 @@ function renderMap() {
     const curLoc = st.scene?.location || '';
     const curKey = placeKey(curLoc);
     const pins = pinsFor(level, region);
-    const present = (st.scene?.characters_present || []).map(canonName);
+    let wl = [];
+    try { wl = whereAll(); } catch (e) { console.warn('[Life] кто где', e); }
     const pinHtml = pins.map(([key, p]) => {
         const here = curKey === key || curKey.startsWith(key + '·');
         const sel = ui.sel === key;
+        const who = whoAtPin(key, wl).map(x => x.who);
         return `<button class="lf-pin${here ? ' here' : ''}${sel ? ' sel' : ''}${ui.editPins ? ' edit' : ''}" data-act="pin" data-key="${esc(key)}" style="left:${p.x}%;top:${p.y}%">
-            <span class="lf-pin-label">${icon(iconName(p.icon))}${esc(locLeaf(p.name))}${here && present.length ? `<span class="lf-pin-who">${present.slice(0, 3).map(n => ava(n, 'xs')).join('')}</span>` : ''}</span>
+            <span class="lf-pin-label">${icon(iconName(p.icon))}${esc(locLeaf(p.name))}${who.length ? `<span class="lf-pin-who">${who.slice(0, 4).map(n => ava(n, 'xs')).join('')}</span>` : ''}</span>
             <span class="lf-pin-stem"></span><span class="lf-pin-dot"></span>
         </button>`;
     }).join('');
@@ -1959,6 +1964,7 @@ function renderMap() {
 
     return `${head}${regs}${mapBox}
     ${selLoc ? placeCardHtml(selLoc, { inline: true }) : ''}
+    ${!level && wl.length ? (() => { try { return whoisHtml(wl); } catch { return ''; } })() : ''}
     ${img ? `<div class="lf-actions">
         <button class="lf-btn${ui.editPins ? ' primary' : ''}" data-act="edit-pins">${icon(ui.editPins ? 'check' : 'pencil')} ${ui.editPins ? 'Готово' : 'Метки'}</button>
         <button class="lf-btn icon" data-act="map-menu" data-key="${esc(level?.key || '')}" title="Карта">${icon('more')}</button>
@@ -2992,7 +2998,13 @@ async function onClick(ev) {
         case 'frame-del': { const cm = chatMeta(); delete (cm.frames || {})[el.dataset.start]; saveMeta(); closeSheet(); render(); decorate(); break; }
         case 'draw-frame': await withBusy(el, async () => { await drawFrame(Number(el.dataset.start)); closeSheet(); render(); decorate(); toast('success', 'Кадр готов'); }); break;
         case 'new-chapter': newChapterSheet(); break;
-        case 'time-skip': newChapterSheet({ title: 'Утро', note: 'Прошла ночь, наступило утро.' }); break;
+        case 'time-skip': {
+            // «Перейти к утру» — перемотка до утра (с телом, сроком и календарём), без даты истории — простой скачок
+            let ok = false;
+            try { ok = await skipClick('sk-go', { dataset: { k: 'morning' }, closest: () => null }); } catch (e) { console.warn('[Life] перемотка', e); }
+            if (!ok || !document.querySelector('#lf-app .lf-sheet')) newChapterSheet({ title: 'Утро', note: 'Прошла ночь, наступило утро.' });
+            break;
+        }
         case 'skip': newChapterSheet({ note: el.dataset.text }); break;
         case 'fill-note': { const inp = box?.querySelector('[data-in="note"]'); if (inp) inp.value = el.dataset.text; break; }
         case 'chapter-go': {
@@ -3749,6 +3761,9 @@ jQuery(async () => {
     initSkip({ ...extApi, insertMarker, daysBrief, afterSkip: () => { ui.focus = 'last'; closeHub(); decorate(); scrollChatBottom(); } });
     hubMods.push({ pre: 'cal-', click: calClick, label: 'Календарь' }, { pre: 'sk-', click: skipClick, label: 'Перемотка' });
     hubInputs.push(skipInput);
+    initStage(extApi);
+    initWhois({ ...extApi, peopleList });
+    hubMods.push({ pre: 'st-', click: stageClick, label: 'Мизансцена' });
     try {
         globalThis.LifeBridge.register({
             id: 'life-arc',
@@ -3777,6 +3792,12 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-stage',
+            prompt: (type) => stagePrompt(type),
+            chron: (i) => stageChron(i),
+            afterPost: (i, j) => stageAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-cal',
