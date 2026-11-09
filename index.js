@@ -37,6 +37,7 @@ import { initStance, stancePrompt, stanceChron, stanceAfterPost, stanceSceneHtml
 import { initRitual, ritualPrompt, ritualChron, ritualAfterPost, ritualHtml, ritualClick } from './ritual.js';
 import { initSteps, stepsPrompt, stepsChron, stepsAfterPost, stepsHtml, stepsClick } from './steps.js';
 import { initSee, seeWarm, seeReady, seePrompt, paintSee, seeClick } from './see.js';
+import { initSeason, seasonPrompt, applySeason, seasonHtml, seasonClick } from './season.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
@@ -51,7 +52,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.31.0';
+const VERSION = '0.32.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -805,6 +806,7 @@ function updateMovePrompt(type, consume = false) {
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
+    try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
     return [text, modes].filter(Boolean).join('\n');
 }
@@ -2417,6 +2419,7 @@ function renderWorld() {
             ${st.scene?.atmosphere ? `<span>${esc(st.scene.atmosphere)}</span>` : ''}
         </section>
         ${(() => { try { return skipHtml(); } catch (e) { console.warn('[Life] перемотка', e); return ''; } })()}
+        ${(() => { try { return seasonHtml(); } catch (e) { console.warn('[Life] сезон', e); return ''; } })()}
         <div class="lf-chips wrap">${['Прошло несколько часов.', 'Прошёл день.', 'Прошло несколько дней.', 'Прошла неделя.'].map(t => `<button class="lf-chip" data-act="skip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
@@ -3795,6 +3798,8 @@ jQuery(async () => {
     hubMods.push({ pre: 'stn-', click: stanceClick, label: 'Споры' }, { pre: 'rit-', click: ritualClick, label: 'Своё' });
     initSteps(extApi);
     initSee(extApi);
+    initSeason({ ...extApi, moodNow });
+    hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
     painters.push((el, id) => paintSee(el, id));
     chatClicks.push((act, el) => seeClick(act, el));
     hubMods.push({ pre: 'stp-', click: stepsClick, label: 'Прожитое' });
@@ -3833,6 +3838,10 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-season',
+            prompt: (type) => seasonPrompt(type),
         });
         globalThis.LifeBridge.register({
             id: 'life-see',

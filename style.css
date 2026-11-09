@@ -2315,3 +2315,45 @@ body.lf-pal-paper .lf-push-h, body.lf-pal-paper .lf-push-x { color: rgba(43, 36,
 .mes .lf-see b { color: #d6cac5; font-weight: 600; }
 .mes .lf-see button { border: 1px dashed rgba(237, 228, 223, .22); background: transparent; color: inherit; border-radius: 8px; padding: 2px 7px; font: inherit; cursor: pointer; }
 body.lf-theme .mes .lf-see { color: var(--t-text2); }
+
+/* ───────────── 0.32: сезоны, праздники, цветокор ───────────── */
+body.lf-season-winter #lf-app { --season-mark: '❄'; }
+body.lf-season-spring #lf-app { --season-mark: '🌸'; }
+body.lf-season-summer #lf-app { --season-mark: '☀'; }
+body.lf-season-autumn #lf-app { --season-mark: '🍂'; }
+body.lf-deco-xmas #lf-app { --season-mark: '🎄'; }
+body.lf-deco-newyear #lf-app { --season-mark: '✨'; }
+body.lf-deco-halloween #lf-app { --season-mark: '🎃'; }
+body.lf-deco-valentine #lf-app { --season-mark: '♥'; }
+body.lf-deco-july4 #lf-app { --season-mark: '🎆'; }
+body.lf-deco-thanks #lf-app { --season-mark: '🦃'; }
+body.lf-deco-patrick #lf-app { --season-mark: '☘'; }
+body.lf-deco-easter #lf-app { --season-mark: '🥚'; }
+#lf-app .lf-pagehead h1::after { content: var(--season-mark, ''); margin-left: 8px; font-size: .55em; vertical-align: .3em; opacity: .85; font-style: normal; }
+body.lf-season-winter #lf-app .lf-tab-ink { box-shadow: 0 0 12px rgba(191, 227, 242, .55); }
+body.lf-deco-xmas #lf-app .lf-pagehead { background-image: radial-gradient(circle at 8px 3px, #e9574f 2.4px, transparent 3.2px), radial-gradient(circle at 24px 3px, #f3c94e 2.4px, transparent 3.2px), radial-gradient(circle at 40px 3px, #6fcf97 2.4px, transparent 3.2px); background-size: 48px 8px; background-repeat: repeat-x; background-position: 0 0; animation: lf-garland 2.4s steps(2) infinite; }
+@keyframes lf-garland { 50% { filter: brightness(1.5) saturate(1.2); } }
+body.lf-deco-halloween #lf-app .lf-pagehead h1 { text-shadow: 0 0 18px rgba(233, 140, 60, .35); }
+.lf-season-card { display: flex; align-items: center; gap: 12px; margin: 12px 0 6px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); }
+.lf-season-card > .lf-i { width: 26px; height: 26px; flex: none; color: var(--lf-rose2); }
+.lf-season-card.s-winter > .lf-i { color: #bfe3f2; } .lf-season-card.s-autumn > .lf-i { color: #e9a46a; } .lf-season-card.s-summer > .lf-i { color: #f3c94e; } .lf-season-card.s-spring > .lf-i { color: #9fc79a; }
+.lf-season-card b { display: block; font-family: var(--lf-serif); font-weight: 500; font-size: 16px; }
+.lf-season-card small { display: block; color: var(--lf-text2); font-size: 12.5px; line-height: 1.35; }
+.lf-season-card em { display: block; margin-top: 3px; color: #e7c77a; font-size: 12.5px; font-style: normal; }
+#lf-grade { position: fixed; inset: 0; z-index: -1; pointer-events: none; mix-blend-mode: soft-light; transition: background 2.5s ease, opacity 2.5s ease; }
+#lf-grade.g-warm { background: radial-gradient(ellipse at 50% 40%, rgba(255, 176, 96, .32), rgba(255, 150, 80, .12)); }
+#lf-grade.g-amber { background: radial-gradient(ellipse at 50% 60%, rgba(255, 196, 120, .34), rgba(200, 120, 60, .14)); }
+#lf-grade.g-rose { background: radial-gradient(ellipse at 50% 50%, rgba(235, 90, 130, .34), rgba(140, 30, 70, .16)); }
+#lf-grade.g-crimson { background: linear-gradient(180deg, rgba(200, 30, 40, .3), rgba(90, 10, 20, .24)); }
+#lf-grade.g-bright { background: radial-gradient(ellipse at 50% 30%, rgba(255, 240, 200, .3), rgba(255, 220, 160, .08)); }
+#lf-grade.g-teal { background: linear-gradient(180deg, rgba(40, 140, 150, .3), rgba(20, 60, 70, .22)); }
+#lf-grade.g-blue { background: linear-gradient(180deg, rgba(70, 100, 170, .34), rgba(20, 30, 70, .28)); }
+#lf-grade.g-contrast { background: linear-gradient(135deg, rgba(30, 140, 150, .3), rgba(240, 140, 60, .26)); }
+body.lf-grade-blue #lf-bg i { filter: brightness(.42) saturate(.45); }
+body.lf-grade-teal #lf-bg i { filter: brightness(.45) saturate(.6) contrast(1.1); }
+body.lf-grade-crimson #lf-bg i { filter: brightness(.45) saturate(1) contrast(1.15); }
+body.lf-grade-contrast #lf-bg i { filter: brightness(.48) saturate(1) contrast(1.25); }
+body.lf-grade-warm #lf-bg i, body.lf-grade-amber #lf-bg i { filter: brightness(.52) saturate(.9) sepia(.12); }
+body.lf-grade-bright #lf-bg i { filter: brightness(.58) saturate(1.05); }
+body.lf-grade-rose #lf-bg i { filter: brightness(.48) saturate(.95); }
+@media (prefers-reduced-motion: reduce) { body.lf-deco-xmas #lf-app .lf-pagehead { animation: none; } }
