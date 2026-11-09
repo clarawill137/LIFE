@@ -13,6 +13,7 @@ import { fameLines } from './hero.js';
 import { storyYear } from './era.js';
 import { canonText } from './canon.js';
 import { heroesDigest } from './heroes.js';
+import { eraLookLines } from './lore.js';
 
 let A = null;
 export function initPress(api) { A = api; }
@@ -35,7 +36,7 @@ let open = ''; // id выпуска, развёрнутого полностью
 
 // ───────────── что знают СМИ ─────────────
 
-function digest(kind) {
+function digest(kind, looks = []) {
     const st = A.worldState();
     const ev = A.horaeEvents().slice(-20).map(e => `- ${[e.timestamp?.story_date, e.event?.summary].filter(Boolean).join(': ')}`).join('\n');
     const store = A.chronStore();
@@ -52,6 +53,7 @@ function digest(kind) {
     return [
         `Дата в мире: ${[A.weekday(st.timestamp?.story_date), st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(', ') || 'не записана'}. Где сейчас герои: ${st.scene?.location || '—'}.`,
         `Персонажи истории: ${A.castNames(st).join(', ')}.`,
+        looks.length ? `Как выглядят сейчас (если пишешь о внешности — только так; чего здесь нет — не описывай):\n${looks.map(x => `- ${x}`).join('\n')}` : 'Как выглядят герои, редакции не сказано — внешность (волосы, лицо, рост) не описывай и не выдумывай.',
         fame.length ? `Кто кем известен публике${year ? ` в ${year}` : ''} (пиши о людях только так, как их знает публика; кого не узнают — того пресса не знает в лицо; «мёртвого» для мира — оплакивают, а не видят на улице):\n${fame.map(x => `- ${x}`).join('\n')}` : '',
         (() => { try { return heroesDigest(); } catch { return ''; } })(),
         ev ? `Свежие события:\n${ev}` : '',
@@ -128,6 +130,7 @@ const KIND = {
 const PRESS_SYSTEM = (kind) => `Ты — редакция СМИ внутри мира ролевой истории на русском (AU по Marvel). Пишешь выпуск: ${PRESS_KINDS[kind].what}.
 ${KIND[kind].topic}
 Пресса знает только то, что видно со стороны: где героев видели на людях, фото папарацци, утечки, официальные заявления, соцсети. Остальное домысливает, путает и раздувает. Тайны истории — никогда точно; кто под маской — пресса не знает. О людях — только так, как их знает публика в этот год (список ниже).
+Внешность людей не выдумывай: цвет и длина волос, лицо, рост — только из «Как выглядят сейчас». Даже о незнакомке на снимке — «блондинка», «брюнетка» только если так там написано.
 Издание придумай сам — под этот мир, эпоху и город (в 1940-е — газеты и радио, без интернета). Даты — по миру истории.
 Ответь только JSON, без пояснений — ровно эти поля:
 {${KIND[kind].fields.join(',\n')}}
@@ -135,7 +138,9 @@ ${KIND[kind].note} Без пошлости.`;
 
 async function generate(kind) {
     const k = KIND[kind] ? kind : 'tabloid';
-    const j = await A.askJson([{ role: 'system', content: PRESS_SYSTEM(k) }, { role: 'user', content: digest(k) }], 4000, { what: 'Выпуск', check: (x) => !!KIND[k].need(x) });
+    let looks = [];
+    try { looks = await eraLookLines(A.castNames(A.worldState())); } catch { /* без ядра */ }
+    const j = await A.askJson([{ role: 'system', content: PRESS_SYSTEM(k) }, { role: 'user', content: digest(k, looks) }], 4000, { what: 'Выпуск', check: (x) => !!KIND[k].need(x) });
     const st = A.worldState();
     const n = (v, max) => str(v).slice(0, max);
     const poll = j.poll && arr(j.poll.options).length ? { q: n(j.poll.q, 120), options: arr(j.poll.options).slice(0, 4).map(o => ({ t: n(o?.t, 60), p: Math.max(0, Math.min(100, Math.round(Number(o?.p) || 0))) })).filter(o => o.t) } : null;

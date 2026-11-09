@@ -146,7 +146,7 @@ async function collectInput(names) {
     const parts = [];
     for (const n of names) {
         let lore = '';
-        try { lore = await loreFor(n, { re: FAME_RE, max: 4500 }); } catch { /* */ }
+        try { lore = await loreFor(n, { re: FAME_RE, max: 4500, all: true }); } catch { /* */ }   // все эпохи: периоды — на все годы
         const card = cardText(n, 1400);
         parts.push(`## ${n}\n${card ? `Карточка:\n${card}\n` : ''}${lore ? `Лор:\n${lore}` : ''}`);
     }

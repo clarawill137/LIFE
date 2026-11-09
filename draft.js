@@ -3,6 +3,8 @@
 // без решений за других; правишь и шлёшь сама. «Причесать» — только опечатки, орфография и запятые.
 // «↩» — как было до этого. Пишет дешёвая модель Летописца.
 
+import { personaNow } from './lore.js';
+
 let A = null;
 let undo = null;   // { text, out } — что было в поле до правки и что в нём стало
 let busy = '';
@@ -79,7 +81,7 @@ function lastAi() {
 async function grow(text) {
     const U = user();
     const c = A.ctx();
-    const persona = String(c.powerUserSettings?.persona_description || '').trim();
+    const persona = personaNow(c.powerUserSettings?.persona_description || '').trim();   // с правками эпохи (ядро таймлайна)
     const st = A.worldState?.() || {};
     const here = (st.scene?.characters_present || []).join(', ');
     const prev = lastAi();

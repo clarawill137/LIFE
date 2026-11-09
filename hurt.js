@@ -9,6 +9,7 @@ import { rpNow, lifeKey } from './sim.js';
 import { prof as innerProf } from './inner.js';
 import { moodNow } from './mood.js';
 import { modesOn } from './modes.js';
+import { eraVisible, eraBooks, personaNow } from './lore.js';
 
 let A = null;
 export function initHurt(api) { A = api; }
@@ -46,6 +47,7 @@ const BEATS = { off: [0, 'Выкл'], rare: [0.5, 'Редко'], mid: [1, 'Ин�
 // приступы старых травм: шанс на пост
 const FLARE = { off: [0, 'Никогда'], rare: [0.03, 'Редко'], mid: [0.07, 'Иногда'], often: [0.14, 'Часто'] };
 const W = [0, 1, 3, 6, 10];             // вес тяжести для «формы»
+const FX_MAX = 10;                       // сколько «чем мешает» у травмы
 const BEAT_SEV = [0, 0.1, 0.22, 0.38, 0.55];
 const COMP_SEV = [0, 0.01, 0.04, 0.08, 0.14];
 
@@ -136,7 +138,7 @@ function mkWound(h, r, now, prog = 0) {
     const at = { t: now?.t ?? null, mes: now?.mes ?? r.mes ?? 0 };
     return {
         id: ++h.seq, t: String(r.t || KINDS[kind][0]).trim().slice(0, 70), part: String(r.part || '').trim().slice(0, 40), kind,
-        sev: Math.max(1, Math.min(4, Math.round(Number(r.sev) || 2))), fx: (Array.isArray(r.fx) ? r.fx : []).map(x => String(x || '').trim().slice(0, 70)).filter(Boolean).slice(0, 4),
+        sev: Math.max(1, Math.min(4, Math.round(Number(r.sev) || 2))), fx: (Array.isArray(r.fx) ? r.fx : []).map(x => String(x || '').trim().slice(0, 70)).filter(Boolean).slice(0, FX_MAX),
         care: Math.max(0, Math.min(3, Math.round(Number(r.care) || 0))), prog: clamp01(prog), at, upd: { ...at }, roll: { ...at },
         mes: r.mes ?? at.mes, src: r.src || 'ai', status: 'on', comp: [],
         flare: FLARE[r.flare] ? r.flare : kind === 'chronic' ? 'rare' : 'off', trig: String(r.trig || '').trim().slice(0, 80),
@@ -277,9 +279,24 @@ function tick(who, now, i, roll) {
 
 // ───────────── сводка ─────────────
 
+// Старое (хроническое) — ампутация, ПТСР, хроническая боль — часть человека, а не урон: форму не режет.
+// Только пока идёт приступ (и пару постов после) — немного, как средняя травма.
+const FLARE_POSTS = 4;
+function flaringNow(w) {
+    if (!isOld(w)) return false;
+    let last = 0;
+    try { last = A.lastAiIndex?.() ?? 0; } catch { /* */ }
+    const f = H().flare;
+    if (f && f.id === w.id && (f.used == null || last - f.used < FLARE_POSTS)) return true;
+    return w.lastFlare != null && last - w.lastFlare < FLARE_POSTS;
+}
+function weightOf(w, now, hm) {
+    if (isOld(w)) return flaringNow(w) ? W[Math.min(2, w.sev || 2)] : 0;
+    return W[w.sev] * (1 - 0.6 * progAt(w, now, hm));
+}
 function burden(who, now = rpNow()) {
     const hm = healOf(who);
-    return active(who).reduce((a, w) => a + W[w.sev] * (1 - 0.6 * progAt(w, now, hm)), 0);
+    return active(who).reduce((a, w) => a + weightOf(w, now, hm), 0);
 }
 const FORM = [[1, 'В строю'], [3, 'Мелкие потери'], [7, 'Ограничения'], [12, 'На пределе'], [Infinity, 'Не боец']];
 function formOf(b) { return FORM.find(([lim]) => b < lim)[1]; }
@@ -567,6 +584,7 @@ async function loreAbout(who) {
         (W.world_info?.charLore || []).find(e => e.name === ch.avatar)?.extraBooks?.forEach(b => books.add(b));
     }
     (W.selected_world_info || []).forEach(b => books.add(b));
+    eraBooks().forEach(b => books.add(b));   // книги эпохи — ядро подключает их само
     try { const pl = c.powerUserSettings?.persona_description_lorebook; if (pl) books.add(pl); } catch { /* */ }
     const mentions = (t) => { try { return (globalThis.LifeFaces?.inText?.(t) || []).some(n => A.sameName(n, who)); } catch { return A.norm(t).includes(A.norm(short(who))); } };
     const out = [];
@@ -574,7 +592,7 @@ async function loreAbout(who) {
     for (const b of books) {
         let data = null;
         try { data = await W.loadWorldInfo(b); } catch { continue; }
-        for (const e of Object.values(data?.entries || {})) {
+        for (const e of await eraVisible(data?.entries, b)) {   // только своя эпоха и дата (ядро таймлайна)
             const t = String(e?.content || '');
             if (e?.disable || !t || !OLD_RE.test(t)) continue;
             if (!mentions(`${e.comment || ''} ${(e.key || []).join(' ')} ${t.slice(0, 1500)}`)) continue;
@@ -592,7 +610,7 @@ flare — как часто бывают приступы или обостре�
 
 async function findOld(who) {
     const c = A.ctx();
-    const card = isUser(who) ? String(c.powerUserSettings?.persona_description || '') : [A.cardOf?.(who)?.description, A.cardOf?.(who)?.personality].filter(Boolean).join('\n');
+    const card = isUser(who) ? personaNow(c.powerUserSettings?.persona_description || '') : [A.cardOf?.(who)?.description, A.cardOf?.(who)?.personality].filter(Boolean).join('\n');
     const lore = await loreAbout(who);
     const have = C(who);
     const input = [`Персонаж: ${A.canonName(who)}`, card ? `Карточка:\n${A.cut(card, 5000)}` : '', lore ? `Лорбуки:\n${lore}` : '',
@@ -733,7 +751,7 @@ export function hurtSection(who) {
     <section class="lf-hu">
         ${bodySvg(all, c.scars, now, hm)}
         <div class="lf-hu-side">
-            <div class="lf-hu-form"><span>Форма</span><b>${esc(form)}</b><i class="lf-meter"><b style="width:${pct}%"></b></i></div>
+            <div class="lf-hu-form"><span>Форма</span><b>${esc(form)}</b><i class="lf-meter"><b style="width:${pct}%"></b></i>${old.some(flaringNow) ? '<small>🌩 приступ</small>' : ''}</div>
             <div class="lf-hu-heal"><span>Заживление</span><b>${esc(HEAL.find(x => x[0] === hm)?.[1] || '')}</b></div>
             ${c.scars.length ? `<div class="lf-hu-scars">${c.scars.slice(-8).reverse().map(s => `<span title="${esc(s.from || '')}">${esc(s.t)}<button data-act="hu-scar-del" data-id="${s.id}" data-name="${N}">${icon('x')}</button></span>`).join('')}</div>` : '<div class="lf-dim small">Шрамов не записано.</div>'}
         </div>
@@ -751,7 +769,7 @@ export function hurtSection(who) {
         <div class="lf-field"><label>Раны дают о себе знать</label>
         <div class="lf-seg">${Object.entries(BEATS).map(([k, v]) => `<button class="${cfg().beats === k ? 'on' : ''}" data-act="hu-beats" data-v="${k}">${v[1]}</button>`).join('')}</div></div>
         <label class="lf-switch"><input type="checkbox" data-act="hu-on" checked><span></span>Вести раны и дебаффы</label>
-        <div class="lf-hint">Не каждый удар — рана: бойцы блокируют и держат удар. Травма — то, что правда достало: мощно по лицу — синяк, нож в бедро — нож в бедро. Заживает по времени истории (таймскип тоже лечит). Помощь ускоряет и снижает риск; нагрузка (драка, бег, секс) откатывает заживление и бросает кубик. Старые травмы не заживают — мешают всегда и иногда накрывают приступом. Тяжёлые раны оставляют шрамы.</div>
+        <div class="lf-hint">Не каждый удар — рана: бойцы блокируют и держат удар. Травма — то, что правда достало: мощно по лицу — синяк, нож в бедро — нож в бедро. Заживает по времени истории (таймскип тоже лечит). Помощь ускоряет и снижает риск; нагрузка (драка, бег, секс) откатывает заживление и бросает кубик. Старые травмы не заживают и мешают по-своему, но форму не режут — это часть человека, а не урон; форма проседает, только пока идёт приступ. Тяжёлые раны оставляют шрамы.</div>
     </details>`;
 }
 
@@ -784,7 +802,7 @@ function editSheet(who, w, old = false) {
             <div class="lf-field"><label>Тип</label><select data-in="hu-kind">${KIND_IDS.filter(k => k !== 'chronic').map(k => `<option value="${k}"${v.kind === k ? ' selected' : ''}>${KINDS[k][0]}</option>`).join('')}</select></div>
             <div class="lf-field"><label>Тяжесть</label><select data-in="hu-sev">${[1, 2, 3, 4].map(s => `<option value="${s}"${v.sev === s ? ' selected' : ''}>${SEV[s]}</option>`).join('')}</select></div>
         </div>`}
-        <div class="lf-field"><label>Чем мешает (через запятую)</label><input type="text" data-in="hu-fx" value="${esc(v.fx.join(', '))}" placeholder="${chronic ? 'рука не поднимается выше плеча, ноет к ночи' : 'хромает, не поднять руку выше плеча'}"></div>
+        <div class="lf-field"><label>Чем мешает (через запятую, до ${FX_MAX})</label><textarea data-in="hu-fx" rows="3" placeholder="${chronic ? 'рука не поднимается выше плеча, ноет к ночи' : 'хромает, не поднять руку выше плеча'}">${esc(v.fx.join(', '))}</textarea></div>
         ${chronic ? `<div class="lf-field"><label>Приступы</label><select data-in="hu-flare">${Object.entries(FLARE).map(([k, f]) => `<option value="${k}"${v.flare === k ? ' selected' : ''}>${f[1]}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Что провоцирует</label><input type="text" data-in="hu-trig" value="${esc(v.trig || '')}" placeholder="холод, нагрузка, выброс энергии, стресс"></div>`
         : `<div class="lf-field"><label>Помощь</label><select data-in="hu-care">${CARE.map((c, n) => `<option value="${n}"${v.care === n ? ' selected' : ''}>${c}</option>`).join('')}</select></div>
@@ -816,12 +834,12 @@ export async function hurtClick(act, el) {
             const t = val('hu-t').trim();
             if (!t) { A.toast('warning', 'Напиши, что за травма', '🩸 Раны', { timeOut: 1800 }); return true; }
             const kind = KINDS[val('hu-kind')] ? val('hu-kind') : 'other';
-            const rec = { t, part: val('hu-part').trim(), kind, sev: Number(val('hu-sev')) || 2, fx: val('hu-fx').split(/[,;]/).map(x => x.trim()).filter(Boolean), care: kind === 'chronic' ? 2 : Number(val('hu-care')) || 0, flare: val('hu-flare') || 'rare', trig: val('hu-trig').trim() };
+            const rec = { t, part: val('hu-part').trim(), kind, sev: Number(val('hu-sev')) || 2, fx: val('hu-fx').split(/[,;\n]/).map(x => x.trim()).filter(Boolean), care: kind === 'chronic' ? 2 : Number(val('hu-care')) || 0, flare: val('hu-flare') || 'rare', trig: val('hu-trig').trim() };
             const now = rpNow();
             const [, w] = el.dataset.id ? byId(el.dataset.id) : [null, null];
             if (w) {
                 tick(who, now, i, false);
-                Object.assign(w, { t: rec.t.slice(0, 70), part: rec.part.slice(0, 40), kind, sev: Math.max(1, Math.min(4, rec.sev)), fx: rec.fx.slice(0, 4), care: Math.max(0, Math.min(3, rec.care)) });
+                Object.assign(w, { t: rec.t.slice(0, 70), part: rec.part.slice(0, 40), kind, sev: Math.max(1, Math.min(4, rec.sev)), fx: rec.fx.map(x => x.slice(0, 70)).slice(0, FX_MAX), care: Math.max(0, Math.min(3, rec.care)) });
                 if (kind === 'chronic') { w.flare = FLARE[rec.flare] ? rec.flare : 'rare'; w.trig = rec.trig.slice(0, 80); }
                 const pr = box.querySelector('[data-in="hu-prog"]');
                 if (pr) { w.prog = clamp01(Number(pr.value) / 100); w.upd = { t: now.t, mes: now.mes }; }

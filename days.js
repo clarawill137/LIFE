@@ -269,6 +269,169 @@ export function daysBrief() {
     try { return daysPrompt('normal').replace(/^\[Последние дни[^\n]*\n/, '').replace(/\]$/, ''); } catch { return ''; }
 }
 
+// ───────────── дата не та ─────────────
+// Horae иногда пишет не ту дату (ноябрь стал декабрём). Здесь её правят: в постах дня (или его части — с какого
+// по какой пост) переписывается дата Horae в самих постах, посты после — остаются при своей. Таймеры Life,
+// отмеченные этими постами (раны, потребности, приступы), сдвигаются на ту же разницу — чтобы не «из будущего».
+
+const MON_RE = [/^янв/, /^фев/, /^мар/, /^апр/, /^ма[йя]/, /^июн/, /^июл/, /^авг/, /^сен/, /^окт/, /^ноя/, /^дек/];
+const WD = [
+    ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'],
+    ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+    ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+];
+const WD_ALT = { среду: 'среда', пятницу: 'пятница', субботу: 'суббота' };
+export const ymdOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const likeCase = (src, w) => (src === src.toUpperCase() && src.length > 1 ? w.toUpperCase() : src[0] === src[0].toUpperCase() ? w[0].toUpperCase() + w.slice(1) : w);
+
+/** Та же запись даты, что у Horae («2024/12/20», «20.12.2024», «20 декабря 2024»), — с новой датой и днём недели. */
+export function restamp(raw, d) {
+    let s = String(raw || '').trim();
+    let hit = false;
+    s = s.replace(/(\d{4})([./-])(\d{1,2})\2(\d{1,2})/, (m, y, sep) => { hit = true; return `${d.getFullYear()}${sep}${pad(d.getMonth() + 1)}${sep}${pad(d.getDate())}`; });
+    if (!hit) s = s.replace(/(\d{1,2})([./-])(\d{1,2})\2(\d{4})/, (m, a, sep) => { hit = true; return `${pad(d.getDate())}${sep}${pad(d.getMonth() + 1)}${sep}${d.getFullYear()}`; });
+    if (!hit) s = s.replace(/(\d{1,2})(\s+)([а-яё]+)(\s+)(\d{4})/i, (m, a, s1, mo, s2) => {
+        if (!MON_RE.some(re => re.test(mo.toLowerCase()))) return m;
+        hit = true;
+        return `${d.getDate()}${s1}${likeCase(mo, MON[d.getMonth()])}${s2}${d.getFullYear()}`;
+    });
+    if (!hit) return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+    // день недели, если Horae его пишет
+    return s.replace(/[а-яё]+|[a-z]+/gi, (w) => {
+        const lw = WD_ALT[w.toLowerCase()] || w.toLowerCase();
+        for (const list of WD) { const k = list.indexOf(lw); if (k >= 0) return likeCase(w, list[d.getDay()]); }
+        return w;
+    });
+}
+
+/** Дата у каждого поста (Horae пишет её не в каждом — тянется от прошлого) и где она записана своя. */
+function postDates(chat) {
+    const raw = new Array(chat.length).fill('');
+    const own = new Array(chat.length).fill(false);
+    let date = '';
+    for (let i = 0; i < chat.length; i++) {
+        const meta = chat[i]?.horae_meta;
+        if (meta?.timestamp?.story_date && !meta._skipHorae) { date = meta.timestamp.story_date; own[i] = true; }
+        raw[i] = date;
+    }
+    return { raw, own };
+}
+
+function setDate(m, date) {
+    if (!m.horae_meta || typeof m.horae_meta !== 'object') m.horae_meta = A.emptyMeta ? A.emptyMeta() : { timestamp: {} };
+    if (!m.horae_meta.timestamp || typeof m.horae_meta.timestamp !== 'object') m.horae_meta.timestamp = { story_date: '', story_time: '', absolute: '' };
+    m.horae_meta.timestamp.story_date = date;
+}
+
+/** Таймеры Life {t, mes} — сдвинуть на разницу, если отмечены переставленными постами. */
+function shiftStamps(root, posts, ms) {
+    if (!ms) return 0;
+    let n = 0;
+    const seen = new Set();
+    const walk = (o, depth) => {
+        if (!o || typeof o !== 'object' || depth > 12 || seen.has(o)) return;
+        seen.add(o);
+        if (!Array.isArray(o) && typeof o.t === 'number' && typeof o.mes === 'number' && Math.abs(o.t) > 1e11 && posts.has(o.mes)) { o.t += ms; n++; }
+        for (const v of Array.isArray(o) ? o : Object.values(o)) if (v && typeof v === 'object') walk(v, depth + 1);
+    };
+    walk(root, 0);
+    return n;
+}
+
+/**
+ * Переставить дату постам дня key: с поста from по to (включительно) — только тем, что в этом дне
+ * (флешбеки внутри со своей датой не трогаю). date — настоящая дата (Date). Вернёт { posts, wrote, stamps, key }.
+ */
+export async function redateDay(key, date, from, to) {
+    if (!(date instanceof Date) || isNaN(date)) throw new Error('дата не читается');
+    const chat = A.chatArr();
+    const { raw, own } = postDates(chat);
+    const keyAt = raw.map(r => (r ? dayKey(r) : ''));
+    const lo = Math.max(0, Math.min(from, to)), hi = Math.min(chat.length - 1, Math.max(from, to));
+    const posts = new Set();
+    for (let i = lo; i <= hi; i++) if (keyAt[i] === key) posts.add(i);
+    if (!posts.size) throw new Error(`в постах #${lo}–#${hi} нет этого дня`);
+    const nk = ymdOf(date);
+    if (nk === key) throw new Error('это та же дата');
+    const oldD = keyDate(key);
+    const ms = oldD ? Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - oldD) / 864e5) * 864e5 : 0;
+    let wrote = 0;
+    let cur = '';
+    for (let i = 0; i < chat.length; i++) {
+        const m = chat[i];
+        if (!m) continue;
+        const meta = m.horae_meta;
+        if (meta?._skipHorae) continue;
+        if (posts.has(i)) {
+            const want = restamp(raw[i], date);
+            if (own[i]) {
+                if (meta.timestamp.story_date !== want) { meta.timestamp.story_date = want; wrote++; }
+                const ab = meta.timestamp.absolute;
+                if (typeof ab === 'string' && A.parseDate(ab)) meta.timestamp.absolute = restamp(ab, date);
+                else if (typeof ab === 'number' && Math.abs(ab) > 1e11) meta.timestamp.absolute = ab + ms;
+                for (const ev of Array.isArray(meta.events) ? meta.events : []) if (ev?.timestamp?.story_date && dayKey(ev.timestamp.story_date) === key) ev.timestamp.story_date = restamp(ev.timestamp.story_date, date);
+                cur = want;
+            } else if (dayKey(cur) !== nk) { setDate(m, want); cur = want; wrote++; }
+            continue;
+        }
+        if (own[i]) { cur = meta.timestamp.story_date; continue; }
+        // наследовал дату — после правки должен наследовать ту же, что раньше
+        if (raw[i] && dayKey(cur) !== keyAt[i]) { setDate(m, raw[i]); cur = raw[i]; wrote++; }
+    }
+    const stamps = shiftStamps(A.chatMeta(), posts, ms);
+    // итоги дней: старый день, если ушёл целиком, — к новому; оба — пересобрать
+    const cm = A.chatMeta();
+    cm.ver = (cm.ver || 0) + 1;
+    cache.sig = '';
+    const sum = M().sum;
+    const gone = !collectDays().some(d => d.key === key);
+    if (gone && sum[key]) {
+        const o = sum[key];
+        if (!sum[nk]) sum[nk] = { ...o, to: -1, today: false };
+        else if (o.edited || sum[nk].edited) sum[nk] = { ...sum[nk], text: [sum[nk].text, o.text].filter(Boolean).join(' ').slice(0, 1800), open: [...(sum[nk].open || []), ...(o.open || [])].slice(0, 4), edited: true };
+        else sum[nk].to = -1;
+        delete sum[key];
+    } else if (sum[nk] && !sum[nk].edited) sum[nk].to = -1;
+    if (!gone && sum[key] && !sum[key].edited) sum[key].to = -1;
+    try { await A.ctx().saveChat?.(); } catch (e) { console.warn('[Life] дни: сохранить чат', e); }
+    A.saveMeta();
+    return { posts: posts.size, wrote, stamps, key: nk, gone };
+}
+
+/** Где в дне полночь: первый пост после позднего вечера с ранним временем (по времени Horae). */
+export function midnightIn(d) {
+    const chat = A.chatArr();
+    let prev = null;
+    for (let i = d.from; i <= d.to; i++) {
+        const t = String(chat[i]?.horae_meta?.timestamp?.story_time || '').match(/(\d{1,2})[:.](\d{2})/);
+        if (!t || chat[i]?.horae_meta?._skipHorae) continue;
+        const min = +t[1] * 60 + +t[2];
+        if (prev && prev.min >= 17 * 60 && min < 9 * 60) return { before: prev.i, after: i };
+        prev = { i, min };
+    }
+    return null;
+}
+
+/** Пересобрать итоги этих дней (после перестановки дат) — фоном. */
+async function rebuildKeys(keys) {
+    for (const k of keys) {
+        const d = collectDays().find(x => x.key === k);
+        const s = M().sum[k];
+        if (!d || !hasStuff(d) || s?.edited) continue;
+        const isToday = d === todayOf(collectDays());
+        if (isToday && d.to - d.from < 24) continue;
+        const upto = isToday ? d.to - 12 : Infinity;
+        try {
+            const r = await summarize(d, upto);
+            M().sum[k] = { ...r, from: d.from, to: isToday ? upto : d.to, today: isToday, at: Date.now() };
+            A.saveMeta();
+        } catch (e) { console.warn('[Life] дни: пересобрать', e); }
+    }
+    A.updatePrompt();
+    A.render?.();
+}
+
 // ───────────── вид: Мир → Дни ─────────────
 
 export function daysHtml() {
@@ -338,11 +501,57 @@ export async function daysClick(act, el) {
         case 'day-edit': {
             const d = collectDays().find(x => x.key === el.dataset.k);
             const s = M().sum[el.dataset.k] || {};
+            const kd = d ? keyDate(d.key) : null;
+            const mid = d && kd ? midnightIn(d) : null;
+            const K = esc(el.dataset.k);
             A.openSheet(`${A.icon('calendar')} ${esc(d ? dayLabel(d.key, d.raw, true) : el.dataset.k)}`, `
                 <div class="lf-field"><label>Что было за день</label><textarea data-in="day-text" rows="6">${esc(s.text || '')}</textarea></div>
                 <div class="lf-field"><label>Открыто (через ;)</label><input type="text" data-in="day-open" value="${esc((s.open || []).join('; '))}"></div>
-                <button class="lf-btn primary full" data-act="day-save" data-k="${esc(el.dataset.k)}">${A.icon('check')} Сохранить</button>
-                ${s.text ? `<button class="lf-btn ghost full" data-act="day-clear" data-k="${esc(el.dataset.k)}">${A.icon('trash')} Стереть итог</button>` : ''}`);
+                <button class="lf-btn primary full" data-act="day-save" data-k="${K}">${A.icon('check')} Сохранить</button>
+                ${s.text ? `<button class="lf-btn ghost full" data-act="day-clear" data-k="${K}">${A.icon('trash')} Стереть итог</button>` : ''}
+                ${d && kd ? `<div class="lf-day-fix">
+                    <label>${A.icon('calendar')} Дата не та?</label>
+                    <small>Horae записал ${esc(dayLabel(d.key, d.raw, true))} — посты #${d.from}–#${d.to}. Поставь настоящую: перепишу дату в самих постах (увидят Horae, Life и модель), посты после останутся при своей.</small>
+                    <div class="lf-day-fix-row">
+                        <input type="date" data-in="day-date" value="${esc(d.key)}">
+                        <span>#<input type="number" inputmode="numeric" data-in="day-from" value="${d.from}" min="0"></span>
+                        <span>– #<input type="number" inputmode="numeric" data-in="day-to" value="${d.to}" min="0"></span>
+                    </div>
+                    ${mid ? `<div class="lf-chips wrap">
+                        <button class="lf-chip" data-act="day-night" data-k="${K}" data-from="${d.from}" data-to="${mid.before}" data-shift="-1">${A.icon('moon')} до полуночи (#${d.from}–#${mid.before}) — днём раньше</button>
+                        <button class="lf-chip" data-act="day-night" data-k="${K}" data-from="${mid.after}" data-to="${d.to}" data-shift="1">${A.icon('sun')} после полуночи (#${mid.after}–#${d.to}) — днём позже</button>
+                    </div>` : ''}
+                    <button class="lf-btn full" data-act="day-redate" data-k="${K}">${A.icon('calendar')} Переставить дату</button>
+                </div>` : ''}`);
+            return true;
+        }
+        case 'day-night': {
+            const box = el.closest('.lf-sheet') || document;
+            const kd = keyDate(el.dataset.k);
+            if (!kd) return true;
+            const cur = box.querySelector('[data-in="day-date"]');
+            const base = cur?.value && keyDate(cur.value) ? keyDate(cur.value) : kd;
+            const d = new Date(base); d.setDate(d.getDate() + (Number(el.dataset.shift) || 0));
+            if (cur) cur.value = ymdOf(d);
+            const f = box.querySelector('[data-in="day-from"]'); if (f) f.value = el.dataset.from;
+            const t = box.querySelector('[data-in="day-to"]'); if (t) t.value = el.dataset.to;
+            return true;
+        }
+        case 'day-redate': {
+            const box = el.closest('.lf-sheet') || document;
+            const v = (k) => box.querySelector(`[data-in="${k}"]`)?.value ?? '';
+            const date = keyDate(v('day-date'));
+            if (!date) { A.toast('warning', 'Выбери дату', '✦ Дни', { timeOut: 2000 }); return true; }
+            let r = null;
+            await A.withBusy(el, async () => {
+                try { r = await redateDay(el.dataset.k, date, Number(v('day-from')), Number(v('day-to'))); }
+                catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Дни', { timeOut: 4000 }); }
+            }, 'Переставляю…');
+            if (!r) return true;
+            A.closeSheet();
+            A.toast('success', `${r.posts} ${A.plural(r.posts, 'пост', 'поста', 'постов')} → ${esc(dayLabel(r.key, '', true))}${r.stamps ? ` · таймеров сдвинула: ${r.stamps}` : ''}<br><small>итоги дня пересоберу сама</small>`, '✦ Дни', { timeOut: 4500, escapeHtml: false });
+            done();
+            rebuildKeys([r.key, el.dataset.k]).catch(() => { });
             return true;
         }
         case 'day-save': {

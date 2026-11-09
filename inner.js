@@ -8,6 +8,7 @@ import { moodNow, BOND_HEAVY } from './mood.js';
 import { agendaCardHtml } from './agenda.js';
 import { hurtSection, hurtCap, hurtCount } from './hurt.js';
 import { armSection } from './arm.js';
+import { eraVisible, eraBooks } from './lore.js';
 
 let A = null;
 export function initInner(api) { A = api; }
@@ -363,13 +364,14 @@ export async function loreAbout(who, re) {
         extra.forEach(b => books.add(b));
     }
     (W.selected_world_info || []).forEach(b => books.add(b));
+    eraBooks().forEach(b => books.add(b));   // книги эпохи — ядро подключает их само
     const name = A.norm(A.canonName(who)).split(' ')[0];
     const out = [];
     let total = 0;
     for (const b of books) {
         let data = null;
         try { data = await W.loadWorldInfo(b); } catch { continue; }
-        for (const e of Object.values(data?.entries || {})) {
+        for (const e of await eraVisible(data?.entries, b)) {   // только своя эпоха и дата (ядро таймлайна)
             const t = String(e?.content || '');
             if (e?.disable || !t || !re.test(t)) continue;
             const hay = A.norm(`${e.comment || ''} ${(e.key || []).join(' ')} ${t.slice(0, 600)}`);

@@ -8,6 +8,7 @@ import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
 import { knockSceneHtml } from './knock.js';
 import { loreAbout } from './inner.js';
+import { cardText, loreFor } from './lore.js';
 import { hurtSection } from './hurt.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
@@ -79,8 +80,8 @@ function addPrefs(list, i) {
         const arr = m.prefs[who] = m.prefs[who] || [];
         const n = A.norm(x.text);
         const old = arr.find(y => A.norm(y.t) === n);
-        if (old) { old.k = x.kind; continue; }
-        arr.push({ t: x.text, k: x.kind, mes: i });
+        if (old) { old.k = x.kind; if (x.hand) old.hand = true; continue; }
+        arr.push({ t: x.text, k: x.kind, mes: i, ...(x.hand ? { hand: true } : {}) });
         if (arr.length > 40) arr.splice(0, arr.length - 40);
     }
 }
@@ -157,6 +158,56 @@ function doneIdea(x, i) {
     x.doneMes = i;
     m.initLast[x.who] = i;
     if (m.armed?.id === x.id) { m.lastInit = { id: x.id, mes: i }; m.armed = null; }
+}
+
+// ───────────── места для «Дома»: без дублей ─────────────
+// «Клиника доктора N», «Клиника д-ра N, холл», «…, парковка» — одно место; жильё — первым, остальное — под «ещё».
+
+const W0 = '(?<![а-яёa-z0-9])', W1 = '(?![а-яёa-z0-9])';
+const ABBR = [[new RegExp(`${W0}д-?ра${W1}`, 'g'), 'доктора'], [new RegExp(`${W0}д-?р${W1}\\.?`, 'g'), 'доктор'], [new RegExp(`${W0}ул\\.?${W1}`, 'g'), 'улица'],
+    [new RegExp(`${W0}(пр-т|просп\\.?)${W1}`, 'g'), 'проспект'], [new RegExp(`${W0}наб\\.?${W1}`, 'g'), 'набережная'], [new RegExp(`${W0}кв\\.?${W1}`, 'g'), 'квартира'], [new RegExp(`${W0}м-?р${W1}\\.?`, 'g'), 'мистер']];
+const DWELL_RE = /квартир|(?<![а-яёa-z0-9])дом(?![а-яёa-z0-9])|апартамент|пентхаус|особняк|лофт|коттедж|дача|студия|комнат|спальн|(?<![a-z])(home|house|apartment|flat|loft)(?![a-z])/i;
+const NOT_HOME_RE = /улиц|проспект|авеню|площад|парковк|клиник|больниц|госпитал|магазин|лавк|рынок|кафе|бар(?![а-яё])|ресторан|офис|штаб|вокзал|аэропорт|машин|авто|салон|мотоцикл|street|avenue|clinic|hospital|shop|store/i;
+
+export function placeBase(raw) {
+    let t = A.norm(A.placeName ? A.placeName(raw) : raw).replace(/\([^)]*\)/g, ' ');
+    t = t.split(/\s*[,—–]\s*|\s+-\s+/)[0];
+    for (const [re, to] of ABBR) t = t.replace(re, to);
+    return t.replace(/[.«»"“”„'`]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Места верхнего уровня, склеенные: [{ raw (как показать), keys:Set, base, home }] — жильё первым. */
+export function homeChoices() {
+    const groups = [];
+    for (const [k, raw] of A.knownLocations()) {
+        if (k.includes('·')) continue;
+        const base = placeBase(raw);
+        if (!base) continue;
+        const g = groups.find(x => x.base === base || x.base.startsWith(`${base} `) || base.startsWith(`${x.base} `));
+        if (g) {
+            g.keys.add(k);
+            // название группы — самое короткое и без сокращений/хвостов
+            const clean = (r) => !/[,—–]/.test(r) && !ABBR.some(([re]) => { re.lastIndex = 0; return re.test(A.norm(r)); });
+            if ((clean(raw) && !clean(g.raw)) || (clean(raw) === clean(g.raw) && base.length < g.base.length)) { g.raw = raw; g.base = base; }
+        } else groups.push({ raw, base, keys: new Set([k]) });
+    }
+    const hk = A.placeKey(homeLoc());
+    const hb = homeLoc() ? placeBase(homeLoc()) : '';
+    for (const g of groups) {
+        g.cur = !!hk && (g.keys.has(hk) || g.base === hb);
+        g.home = g.cur || (DWELL_RE.test(g.base) && !NOT_HOME_RE.test(g.base));
+    }
+    return groups.sort((a, b) => (b.cur - a.cur) || (b.home - a.home));
+}
+
+function homePicker(act, attrs = '') {
+    const gs = homeChoices();
+    if (!gs.length) return '<span class="lf-dim">Мест пока нет.</span>';
+    const chip = (g) => `<button class="lf-chip${g.cur ? ' on' : ''}" data-act="${act}" data-loc="${esc(g.raw)}"${attrs}>${icon(g.home ? 'home' : 'pin')} ${esc(A.placeName(g.raw))}${g.keys.size > 1 ? ` <span class="lf-cnt">${g.keys.size}</span>` : ''}</button>`;
+    const main = gs.filter(g => g.home);
+    const rest = gs.filter(g => !g.home);
+    const top = main.length ? main : rest.splice(0, 4);
+    return `<div class="lf-chips wrap">${top.map(chip).join('')}</div>${rest.length ? `<details class="lf-more"><summary>Ещё ${rest.length} ${A.plural(rest.length, 'место', 'места', 'мест')}</summary><div class="lf-chips wrap">${rest.slice(0, 40).map(chip).join('')}</div></details>` : ''}`;
 }
 
 export function homeLoc() {
@@ -623,8 +674,48 @@ function ideaRow(x, tease) {
 function prefsHtml(who) {
     const p = prefsOf(who);
     const chip = (x) => `<span class="lf-pref${x.k === 'dislike' ? ' no' : ''}">${icon(x.k === 'dislike' ? 'x' : 'heart')}${esc(x.t)}<button data-act="sim-pref-del" data-name="${esc(who)}" data-t="${esc(x.t)}">${icon('x')}</button></span>`;
-    return `<div class="lf-prefs">${p.length ? p.map(chip).join('') : '<span class="lf-dim">Пока ничего — Летописец запишет, как только это прозвучит в истории.</span>'}
-        <button class="lf-chip" data-act="sim-pref-add" data-name="${esc(who)}">${icon('plus')}</button></div>`;
+    return `<div class="lf-prefs">${p.length ? p.map(chip).join('') : '<span class="lf-dim">Пока ничего — Летописец запишет, как только это прозвучит в истории, или возьму из карточки.</span>'}
+        <button class="lf-chip" data-act="sim-pref-add" data-name="${esc(who)}">${icon('plus')}</button></div>
+        <button class="lf-btn ghost full" data-act="sim-pref-card" data-name="${esc(who)}">${icon('sparkles')} Из карточки и лорбука${p.length ? ' — и убрать временное' : ''}</button>`;
+}
+
+// вкусы из карточки и лорбука — постоянные; заодно убрать то, что записалось временным (токсикоз, таблетки)
+const PREF_RE = /любит|обожа|нравит|предпочит|не любит|ненавид|терпеть не|не выносит|раздраж|вкус|любим|еда|кофе|чай|цвет|музык|книг|фильм|запах|духи|подар|хобби|увлеч|likes?|loves?|hates?|favou?rite|prefer|taste|food|drink|coffee|music|perfume/i;
+const PREFS_SYSTEM = `Ты ведёшь вкусы персонажа ролевой истории — для подарков и заботы. Даны карточка персонажа, записи лорбука о нём и то, что уже записано.
+Выпиши его ПОСТОЯННЫЕ вкусы — что верно о нём надолго: еда и напитки, цветы, запахи и духи, музыка, книги и фильмы, вещи, места, занятия; и что он не любит или не выносит. Только то, что правда есть в тексте, без догадок.
+НЕ вкусы: что тянет или тошнит сейчас (беременность, болезнь), лекарства и таблетки, симптомы, настроение момента.
+Ответь только JSON: {"like":["1–5 слов"],"dislike":["1–5 слов"],"drop":["уже записанное (точь-в-точь), что временное или не вкус"]}. like — до 15, dislike — до 8; уже записанное не повторяй.`;
+
+export async function prefsFromCard(who) {
+    const n = A.canonName(who) || who;
+    const card = cardText(n, 6000);
+    let lore = '';
+    try { lore = await loreFor(n, { re: PREF_RE, max: 6000 }); } catch { /* */ }
+    if (!card && !lore) throw new Error('ни карточки, ни записей в лорбуках про это нет');
+    const have = prefsOf(n);
+    const j = await A.askJson([{ role: 'system', content: PREFS_SYSTEM }, {
+        role: 'user', content: [`Персонаж: ${n}`, card ? `Карточка:\n${card}` : '', lore ? `Лорбук:\n${lore}` : '',
+            have.length ? `Уже записано:\n${have.map(x => `- ${x.k === 'dislike' ? 'не любит' : 'любит'}: ${x.t}`).join('\n')}` : ''].filter(Boolean).join('\n\n'),
+    }], 1600, { what: 'Вкусы', check: (x) => Array.isArray(x?.like) || Array.isArray(x?.dislike) });
+    const m = M();
+    const arr = m.prefs[n] = m.prefs[n] || [];
+    const drop = new Set((Array.isArray(j.drop) ? j.drop : []).map(x => A.norm(String(x || ''))).filter(Boolean));
+    const before = arr.length;
+    for (let k = arr.length - 1; k >= 0; k--) if (!arr[k].hand && drop.has(A.norm(arr[k].t))) arr.splice(k, 1);
+    const removed = before - arr.length;
+    let added = 0;
+    for (const [list, kind] of [[j.like, 'like'], [j.dislike, 'dislike']]) {
+        for (const x of Array.isArray(list) ? list.slice(0, kind === 'like' ? 15 : 8) : []) {
+            const t = String(x || '').trim().slice(0, 60);
+            if (!t || arr.some(y => A.norm(y.t) === A.norm(t))) continue;
+            arr.push({ t, k: kind, mes: A.lastAiIndex(), src: 'card' });
+            added++;
+        }
+    }
+    if (arr.length > 40) arr.splice(0, arr.length - 40);
+    A.saveMeta();
+    A.updatePrompt();
+    return { added, removed };
 }
 
 function giftsHtml(who) {
@@ -647,7 +738,6 @@ export function renderLife(who) {
     const st = A.worldState();
     if (isUser(who)) {
         const unseen = m.offscreen.filter(e => !e.seen).slice(-6).reverse();
-        const homes = [...A.knownLocations()].filter(([k]) => !k.includes('·')).slice(0, 30);
         return `<div class="lf-pagehead"><h1>Жизнь</h1><span class="lf-subtitle">Что о тебе знают и что творится вокруг</span></div>
         ${unseen.length ? `${A.sec('Пока тебя не было')}${offHtml(unseen)}` : ''}
         ${(() => { try { return hurtSection(who); } catch (e) { console.warn('[Life] раны', e); return ''; } })()}
@@ -655,7 +745,7 @@ export function renderLife(who) {
         ${A.sec('Что о тебе знают', 'вкусы для подарков и заботы')}${prefsHtml(who)}
         ${A.sec('Подарки')}${giftsHtml(who)}
         ${A.sec('Дом', 'сюда идут записки и питомцы')}
-        <div class="lf-chips wrap">${homes.map(([k, raw]) => `<button class="lf-chip${A.placeKey(homeLoc()) === k ? ' on' : ''}" data-act="sim-home" data-loc="${esc(raw)}">${icon('home')} ${esc(A.placeName(raw))}</button>`).join('') || '<span class="lf-dim">Мест пока нет.</span>'}</div>
+        ${homePicker('sim-home')}
         ${A.sec('Инициатива персонажей')}
         <label class="lf-switch"><input type="checkbox" data-set="sim.on" ${c.on ? 'checked' : ''}><span></span>Персонажи проявляют инициативу сами</label>
         <label class="lf-switch"><input type="checkbox" data-set="sim.tease" ${c.tease ? 'checked' : ''}><span></span>Их намерения — сюрприз (размыто, пока не случится)</label>
@@ -769,7 +859,7 @@ export function renderPet(id) {
 
 function petEditSheet(p) {
     const now = rpNow();
-    const homes = [...A.knownLocations()].filter(([k]) => !k.includes('·')).slice(0, 30);
+    const homes = homeChoices().slice(0, 40);
     const names = [...new Set([...A.castNames().map(A.canonName), ...(p.people || []).map(x => x.name)])].filter(Boolean);
     const per = (n) => (p.people || []).find(x => A.sameName(x.name, n)) || {};
     const t = p.temper || {};
@@ -790,7 +880,7 @@ function petEditSheet(p) {
         <div class="lf-field"><label>Хозяин</label><div class="lf-chips wrap" data-owner>${names.map(n => `<button class="lf-chip${A.sameName(n, p.owner) ? ' on' : ''}" data-act="how" data-v="${esc(n)}">${icon('crown')} ${esc(short(n))}</button>`).join('')}</div></div>
         <div class="lf-field"><label>Кто для ${f ? 'неё' : 'него'} кто</label>${names.map(n => { const x = per(n); return `<div class="lf-pet-fam-in" data-pn="${esc(n)}"><b>${esc(short(n))}</b><input type="text" data-in="role" value="${esc(x.role || '')}" placeholder="батя, мама, друг…"><input type="range" min="0" max="100" data-in="love" value="${x.love ?? 50}" title="Привязанность"></div>`; }).join('')}
             <div class="lf-hint">Ползунок — привязанность: слева сторонится, справа обожает.</div></div>
-        <div class="lf-field"><label>Живёт</label><select data-in="phome"><option value="">— где и все —</option>${homes.map(([k, raw]) => `<option value="${esc(raw)}" ${A.placeKey(p.home || '') === k ? 'selected' : ''}>${esc(A.placeName(raw))}</option>`).join('')}</select></div>
+        <div class="lf-field"><label>Живёт</label><select data-in="phome"><option value="">— где и все —</option>${homes.map(g => `<option value="${esc(g.raw)}" ${p.home && (g.keys.has(A.placeKey(p.home)) || g.base === placeBase(p.home)) ? 'selected' : ''}>${esc(A.placeName(g.raw))}</option>`).join('')}</select></div>
         ${p.id ? `<div class="lf-field"><label>Поправить потребности</label>${pk(p).needs.map(([k, label]) => `<div class="lf-inline"><span class="lf-need-l">${esc(label)}</span><input type="range" min="0" max="100" data-in="need-${k}" value="${needOf(p, k, now)}"></div>`).join('')}</div>` : ''}
         <label class="lf-switch"><input type="checkbox" data-in="pon" ${p.on !== false ? 'checked' : ''}><span></span>Участвует в истории</label>
         <button class="lf-btn primary serif full big" data-act="sim-pet-save" data-id="${esc(p.id || '')}">${icon('check')} Сохранить</button>
@@ -1009,6 +1099,16 @@ export async function simClick(act, el, ev) {
             A.render();
         }, 'Думаю…'); return true;
         case 'sim-pref-del': { const n = A.canonName(el.dataset.name); const arr = m.prefs[n] || []; const k = arr.findIndex(x => x.t === el.dataset.t); if (k >= 0) arr.splice(k, 1); A.saveMeta(); A.render(); return true; }
+        case 'sim-pref-card': {
+            await A.withBusy(el, async () => {
+                try {
+                    const r = await prefsFromCard(el.dataset.name);
+                    A.toast(r.added || r.removed ? 'success' : 'info', r.added || r.removed ? `${r.added ? `Добавила: ${r.added}` : ''}${r.added && r.removed ? ' · ' : ''}${r.removed ? `убрала временное: ${r.removed}` : ''}` : 'Нового в карточке не нашла', '✦ Вкусы', { timeOut: 3000 });
+                } catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Вкусы', { timeOut: 4000 }); }
+            }, 'Читаю карточку…');
+            A.render();
+            return true;
+        }
         case 'sim-pref-add': {
             A.openSheet(`${icon('heart')} ${esc(short(el.dataset.name))}`, `<div class="lf-field"><label>Что</label><input type="text" data-in="ptext" placeholder="кофе с корицей, пионы, старый джаз"></div>
                 <div class="lf-actions"><button class="lf-btn primary" data-act="sim-pref-save" data-name="${esc(el.dataset.name)}" data-k="like">${icon('heart')} Любит</button>
@@ -1017,7 +1117,7 @@ export async function simClick(act, el, ev) {
         }
         case 'sim-pref-save': {
             const t = val('[data-in="ptext"]');
-            if (t) for (const part of t.split(/[,;]/).map(x => x.trim()).filter(Boolean)) addPrefs([{ who: el.dataset.name, text: part, kind: el.dataset.k }], A.lastAiIndex());
+            if (t) for (const part of t.split(/[,;]/).map(x => x.trim()).filter(Boolean)) addPrefs([{ who: el.dataset.name, text: part, kind: el.dataset.k, hand: true }], A.lastAiIndex());
             A.saveMeta(); A.closeSheet(); A.render(); return true;
         }
         case 'sim-home': c.home = el.dataset.loc; A.saveSettings(); A.render(); return true;

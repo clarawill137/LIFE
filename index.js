@@ -9,7 +9,7 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
 import { initErrors } from './errors.js';
-import { peopleDedupe, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
+import { peopleDedupe, peopleDropCards, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
@@ -45,7 +45,7 @@ import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
-import { initLore } from './lore.js';
+import { initLore, coreRefresh } from './lore.js';
 import { splitEvent } from './hsplit.js';
 import { crossSame } from './names.js';
 import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
@@ -72,7 +72,7 @@ import { initCanon, canonEnsure, canonClick } from './canon.js';
 import { initHero, heroClick, heroInput, fameEnsure } from './hero.js';
 import { makeAskJson } from './ask.js';
 import { initArm, armPrompt, armChron, armAfterPost, armSceneHtml, armNote, armRecs, armClick, armCfgHtml } from './arm.js';
-import { initDollhouse, dollhouseHtml, dhClick, dhDefault, dhHomeKey } from './dollhouse.js';
+import { initDollhouse, dollhouseHtml, dhClick, dhDefault, dhRemember, dhHomeKey } from './dollhouse.js';
 import { initHeroes, heroesPrompt, heroesChron, heroesAfterPost, heroesRecs, heroesHtml, heroesClick, heroesInput, heroNote } from './heroes.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
@@ -90,7 +90,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.46.0';
+const VERSION = '0.47.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3270,7 +3270,7 @@ async function onClick(ev) {
             break;
         }
         case 'map-up': ui.mapStack.pop(); ui.editPins = false; ui.sel = ''; render(); break;
-        case 'map-dh': { const lv = mapLevel(); if (lv) { ui.dhModes = { ...(ui.dhModes || {}), [lv.key]: el.dataset.v }; ui.editPins = false; } render(); break; }
+        case 'map-dh': { const lv = mapLevel(); if (lv) { ui.dhModes = { ...(ui.dhModes || {}), [lv.key]: el.dataset.v }; dhRemember(lv.key, el.dataset.v); ui.editPins = false; } render(); break; }
         case 'map-home': { const k = el.dataset.key; if (k) { ui.mapStack = [k]; ui.dhModes = { ...(ui.dhModes || {}), [k]: 'cut' }; ui.sel = ''; ui.editPins = false; ui.atlas = false; } render(); break; }
         case 'inside': ui.mapStack.push(el.dataset.key); ui.tab = 'map'; ui.editPins = false; ui.sel = ''; ui.atlas = false; closeSheet(); render(); break;
         case 'edit-pins': ui.editPins = !ui.editPins; ui.placing = null; render(); break;
@@ -3829,6 +3829,8 @@ function onChatChanged() {
     setTimeout(runAutopay, 2500);
     setTimeout(() => { try { ambUpdate(); } catch { /* */ } }, 1500);
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
+    // ядро «Священный таймлайн»: облик людей на дату и правки персоны эпохи (оно само переключается чуть позже)
+    for (const ms of [1500, 6000]) setTimeout(() => { coreRefresh(true).catch(e => console.warn('[Life] ядро таймлайна', e)); }, ms);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
     setTimeout(() => { try { fameEnsure(); } catch (e) { console.warn('[Life] кого как узнают', e); } }, 16000);
@@ -3893,6 +3895,7 @@ const simApi = {
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
     skipFlare: (who, w) => stonesOwns(who, w),
+    emptyMeta,
 };
 
 /** Персонаж → Жизнь → Психика: триггеры, память, привычки, Камни, голос. */
@@ -3928,7 +3931,11 @@ jQuery(async () => {
     settings();
     initSim(simApi);
     // одна карточка человека на двух алфавитах («Гельмут» и «Helmut») — склеить
-    setTimeout(() => { try { const n = peopleDedupe(); if (n) console.info(`[Life] люди: склеила дублей ${n}`); } catch (e) { console.warn('[Life] люди: склейка', e); } }, 3000);
+    setTimeout(() => {
+        try { const n = peopleDedupe(); if (n) console.info(`[Life] люди: склеила дублей ${n}`); } catch (e) { console.warn('[Life] люди: склейка', e); }
+        // у кого своя карточка в ST — не NPC: из «Людей» вон
+        try { const n = peopleDropCards(); if (n) console.info(`[Life] люди: убрала с карточками ${n}`); } catch (e) { console.warn('[Life] люди: карточки', e); }
+    }, 3000);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
     initPress({ ...simApi, faceRef });
     // для патча телефона (phone-draw): те же лица, что в кадрах и СМИ
@@ -4214,6 +4221,8 @@ jQuery(async () => {
     ui.focus = 'last';
     const { eventSource, eventTypes: E } = ctx();
     eventSource.on(E.CHAT_CHANGED, onChatChanged);
+    // ядро таймлайна сменило эпоху, дату или состав — облик и правки персоны заново
+    try { window.addEventListener?.('sacred-timeline:changed', () => { coreRefresh(true).catch(() => { }); }); } catch { /* */ }
     const later = () => { invalidate(); decorateSoon(450); setTimeout(() => { invalidate(); decorateSoon(); }, 1600); };
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
     const onAi = (id, type) => {

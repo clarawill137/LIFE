@@ -4,6 +4,7 @@
 // с каноном — тем же чипом ⚠, что и остальные ляпы. Лорбук поменялся — список соберётся заново (если не правила сама).
 
 import { storyYear } from './era.js';
+import { eraVisible, eraBooks } from './lore.js';
 
 let A = null;
 export function initCanon(api) { A = api; }
@@ -34,12 +35,13 @@ export async function timelineLore(W = null) {
         (W.world_info?.charLore || []).find(e => e.name === ch.avatar)?.extraBooks?.forEach(b => books.add(b));
     }
     (W.selected_world_info || []).forEach(b => books.add(b));
+    eraBooks().forEach(b => books.add(b));   // книги эпохи — ядро подключает их само
     const parts = [];
     for (const b of books) {
         let data = null;
         try { data = await W.loadWorldInfo(b); } catch { continue; }
         const bookHit = TL_RE.test(`${b} ${data?.name || ''} ${data?.description || ''}`);
-        for (const e of Object.values(data?.entries || {})) {
+        for (const e of await eraVisible(data?.entries, b)) {   // только своя эпоха и дата (ядро таймлайна)
             const t = String(e?.content || '').trim();
             if (e?.disable || !t) continue;
             const head = `${e.comment || ''} ${(e.key || []).join(' ')}`;

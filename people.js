@@ -94,6 +94,38 @@ export function peopleDedupe() {
 /** Главные герои — участники группы и персона игрока (не все, кто мелькнул в сцене). */
 function castHas(name) { return [A.ctx().name1, ...A.groupMembers()].some(n => A.sameName(n, name)); }
 
+/** Имена всех карточек ST (без повторов: у одного человека бывает несколько карточек по эпохам). */
+function cardNames() {
+    const out = [];
+    for (const ch of A.ctx().characters || []) { const n = String(ch?.name || '').trim(); if (n && !out.some(x => A.norm(x) === A.norm(n))) out.push(n); }
+    return out;
+}
+/** У кого своя карточка в ST — тот не NPC: в «Людях» ему не место, даже если он не в этом чате. */
+export function hasCard(name) {
+    const n = String(name || '').trim();
+    if (!n) return false;
+    const cn = A.norm(A.canonName(n) || n);
+    return (A.ctx().characters || []).some(ch => ch?.name && (A.norm(ch.name) === cn || crossSame(ch.name, n)));
+}
+/** Не для «Людей»: свои (ты и группа) и все, у кого есть карточка, — по имени или любому из «ещё зовут». */
+function notNpc(name, aliases = []) {
+    return [name, ...(aliases || [])].filter(Boolean).some(n => castHas(n) || hasCard(n) || A.sameName(n, userName()));
+}
+
+/** Убрать из «Людей» тех, у кого есть карточка (заводились раньше, до этого правила). Вернёт, скольких убрала. */
+export function peopleDropCards() {
+    const p = P();
+    const keep = p.list.filter(x => !notNpc(x.name, x.aliases));
+    const n = p.list.length - keep.length;
+    if (n) { p.list = keep; A.saveSettings(); }
+    try {
+        const cm = CM();
+        const fresh = cm.fresh.filter(f => !notNpc(f.name));
+        if (fresh.length !== cm.fresh.length) { cm.fresh = fresh; A.saveMeta(); }
+    } catch { /* без чата */ }
+    return n;
+}
+
 /** Фото NPC для аватарок в хабе. */
 export function npcImg(name) {
     if (!A || !P().list.length) return '';
@@ -128,7 +160,7 @@ function nearby() {
     const tail = chat.slice(-2).map(m => String(m?.mes || '')).join('\n');
     const out = [];
     for (const x of P().list) {
-        if (castHas(x.name)) continue;
+        if (notNpc(x.name, x.aliases)) continue;
         const inScene = here.some(h => keysOf(x).includes(A.norm(h)) || keysOf(x).some(k => k.split(' ')[0] === A.norm(h).split(' ')[0]));
         if (inScene) out.push({ x, how: 'scene' });
         else if (mentions(x, tail)) out.push({ x, how: 'mention' });
@@ -158,7 +190,7 @@ export function peoplePrompt(type) {
 export function peopleChronOpts() {
     const p = P();
     if (!p.list.length && !p.auto) return null;
-    const names = p.list.filter(x => !castHas(x.name)).map(x => x.name).slice(0, 50);
+    const names = p.list.filter(x => !notNpc(x.name, x.aliases)).map(x => x.name).slice(0, 50);
     return { line: names.join(', '), auto: p.auto, tokens: 140 };
 }
 
@@ -178,7 +210,7 @@ export function peopleAfterPost(i, res) {
             if (r.status && STATUS.some(s => s[0] === r.status)) cm.status[x.id] = { v: r.status, mes: i };
             continue;
         }
-        if (!r.new || !p.auto || castHas(r.name) || A.sameName(r.name, userName())) continue;
+        if (!r.new || !p.auto || notNpc(r.name)) continue;
         if (cm.fresh.some(f => A.sameName(f.name, r.name))) continue;
         cm.fresh.push({ name: r.name, who: r.who || '', mes: i });
         if (cm.fresh.length > 8) cm.fresh.shift();
@@ -232,7 +264,7 @@ async function importBook(book) {
     for (const [k, text] of chunks.entries()) {
         if (chunks.length > 1) A.toast('info', `Читаю часть ${k + 1} из ${chunks.length}…`, '✦ Люди', { timeOut: 2000 });
         const out = await A.askModel([{ role: 'system', content: LORE_SYSTEM }, {
-            role: 'user', content: `Главные герои (пропусти): ${[A.ctx().name1, ...A.groupMembers()].join(', ')}. Игрок пишет за: ${userName()}.\nЛорбук «${book}»:\n\n${text}`,
+            role: 'user', content: `Главные герои (пропусти): ${[A.ctx().name1, ...A.groupMembers()].join(', ')}. У этих своя карточка — тоже пропусти: ${cardNames().filter(n => !castHas(n)).join(', ') || '—'}. Игрок пишет за: ${userName()}.\nЛорбук «${book}»:\n\n${text}`,
         }], 3500);
         const j = A.extractJson(out);
         for (const r of arr(j?.people)) {
@@ -255,7 +287,7 @@ function cleanRec(r) {
 /** Добавить или дополнить: правки руками не перетираются, пустые поля заполняются. */
 function mergePerson(raw, src) {
     const r = cleanRec(raw);
-    if (!r.name || castHas(r.name) || A.sameName(r.name, userName())) return '';
+    if (!r.name || notNpc(r.name, r.aliases)) return '';
     const p = P();
     const x = findPerson(r.name) || r.aliases.map(findPerson).find(Boolean);
     if (x) {
@@ -295,9 +327,10 @@ export function renderPeople() {
     const near = nearbyIds();
     const groups = [...new Set(p.list.map(x => x.group).filter(Boolean))];
     if (ui.pGroup && !groups.includes(ui.pGroup) && ui.pGroup !== '—') ui.pGroup = '';
+    if (p.list.some(x => notNpc(x.name, x.aliases))) peopleDropCards();
     const shown = p.list.filter(x => !ui.pGroup || (ui.pGroup === '—' ? !x.group : x.group === ui.pGroup))
         .sort((a, b) => (near.has(b.id) ? 1 : 0) - (near.has(a.id) ? 1 : 0) || (a.group || 'я').localeCompare(b.group || 'я') || a.name.localeCompare(b.name));
-    const horae = Object.keys(A.worldState().npcs || {}).filter(n => !findPerson(n) && !castHas(n) && !cm.fresh.some(f => A.sameName(f.name, n))).slice(0, 12);
+    const horae = Object.keys(A.worldState().npcs || {}).filter(n => !findPerson(n) && !notNpc(n) && !cm.fresh.some(f => A.sameName(f.name, n))).slice(0, 12);
     return `<div class="lf-pagehead"><h1>Люди</h1><span class="lf-subtitle">${icon('users')} Постоянные NPC — кто они, как звучат, что о них известно</span></div>
     ${cm.fresh.length ? `${A.sec('Новые лица', 'заметил Летописец')}<div class="lf-list">${cm.fresh.map(f => `<div class="lf-row lf-fresh">${icon('sparkles')}<span><b>${esc(f.name)}</b>${f.who ? ` — ${esc(f.who)}` : ''}</span>
         <button class="lf-iconbtn sm" data-act="pp-fresh-ok" data-name="${esc(f.name)}" title="Завести карточку">${icon('check')}</button><button class="lf-iconbtn sm" data-act="pp-fresh-no" data-name="${esc(f.name)}" title="Не надо">${icon('x')}</button></div>`).join('')}</div>` : ''}
@@ -440,6 +473,7 @@ export async function peopleClick(act, el) {
             const v = (k) => box?.querySelector(`[data-pf="${k}"]`)?.value?.trim() || '';
             const rec = Object.fromEntries(FIELDS.map(([k]) => [k, ['aliases', 'traits'].includes(k) ? v(k).split(',').map(s => s.trim()).filter(Boolean) : v(k)]));
             if (!rec.name) { A.toast('warning', 'Нужно имя'); return true; }
+            if (!el.dataset.id && notNpc(rec.name, rec.aliases)) { A.toast('info', `У «${esc(rec.name)}» своя карточка — он в «Персонаже», не в «Людях»`, '✦ Люди', { timeOut: 3500 }); return true; }
             const x = personById(el.dataset.id);
             if (x) Object.assign(x, rec);
             else { const id = A.uid(); p.list.push({ id, ...rec, img: '', status: 'active', inject: true, src: 'me', at: Date.now() }); ui.npc = id; }
@@ -474,6 +508,7 @@ export async function peopleClick(act, el) {
         case 'pp-fresh-ok': {
             const f = cm.fresh.find(y => A.sameName(y.name, el.dataset.name));
             cm.fresh = cm.fresh.filter(y => y !== f);
+            if (notNpc(f?.name || el.dataset.name)) { A.saveMeta(); return done(); }
             const id = A.uid();
             p.list.push({ id, name: f?.name || el.dataset.name, aliases: [], group: '', role: f?.who || '', age: '', look: '', traits: [], voice: '', bio: f?.who || '', toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: 'chron', at: Date.now() });
             A.saveMeta();

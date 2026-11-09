@@ -84,8 +84,64 @@ export function ritualHtml(a, b) {
     const N = (n) => esc(n || '');
     return `${A.sec('Своё', list.length ? String(list.length) : '')}
     ${list.length ? `<div class="lf-rit">${list.slice().reverse().map(x => `<span class="lf-rit-c k-${x.kind}">${A.icon(KINDS[x.kind]?.[1] || 'sparkles')}<b>${esc(x.t)}</b>${x.when ? `<small>${esc(x.when)}</small>` : ''}${x.hits?.length ? `<i>×${x.hits.length + 1}</i>` : ''}<button data-act="rit-del" data-id="${x.id}">${A.icon('x')}</button></span>`).join('')}</div>`
-        : '<div class="lf-hint">Внутренние шутки, прозвища и ритуалы появятся, когда Летописец заметит, что что-то стало «вашим».</div>'}
-    <button class="lf-btn ghost full" data-act="rit-add" data-a="${N(a)}" data-b="${N(b)}">${A.icon('plus')} Своё</button>`;
+        : '<div class="lf-hint">Внутренние шутки, прозвища и ритуалы появятся, когда Летописец заметит, что что-то стало «вашим», — или собери их из всей истории чата кнопкой ниже.</div>'}
+    <div class="lf-actions"><button class="lf-btn ghost" data-act="rit-add" data-a="${N(a)}" data-b="${N(b)}">${A.icon('plus')} Своё</button>
+    <button class="lf-btn ghost" data-act="rit-fill" data-a="${N(a)}" data-b="${N(b)}">${A.icon('sparkles')} Собрать из истории</button></div>`;
+}
+
+// ───────────── собрать из истории чата ─────────────
+
+const FILL_SYSTEM = (pair) => `Ты читаешь длинную ролевую историю на русском — выдержки по порядку, от давних к свежим — и выписываешь СВОЁ у ${pair}: что повторяется и стало «их». Внутренние шутки, прозвища и ласковые обращения (как именно называют друг друга), кодовые фразы, ритуалы и привычки вдвоём (кофе ей по утрам, греет её руки, «спокойной ночи» по-русски), подколы и игры.
+Только то, что правда есть в выдержках, лучше — что встречается не один раз. Не выдумывай. Уже записанное не повторяй.
+Ответь только JSON: {"ritual":[{"t":"что, 3–12 слов","kind":"joke|nickname|phrase|ritual","when":"когда бывает, 2–6 слов","who":["имена"],"mes":номер поста, где это видно}]} — до 10 штук, самое живое.`;
+
+/** Выдержки из всей истории: каждый пост — коротко; давние — через один-два, свежие — подряд. */
+function historyDigest(max = 26000) {
+    const chat = A.chatArr();
+    const isPost = A.isPost || ((m) => !!m && !m.is_system);
+    const ids = [];
+    for (let i = 0; i < chat.length; i++) if (isPost(chat[i]) && String(chat[i]?.mes || '').trim()) ids.push(i);
+    if (!ids.length) return '';
+    const tail = ids.slice(-30);
+    const head = ids.slice(0, -30);
+    const step = Math.max(1, Math.ceil(head.length / 55));
+    const pick = [...head.filter((_, k) => k % step === 0), ...tail];
+    const per = Math.max(260, Math.min(700, Math.floor(max / Math.max(1, pick.length)) - 20));
+    const out = [];
+    let total = 0;
+    for (const i of pick) {
+        const m = chat[i];
+        const t = `#${i} ${m.is_user ? (A.ctx().name1 || 'игрок') : (m.name || '')}: ${A.cut(A.plainText ? A.plainText(m.mes) : String(m.mes), per)}`;
+        if (total + t.length > max) break;
+        out.push(t);
+        total += t.length;
+    }
+    return out.join('\n');
+}
+
+export async function ritualFill(a, b) {
+    const who = [a, b].filter(Boolean).map(A.canonName);
+    if (!who.length) throw new Error('не поняла, чьё');
+    const hist = historyDigest();
+    if (!hist) throw new Error('в чате пока нечего читать');
+    const r = M();
+    const have = r.list.filter(x => !x.off && who.every(n => has(x, n)));
+    const days = Object.values(A.chatMeta().days?.sum || {}).map(x => x?.text).filter(Boolean).slice(-12).join('\n');
+    const pair = who.map(n => A.shortName(n)).join(' и ');
+    const j = await A.askJson([{ role: 'system', content: FILL_SYSTEM(pair) }, {
+        role: 'user', content: [`Кто: ${who.join(', ')}`, have.length ? `Уже записано:\n${have.map(x => `- ${x.t}`).join('\n')}` : '', days ? `Коротко по дням:\n${days}` : '', `Выдержки из истории:\n${hist}`].filter(Boolean).join('\n\n'),
+    }], 2600, { what: 'Своё', check: (x) => Array.isArray(x?.ritual) });
+    let n = 0;
+    for (const it of j.ritual.slice(0, 10)) {
+        const t = str(it?.t).slice(0, 90);
+        if (!t || r.list.some(y => !y.off && similar(y.t, t))) continue;
+        const ws = (Array.isArray(it?.who) ? it.who : []).map(str).filter(Boolean).map(A.canonName).filter(x => who.some(w => A.sameName(w, x)));
+        const mes = Number.isFinite(Number(it?.mes)) ? Number(it.mes) : -1;
+        r.list.push({ id: `r${++r.seq}`, t, who: ws.length >= Math.min(2, who.length) ? ws : who, kind: KINDS[str(it?.kind)] ? str(it.kind) : 'ritual', when: str(it?.when).slice(0, 50), mes, last: mes, hits: [], src: 'ai', at: Date.now() });
+        n++;
+    }
+    if (n) { A.saveMeta(); A.updatePrompt(); }
+    return n;
 }
 
 export function ritualClick(act, el) {
@@ -94,6 +150,18 @@ export function ritualClick(act, el) {
     const done = () => { A.saveMeta(); A.updatePrompt(); A.render(); return true; };
     switch (act) {
         case 'rit-del': { const x = r.list.find(y => y.id === el.dataset.id); if (x) x.off = true; return done(); }
+        case 'rit-fill': {
+            (async () => {
+                await A.withBusy(el, async () => {
+                    try {
+                        const n = await ritualFill(el.dataset.a, el.dataset.b);
+                        A.toast(n ? 'success' : 'info', n ? `Нашла своего: ${n}` : 'Нового своего в истории не нашла', '✦ Своё', { timeOut: 3000 });
+                    } catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Своё', { timeOut: 4000 }); }
+                }, 'Читаю историю…');
+                A.render();
+            })();
+            return true;
+        }
         case 'rit-add': {
             A.openSheet(`${A.icon('heart')} Своё`, `
                 <div class="lf-field"><label>Что</label><input type="text" data-in="rit-t" placeholder="«куколка»; кофе с корицей по утрам"></div>

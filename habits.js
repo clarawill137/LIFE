@@ -2,6 +2,8 @@
 // металлической руки, когда нервничает», «мурлычет Гленна Миллера») — модели по одной, через ход, к месту,
 // по кругу: недавно показанные не повторяются. «Собрать из лорбука» — дешёвая модель вытаскивает список.
 
+import { eraVisible, eraBooks } from './lore.js';
+
 let A = null;
 export function initHabits(api) { A = api; }
 
@@ -75,13 +77,14 @@ async function loreAbout(who) {
         (W.world_info?.charLore || []).find(e => e.name === ch.avatar)?.extraBooks?.forEach(b => books.add(b));
     }
     (W.selected_world_info || []).forEach(b => books.add(b));
+    eraBooks().forEach(b => books.add(b));   // книги эпохи — ядро подключает их само
     const first = A.norm(A.shortName(A.canonName(who)));
     const out = [];
     let total = 0;
     for (const b of books) {
         let data = null;
         try { data = await W.loadWorldInfo(b); } catch { continue; }
-        for (const e of Object.values(data?.entries || {})) {
+        for (const e of await eraVisible(data?.entries, b)) {   // только своя эпоха и дата (ядро таймлайна)
             const t = String(e?.content || '');
             const head = `${e.comment || ''} ${(e.key || []).join(' ')}`;
             if (e?.disable || !t || !HABIT_RE.test(`${head} ${t.slice(0, 400)}`)) continue;

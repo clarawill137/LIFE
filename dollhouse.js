@@ -349,11 +349,18 @@ export async function dhClick(act, el) {
 }
 
 /** Для Карты: домик или план (если у места есть свой план-картинка). */
+/** Как открывать место: что выбрала сама (запоминается), иначе её план, если он есть, иначе — в разрезе. */
 export function dhDefault(key) {
-    let home = '';
-    try { home = A.placeKey(homeLoc()); } catch { /* */ }
+    const own = A.settings().dhModes?.[key];
+    if (own === 'cut' || own === 'plan') return own;
     const p = A.settings().places[key];
-    return !p?.plan || key === home ? 'cut' : 'plan';
+    return p?.plan ? 'plan' : 'cut';
+}
+export function dhRemember(key, mode) {
+    const s = A.settings();
+    if (!s.dhModes || typeof s.dhModes !== 'object') s.dhModes = {};
+    s.dhModes[key] = mode === 'plan' ? 'plan' : 'cut';
+    A.saveSettings();
 }
 
 export function dhHomeKey() {
