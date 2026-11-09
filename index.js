@@ -26,6 +26,8 @@ import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather
 import { initZr } from './zr.js';
 import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
 import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput } from './slip.js';
+import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick } from './cal.js';
+import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -38,7 +40,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.24.0';
+const VERSION = '0.25.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -704,11 +706,14 @@ function itemPrompt(name, it) {
  * Скрытая отметка: системное сообщение (в промпт не идёт), но с horae_meta, чтобы Horae
  * считал новое место текущим. chapter=false — просто переход между комнатами без новой главы.
  */
-async function insertMarker({ location = '', title = '', who = [], how = '', note = '', chapter = true }) {
+async function insertMarker({ location = '', title = '', who = [], how = '', note = '', chapter = true, date = '', time = '' }) {
     const c = ctx();
     if (!hasChat()) throw new Error('сначала открой чат');
     const meta = emptyMeta();
     meta.scene.location = location || '';
+    // перемотка: новое время истории — сразу в отметку (Horae и Life видят его до следующего ответа)
+    if (date) meta.timestamp.story_date = date;
+    if (time) meta.timestamp.story_time = time;
     if (who.length) meta.scene.characters_present = [...who];
     const msg = {
         name: 'Life',
@@ -2329,6 +2334,8 @@ function renderWorld() {
     let body = '';
     if (tab === 'days') {
         body = (() => { try { return daysHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
+    } else if (tab === 'cal') {
+        body = (() => { try { return calHtml(); } catch (e) { console.warn('[Life] календарь', e); return ''; } })();
     } else if (tab === 'events') {
         const ev = horaeEvents().slice(-60).reverse();
         const lc = lastChron();
@@ -2385,12 +2392,12 @@ function renderWorld() {
             <b>${esc(st.timestamp?.story_time || '—:—')}</b>
             ${st.scene?.atmosphere ? `<span>${esc(st.scene.atmosphere)}</span>` : ''}
         </section>
-        <button class="lf-btn primary serif full big" data-act="time-skip">${icon('sunrise')} Перейти к утру</button>
+        ${(() => { try { return skipHtml(); } catch (e) { console.warn('[Life] перемотка', e); return ''; } })()}
         <div class="lf-chips wrap">${['Прошло несколько часов.', 'Прошёл день.', 'Прошло несколько дней.', 'Прошла неделя.'].map(t => `<button class="lf-chip" data-act="skip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-        <div class="lf-hint">Скачок времени — это новая глава со строчкой для модели. Время дальше ведёт Horae.</div>`;
+        <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -3738,6 +3745,10 @@ jQuery(async () => {
     chatClicks.push((act, el) => frameClick(act, el), (act, el) => slipClick(act, el));
     hubMods.push({ pre: 'vo-', click: voiceClick, label: 'Голос' }, { pre: 'sl-', click: slipClick, label: 'Ляп-фикс' });
     hubInputs.push(slipInput);
+    initCal({ ...extApi, horaeAgenda });
+    initSkip({ ...extApi, insertMarker, daysBrief, afterSkip: () => { ui.focus = 'last'; closeHub(); decorate(); scrollChatBottom(); } });
+    hubMods.push({ pre: 'cal-', click: calClick, label: 'Календарь' }, { pre: 'sk-', click: skipClick, label: 'Перемотка' });
+    hubInputs.push(skipInput);
     try {
         globalThis.LifeBridge.register({
             id: 'life-arc',
@@ -3766,6 +3777,12 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-cal',
+            prompt: (type) => calPrompt(type),
+            chron: (i) => calChron(i),
+            afterPost: (i, j) => calAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-voice',

@@ -2102,3 +2102,59 @@ body.lf-theme .mes .lf-frame button { color: var(--t-text2); border-color: var(-
 .mes .lf-slip-b button.main { border: 1px solid rgba(185, 220, 180, .4); color: #b9dcb4; border-radius: 9px; padding: 4px 12px; }
 .mes .lf-slip-all { width: 100%; margin-top: 6px; border: 1px solid rgba(185, 220, 180, .4); background: rgba(185, 220, 180, .06); color: #b9dcb4; border-radius: 10px; padding: 7px; font: inherit; cursor: pointer; }
 .lf-sl-facts { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 6px; }
+
+/* ───────────── 0.25: календарь ───────────── */
+.lf-field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lf-field.two > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lf-cal { margin: 6px 0 12px; padding: 12px 10px 10px; border-radius: 18px; background: rgba(255, 255, 255, .025); border: 1px solid var(--lf-line); }
+.lf-cal-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 8px; }
+.lf-cal-head b { font-family: var(--lf-serif); font-weight: 500; font-size: 18px; }
+.lf-cal-head button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .04); color: var(--lf-text2); cursor: pointer; }
+.lf-cal-head .lf-i { width: 16px; height: 16px; }
+.lf-cal-wd, .lf-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.lf-cal-wd span { text-align: center; font-size: 10.5px; letter-spacing: .06em; color: var(--lf-dim2); text-transform: uppercase; padding-bottom: 4px; }
+.lf-cal-c { position: relative; aspect-ratio: 1 / 1.05; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--lf-text); font: 500 14px/1 var(--lf-sans); cursor: pointer; }
+.lf-cal-c.out { color: var(--lf-dim2); opacity: .55; }
+.lf-cal-c.past span { opacity: .6; }
+.lf-cal-c.today { border-color: rgba(234, 179, 188, .55); }
+.lf-cal-c.today span { color: var(--lf-rose2); font-weight: 700; }
+.lf-cal-c.sel { background: rgba(123, 45, 61, .45); border-color: rgba(234, 179, 188, .35); }
+.lf-cal-c i { display: flex; gap: 2px; height: 5px; }
+.lf-cal-c i b, .lf-cal-legend b { width: 5px; height: 5px; border-radius: 50%; background: var(--lf-text2); }
+.lf-cal-c i b.off { opacity: .3; }
+.lf-cal-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-size: 10.5px; color: var(--lf-dim); }
+.lf-cal-legend span { display: inline-flex; align-items: center; gap: 4px; }
+b.k-promise { background: #eab3bc !important; } b.k-plan { background: #d6cac5 !important; } b.k-appointment { background: #8fc3d6 !important; }
+b.k-anniversary, b.k-birthday { background: #e7c77a !important; } b.k-deadline { background: #e9a46a !important; } b.k-bill { background: #9fc79a !important; }
+.lf-cal-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.lf-cal-ev { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); }
+.lf-cal-ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: rgba(255, 255, 255, .05); }
+.lf-cal-ic .lf-i { width: 16px; height: 16px; }
+.lf-cal-ev.k-promise .lf-cal-ic { color: #eab3bc; } .lf-cal-ev.k-appointment .lf-cal-ic { color: #8fc3d6; } .lf-cal-ev.k-anniversary .lf-cal-ic, .lf-cal-ev.k-birthday .lf-cal-ic { color: #e7c77a; }
+.lf-cal-ev.k-deadline .lf-cal-ic { color: #e9a46a; } .lf-cal-ev.k-bill .lf-cal-ic { color: #9fc79a; }
+.lf-cal-t { flex: 1; min-width: 0; }
+.lf-cal-t b { display: block; font-weight: 600; font-size: 14px; }
+.lf-cal-t b small { font-weight: 400; color: var(--lf-dim); }
+.lf-cal-t > small { display: block; color: var(--lf-dim); font-size: 12px; margin-top: 2px; }
+.lf-cal-ev.st-done, .lf-cal-ev.st-cancel { opacity: .55; }
+.lf-cal-ev.st-done .lf-cal-t b, .lf-cal-ev.st-cancel .lf-cal-t b { text-decoration: line-through; }
+.lf-cal-b { display: flex; gap: 2px; flex: none; }
+.lf-cal-b button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-cal-b .lf-i { width: 15px; height: 15px; }
+
+/* ───────────── 0.25: перемотка ───────────── */
+.lf-skip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 8px; }
+.lf-skip-b { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px 10px; border-radius: 16px; border: 1px solid var(--lf-line2); background: linear-gradient(180deg, rgba(123, 45, 61, .22), rgba(94, 31, 44, .1)); color: var(--lf-text); cursor: pointer; text-align: center; overflow: hidden; }
+.lf-skip-b .lf-i { width: 20px; height: 20px; color: var(--lf-rose2); }
+.lf-skip-b b { font-family: var(--lf-serif); font-weight: 500; font-size: 14px; }
+.lf-skip-b small { font-size: 11px; color: var(--lf-dim); }
+.lf-skip-b.date input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.lf-skip-head { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); margin-bottom: 4px; }
+.lf-skip-head span { color: var(--lf-dim); font-size: 12.5px; }
+.lf-skip-head b { font-family: var(--lf-serif); font-weight: 500; font-size: 17px; }
+.lf-skip-head small { color: var(--lf-rose2); font-size: 12px; }
+.lf-skip-ev { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); }
+.lf-skip-ev > .lf-i { width: 15px; height: 15px; color: #8fc3d6; }
+.lf-skip-ev > span { flex: 1; min-width: 60%; font-size: 13px; }
+.lf-skip-ev .lf-btn { padding: 4px 10px; font-size: 12px; }
+.lf-skip-sum { width: 100%; box-sizing: border-box; min-height: 110px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--lf-line2); background: rgba(255, 255, 255, .03); color: var(--lf-text); font: 14px/1.5 var(--lf-serif); resize: vertical; }

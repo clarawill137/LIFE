@@ -289,6 +289,18 @@ export function hurtCap(who, now) {
     try { return hurtOn() && active(who).length ? Math.max(5, Math.round(100 - burden(who, now || rpNow()) * 7)) : 100; } catch { return 100; }
 }
 export function hurtCount(who) { try { return hurtOn() ? active(who).length : 0; } catch { return 0; } }
+/** Прогноз тела на момент t (перемотка): что к тому времени заживёт, что останется и в какой стадии. */
+export function hurtAt(who, t) {
+    try {
+        if (!hurtOn() || t == null) return [];
+        const hm = healOf(who);
+        const at = { t, mes: A.lastAiIndex?.() ?? 0 };
+        return active(who).filter(w => !isOld(w)).map(w => {
+            const p = progAt(w, at, hm);
+            return { t: w.t, healed: p >= 1, prog: p, line: p >= 1 ? `${w.t} — заживёт` : line(w, at, hm) };
+        });
+    } catch { return []; }
+}
 /** Коротко для сверки (ляп-фикс): что сейчас с телом — раны с местом, стадией и чем мешают. */
 export function hurtFacts(who) {
     try {
