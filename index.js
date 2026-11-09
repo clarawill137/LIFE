@@ -46,6 +46,7 @@ import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, ston
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
 import { initLore, coreRefresh } from './lore.js';
+import { initSeed, seedApply } from './seed.js';
 import { splitEvent } from './hsplit.js';
 import { crossSame } from './names.js';
 import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
@@ -90,7 +91,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.48.0';
+const VERSION = '0.48.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3839,6 +3840,8 @@ function onChatChanged() {
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     // ядро «Священный таймлайн»: облик людей на дату и правки персоны эпохи (оно само переключается чуть позже)
     for (const ms of [1500, 6000]) setTimeout(() => { coreRefresh(true).catch(e => console.warn('[Life] ядро таймлайна', e)); }, ms);
+    // посев «от Claude» (лорбук на сервере): дни, подвиги — один раз на версию
+    setTimeout(() => { seedApply().catch(e => console.warn('[Life] посев', e)); }, 9000);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
     setTimeout(() => { try { fameEnsure(); } catch (e) { console.warn('[Life] кого как узнают', e); } }, 16000);
@@ -3956,6 +3959,7 @@ jQuery(async () => {
     initHurt(simApi);
     const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
     initDays(extApi);
+    initSeed(extApi);
     initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c) });
     initFresh(extApi);
     initFrames(extApi);

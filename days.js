@@ -554,6 +554,14 @@ export async function restoreDates({ smart = true } = {}) {
     });
 }
 
+/** Итог дня руками (или посевом «от Claude»): правленый — Летописец его не перезапишет. */
+export function setDaySummary(key, text, open = []) {
+    const d = collectDays().find(x => x.key === key);
+    M().sum[key] = { text: String(text || '').trim(), open: (Array.isArray(open) ? open : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 4), from: d?.from ?? 0, to: d?.to ?? 0, edited: true, at: Date.now() };
+    if (M().fail) delete M().fail[key];
+    A.saveMeta();
+}
+
 // ───────────── лист «Дата не та?» ─────────────
 
 function nightChips(key, chunks) {
@@ -718,8 +726,7 @@ export async function daysClick(act, el) {
             const box = el.closest('.lf-sheet') || document;
             const text = box.querySelector('[data-in="day-text"]')?.value?.trim() || '';
             const open = (box.querySelector('[data-in="day-open"]')?.value || '').split(';').map(x => x.trim()).filter(Boolean).slice(0, 4);
-            const d = collectDays().find(x => x.key === el.dataset.k);
-            M().sum[el.dataset.k] = { text, open, from: d?.from ?? 0, to: d?.to ?? 0, edited: true, at: Date.now() };
+            setDaySummary(el.dataset.k, text, open);
             A.closeSheet();
             return done();
         }
