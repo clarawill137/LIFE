@@ -90,7 +90,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.47.0';
+const VERSION = '0.48.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -944,7 +944,15 @@ async function askModel(messages, maxTokens) {
         ]);
         return { text: String(typeof r === 'string' ? r : (r?.content ?? '')), thought: !!String(r?.reasoning || '').trim() };
     };
-    const a = await once(p, base);
+    let a;
+    try { a = await once(p, base); } catch (e) {
+        // провайдер отказал («API request failed»: баланс, лимит, модель недоступна) — один раз запасным профилем
+        const why = String(e?.message || e);
+        console.warn(`[Life] Летописец: «${p.name}» — ${why}`);
+        if (alt === p) throw new Error(`${why} — профиль «${p.name}»: проверь баланс и модель, или задай запасной профиль (Мир → ⚙)`);
+        await new Promise(res => setTimeout(res, 1200));
+        try { a = await once(alt, base); } catch (e2) { throw new Error(`${why} — и запасной «${alt.name}»: ${String(e2?.message || e2)}`); }
+    }
     if (a.text.trim()) return a.text;
     // Пусто — обычно фильтр модели или мысли съели токены. Один раз переспросить сами: с запасом токенов и запасным профилем, если он задан.
     console.warn(`[Life] Летописец: пустой ответ${a.thought ? ' (одни размышления)' : ''} — переспрашиваю${alt !== p ? ` через «${alt.name}»` : ''}`);

@@ -1936,7 +1936,12 @@ body.lf-theme.lf-ava-wide #chat .mes_block > .lf-detpick { margin: -10px -16px 1
 .lf-day-fix-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .lf-day-fix-row input[type="date"] { flex: 1 1 150px; min-width: 0; }
 .lf-day-fix-row span { display: inline-flex; align-items: center; gap: 3px; color: var(--lf-dim); font-size: 13px; }
-.lf-day-fix-row input[type="number"] { width: 68px; }
+.lf-day-part { color: #ecd6a6; font-size: 12.5px; }
+.lf-day-fix .lf-chip.on { background: rgba(242, 200, 121, .18); border-color: rgba(242, 200, 121, .55); color: #f5e3bd; }
+.lf-day-moved { margin: 0 0 12px; padding: 12px; border-radius: 14px; border: 1px solid rgba(233, 181, 108, .35); background: rgba(233, 181, 108, .07); display: grid; gap: 8px; }
+.lf-day-moved b { display: flex; align-items: center; gap: 6px; color: #ecd6a6; font-size: 14px; }
+.lf-day-moved small { color: var(--lf-dim); font-size: 12.5px; line-height: 1.45; }
+.lf-day small .lf-warn, .lf-warn { color: #e9b56c; }
 .lf-day-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .lf-day-acts .lf-chip { padding: 5px 10px; font-size: 12px; }
 .lf-day-gap { align-self: center; color: var(--lf-dim); font-family: var(--lf-serif); font-style: italic; font-size: 13px; letter-spacing: .04em; padding: 2px 10px; }

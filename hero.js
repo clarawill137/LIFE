@@ -58,6 +58,18 @@ function keyOf(c, name) { return Object.keys(c.list).find(k => A.sameName(k, nam
 /** Запись героя (периоды, псевдоним, костюм, кто знает тайну, подвиги из лора) или null. */
 export function heroOf(name) { const c = cfg(); const k = keyOf(c, name); return k ? c.list[k] : null; }
 
+/** Подвиги руками: [{ year, t, public }] — Летописец их больше не перезаписывает. */
+export function setFeats(name, feats) {
+    const c = cfg();
+    let k = keyOf(c, name);
+    if (!k) { k = A.canonName(name) || name; c.list[k] = { alias: '', eras: [] }; }
+    c.list[k].feats = (Array.isArray(feats) ? feats : []).filter(f => f && str(f.t)).slice(0, 12)
+        .map(f => ({ year: str(String(f.year ?? '')).slice(0, 12), t: str(f.t).slice(0, 120), public: str(f.public).slice(0, 220) }));
+    c.list[k].featsHand = true;
+    A.saveSettings();
+    return c.list[k].feats.length;
+}
+
 /** Кто в истории: персона и участники группы. */
 export function heroRoster() {
     const out = [];

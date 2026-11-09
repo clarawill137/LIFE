@@ -147,9 +147,22 @@ const SUM_SYSTEM = `Ты ведёшь хронику длинной литера
 Напиши, что было за этот день: 2–4 коротких предложения, по порядку, конкретно — кто, что, где, чем кончилось. Главное и то, что ещё аукнется: решения, обещания, признания, ссоры и примирения, раны, подарки, новости, планы на потом. Без оценок, без украшений, без пересказа диалогов. Если в дне был флешбек или сон — так и скажи.
 Ответь только JSON: {"text":"2–4 предложения","open":["что осталось открытым или обещано на потом, 3–8 слов"]} (open — 0–3 пункта).`;
 
+/** Длинный день (сотни постов) — не обрезать конец: важное (★) всё, остальное — равномерно по дню. */
+function spread(list, max, isImp = () => false) {
+    const len = (a) => a.reduce((n, x) => n + x.t.length + 3, 0);
+    if (len(list) <= max) return list;
+    const imp = list.filter(isImp);
+    const rest = list.filter(x => !isImp(x));
+    let budget = max - Math.min(len(imp), max * 0.6);
+    const keep = new Set(imp.slice(0, 60));
+    const step = Math.max(1, Math.ceil(rest.length / Math.max(1, Math.floor(budget / 90))));
+    for (let k = 0; k < rest.length && budget > 0; k += step) { keep.add(rest[k]); budget -= rest[k].t.length + 3; }
+    return list.filter(x => keep.has(x));
+}
+
 function dayInput(d, upto = Infinity) {
-    const frags = d.frags.filter(f => f.i <= upto).map(f => `${f.imp ? '★ ' : ''}${f.t}`);
-    const chips = d.chips.filter(c => c.i <= upto).map(c => c.t);
+    const frags = spread(d.frags.filter(f => f.i <= upto), 6500, f => f.imp).map(f => `${f.imp ? '★ ' : ''}${f.t}`);
+    const chips = spread(d.chips.filter(c => c.i <= upto), 3000).map(c => c.t);
     const chat = A.chatArr();
     let tail = '';
     for (let i = Math.min(d.to, upto); i >= d.from && !tail; i--) if (isPost(chat[i]) && !chat[i].is_user) tail = A.cut(A.plainText(chat[i].mes), 900);
@@ -169,6 +182,8 @@ async function summarize(d, upto = Infinity) {
     const j = A.extractJson(out);
     const text = String(j?.text || '').trim();
     if (!text) throw new Error('Летописец не прислал итог дня');
+    // «ничего не было», хотя события есть, — не итог: прежний не трогать
+    if (hollow({ text }) && (d.frags.length + d.chips.length >= 3)) throw new Error('Летописец ответил «ничего не было», хотя события есть, — оставила как было');
     return { text: text.slice(0, 900), open: (Array.isArray(j?.open) ? j.open : []).map(x => String(x || '').trim().slice(0, 90)).filter(Boolean).slice(0, 3) };
 }
 
@@ -179,14 +194,16 @@ function wanted(all = false) {
     const out = [];
     const closed = days.slice(0, -1);
     const pool = all ? closed : closed.slice(-(cfg().n + 2));
+    const fail = M().fail || {};
+    const cool = (d) => !all && fail[d.key] && Date.now() - fail[d.key] < 3 * 3600e3;   // не долбить провайдера
     for (const d of pool) {
         const s = sum[d.key];
-        if (s?.edited || !hasStuff(d)) continue;
+        if (s?.edited || !hasStuff(d) || cool(d)) continue;
         if (!s || hollow(s) || (s.to !== d.to && !s.today)) out.push({ d, today: false });
         else if (s.today) out.push({ d, today: false }); // день закрылся — итог по всему дню
     }
     // пустышки, собранные, когда дню не дали материала (скрытые посты), — пересобрать, даже если день старый
-    if (!all) for (const d of closed) if (!pool.includes(d) && hollow(sum[d.key]) && hasStuff(d)) out.push({ d, today: false });
+    if (!all) for (const d of closed) if (!pool.includes(d) && hollow(sum[d.key]) && hasStuff(d) && !cool(d)) out.push({ d, today: false });
     const t = todayOf(days);
     if (t && t.to - t.from >= 24 && hasStuff(t)) {
         const s = sum[t.key];
@@ -215,10 +232,16 @@ export async function runDays({ all = false, onStep } = {}) {
             try {
                 const r = await summarize(w.d, w.today ? w.upto : Infinity);
                 M().sum[w.d.key] = { ...r, from: w.d.from, to: w.today ? w.upto : w.d.to, today: !!w.today, at: Date.now() };
+                if (M().fail) delete M().fail[w.d.key];
                 A.saveMeta();
                 n++;
                 onStep?.(n);
-            } catch (e) { console.warn('[Life] дни', e); last.err = String(e?.message || e); break; }
+            } catch (e) {
+                console.warn('[Life] дни', e);
+                last.err = String(e?.message || e);
+                const m = M(); m.fail = { ...(m.fail || {}), [w.d.key]: Date.now() }; A.saveMeta();
+                break;
+            }
         }
     } finally { busy = false; }
     if (n) { A.updatePrompt(); A.render?.(); }
@@ -317,6 +340,7 @@ function postDates(chat) {
     }
     return { raw, own };
 }
+const keysOf = (chat) => postDates(chat).raw.map(r => (r ? dayKey(r) : ''));
 
 function setDate(m, date) {
     if (!m.horae_meta || typeof m.horae_meta !== 'object') m.horae_meta = A.emptyMeta ? A.emptyMeta() : { timestamp: {} };
@@ -324,15 +348,15 @@ function setDate(m, date) {
     m.horae_meta.timestamp.story_date = date;
 }
 
-/** Таймеры Life {t, mes} — сдвинуть на разницу, если отмечены переставленными постами. */
-function shiftStamps(root, posts, ms) {
-    if (!ms) return 0;
+/** Таймеры Life {t, mes} — сдвинуть: delta — Map(номер поста → сколько мс). */
+function shiftStamps(root, delta) {
+    if (!delta.size) return 0;
     let n = 0;
     const seen = new Set();
     const walk = (o, depth) => {
         if (!o || typeof o !== 'object' || depth > 12 || seen.has(o)) return;
         seen.add(o);
-        if (!Array.isArray(o) && typeof o.t === 'number' && typeof o.mes === 'number' && Math.abs(o.t) > 1e11 && posts.has(o.mes)) { o.t += ms; n++; }
+        if (!Array.isArray(o) && typeof o.t === 'number' && typeof o.mes === 'number' && Math.abs(o.t) > 1e11 && delta.has(o.mes)) { o.t += delta.get(o.mes); n++; }
         for (const v of Array.isArray(o) ? o : Object.values(o)) if (v && typeof v === 'object') walk(v, depth + 1);
     };
     walk(root, 0);
@@ -340,66 +364,89 @@ function shiftStamps(root, posts, ms) {
 }
 
 /**
- * Переставить дату постам дня key: с поста from по to (включительно) — только тем, что в этом дне
- * (флешбеки внутри со своей датой не трогаю). date — настоящая дата (Date). Вернёт { posts, wrote, stamps, key }.
+ * Поменять даты постов: mutate(chat) правит horae_meta, а здесь — до/после: у каких постов сменился день,
+ * на столько же сдвигаются таймеры Life с этих постов; кэш дней сбрасывается, чат сохраняется.
  */
-export async function redateDay(key, date, from, to) {
-    if (!(date instanceof Date) || isNaN(date)) throw new Error('дата не читается');
+async function changeDates(mutate) {
     const chat = A.chatArr();
-    const { raw, own } = postDates(chat);
-    const keyAt = raw.map(r => (r ? dayKey(r) : ''));
-    const lo = Math.max(0, Math.min(from, to)), hi = Math.min(chat.length - 1, Math.max(from, to));
-    const posts = new Set();
-    for (let i = lo; i <= hi; i++) if (keyAt[i] === key) posts.add(i);
-    if (!posts.size) throw new Error(`в постах #${lo}–#${hi} нет этого дня`);
-    const nk = ymdOf(date);
-    if (nk === key) throw new Error('это та же дата');
-    const oldD = keyDate(key);
-    const ms = oldD ? Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - oldD) / 864e5) * 864e5 : 0;
-    let wrote = 0;
-    let cur = '';
+    const before = keysOf(chat);
+    const res = mutate(chat) || {};
+    const after = keysOf(chat);
+    const delta = new Map();
     for (let i = 0; i < chat.length; i++) {
-        const m = chat[i];
-        if (!m) continue;
-        const meta = m.horae_meta;
-        if (meta?._skipHorae) continue;
-        if (posts.has(i)) {
-            const want = restamp(raw[i], date);
-            if (own[i]) {
-                if (meta.timestamp.story_date !== want) { meta.timestamp.story_date = want; wrote++; }
-                const ab = meta.timestamp.absolute;
-                if (typeof ab === 'string' && A.parseDate(ab)) meta.timestamp.absolute = restamp(ab, date);
-                else if (typeof ab === 'number' && Math.abs(ab) > 1e11) meta.timestamp.absolute = ab + ms;
-                for (const ev of Array.isArray(meta.events) ? meta.events : []) if (ev?.timestamp?.story_date && dayKey(ev.timestamp.story_date) === key) ev.timestamp.story_date = restamp(ev.timestamp.story_date, date);
-                cur = want;
-            } else if (dayKey(cur) !== nk) { setDate(m, want); cur = want; wrote++; }
-            continue;
-        }
-        if (own[i]) { cur = meta.timestamp.story_date; continue; }
-        // наследовал дату — после правки должен наследовать ту же, что раньше
-        if (raw[i] && dayKey(cur) !== keyAt[i]) { setDate(m, raw[i]); cur = raw[i]; wrote++; }
+        if (before[i] === after[i] || !before[i] || !after[i]) continue;
+        const a = keyDate(before[i]), b = keyDate(after[i]);
+        if (a && b) delta.set(i, Math.round((b - a) / 864e5) * 864e5);
     }
-    const stamps = shiftStamps(A.chatMeta(), posts, ms);
-    // итоги дней: старый день, если ушёл целиком, — к новому; оба — пересобрать
+    const stamps = shiftStamps(A.chatMeta(), delta);
     const cm = A.chatMeta();
     cm.ver = (cm.ver || 0) + 1;
     cache.sig = '';
+    try { await A.ctx().saveChat?.(); } catch (e) { console.warn('[Life] дни: сохранить чат', e); }
+    A.saveMeta();
+    return { ...res, moved: delta.size, stamps, before, after };
+}
+
+/** Где в чате этот день: куски подряд идущих постов (разрыв больше 12 сообщений — уже другой кусок). */
+export function dayChunks(key) {
+    const keys = keysOf(A.chatArr());
+    const out = [];
+    for (let i = 0; i < keys.length; i++) {
+        if (keys[i] !== key) continue;
+        const last = out[out.length - 1];
+        if (last && i - last.to <= 12) { last.to = i; last.n++; } else out.push({ from: i, to: i, n: 1 });
+    }
+    return out;
+}
+
+/**
+ * Переставить дату постам дня key — только в выбранных кусках [{from,to}] и только тем, что в этом дне
+ * (флешбеки внутри со своей датой не трогаю). date — настоящая дата (Date).
+ */
+export async function redateDay(key, date, chunks) {
+    if (!(date instanceof Date) || isNaN(date)) throw new Error('дата не читается');
+    const nk = ymdOf(date);
+    if (nk === key) throw new Error('это та же дата');
+    const list = (Array.isArray(chunks) ? chunks : [chunks]).filter(c => c && Number.isFinite(c.from) && Number.isFinite(c.to));
+    if (!list.length) throw new Error('отметь, в каком месте чата дата не та');
+    const r = await changeDates((chat) => {
+        const { raw, own } = postDates(chat);
+        const keyAt = raw.map(x => (x ? dayKey(x) : ''));
+        const posts = new Set();
+        for (const c of list) for (let i = Math.max(0, Math.min(c.from, c.to)); i <= Math.min(chat.length - 1, Math.max(c.from, c.to)); i++) if (keyAt[i] === key) posts.add(i);
+        if (!posts.size) throw new Error('в этих постах нет этого дня');
+        let cur = '';
+        for (let i = 0; i < chat.length; i++) {
+            const m = chat[i];
+            if (!m) continue;
+            const meta = m.horae_meta;
+            if (meta?._skipHorae) continue;
+            if (posts.has(i)) {
+                const want = restamp(raw[i], date);
+                if (own[i]) { meta.timestamp.story_date = want; cur = want; }
+                else if (dayKey(cur) !== nk) { setDate(m, want); cur = want; }
+                continue;
+            }
+            if (own[i]) { cur = meta.timestamp.story_date; continue; }
+            // наследовал дату — после правки должен наследовать ту же, что раньше
+            if (raw[i] && dayKey(cur) !== keyAt[i]) { setDate(m, raw[i]); cur = raw[i]; }
+        }
+        return { posts: posts.size };
+    });
+    // итоги: ничего не стирать. День ушёл целиком — его итог переезжает (к уже бывшему — дописывается); оба — «пересобрать» по желанию
     const sum = M().sum;
     const gone = !collectDays().some(d => d.key === key);
     if (gone && sum[key]) {
         const o = sum[key];
-        if (!sum[nk]) sum[nk] = { ...o, to: -1, today: false };
-        else if (o.edited || sum[nk].edited) sum[nk] = { ...sum[nk], text: [sum[nk].text, o.text].filter(Boolean).join(' ').slice(0, 1800), open: [...(sum[nk].open || []), ...(o.open || [])].slice(0, 4), edited: true };
-        else sum[nk].to = -1;
+        if (!sum[nk] || hollow(sum[nk])) sum[nk] = { ...o, to: -1, today: false };
+        else if (!hollow(o)) sum[nk] = { ...sum[nk], text: [sum[nk].text, o.text].filter(Boolean).join(' ').slice(0, 2400), open: [...(sum[nk].open || []), ...(o.open || [])].slice(0, 4), to: -1, edited: !!(sum[nk].edited || o.edited) };
         delete sum[key];
-    } else if (sum[nk] && !sum[nk].edited) sum[nk].to = -1;
-    if (!gone && sum[key] && !sum[key].edited) sum[key].to = -1;
-    try { await A.ctx().saveChat?.(); } catch (e) { console.warn('[Life] дни: сохранить чат', e); }
+    }
     A.saveMeta();
-    return { posts: posts.size, wrote, stamps, key: nk, gone };
+    return { ...r, key: nk, gone };
 }
 
-/** Где в дне полночь: первый пост после позднего вечера с ранним временем (по времени Horae). */
+/** Где в куске полночь: первый пост после позднего вечера с ранним временем (по времени Horae). */
 export function midnightIn(d) {
     const chat = A.chatArr();
     let prev = null;
@@ -413,23 +460,126 @@ export function midnightIn(d) {
     return null;
 }
 
-/** Пересобрать итоги этих дней (после перестановки дат) — фоном. */
-async function rebuildKeys(keys) {
-    for (const k of keys) {
-        const d = collectDays().find(x => x.key === k);
-        const s = M().sum[k];
-        if (!d || !hasStuff(d) || s?.edited) continue;
-        const isToday = d === todayOf(collectDays());
-        if (isToday && d.to - d.from < 24) continue;
-        const upto = isToday ? d.to - 12 : Infinity;
-        try {
-            const r = await summarize(d, upto);
-            M().sum[k] = { ...r, from: d.from, to: isToday ? upto : d.to, today: isToday, at: Date.now() };
-            A.saveMeta();
-        } catch (e) { console.warn('[Life] дни: пересобрать', e); }
+// ───────────── вернуть даты Horae ─────────────
+// Horae держит дату ещё и в самом тексте поста (<horae>time:…</horae>). Если Life переставил дату, а Horae был прав
+// (пост и правда из декабря), — её можно вернуть оттуда.
+
+/** Дата из тега Horae в тексте поста (последний блок со строкой time:) или ''. */
+export function horaeTagDate(mes) {
+    const blocks = [...String(mes || '').matchAll(/<horae>([\s\S]*?)<\/horae>/gi)];
+    for (let k = blocks.length - 1; k >= 0; k--) {
+        const line = blocks[k][1].split('\n').map(x => x.trim()).find(x => /^time\s*[:：]/i.test(x));
+        if (!line) continue;
+        const t = line.replace(/^time\s*[:：]/i, '').trim();
+        const clock = t.match(/(\d{1,2}:\d{2})\s*$/);
+        return clock ? t.slice(0, t.lastIndexOf(clock[1])).trim() : t;
     }
-    A.updatePrompt();
-    A.render?.();
+    return '';
+}
+
+let movedMemo = { sig: '', list: [] };
+/** Посты, где дата Horae в метке не та, что в тексте поста (её переставили): [{ i, cur, tag }]. */
+export function movedDates() {
+    const chat = A.chatArr();
+    const last = chat[chat.length - 1];
+    const sig = `${A.ctx().chatId || A.ctx().groupId}|${chat.length}|${String(last?.mes || '').length}|${A.chatMeta().ver || 0}`;
+    if (movedMemo.sig === sig) return movedMemo.list;
+    const list = [];
+    for (let i = 0; i < chat.length; i++) {
+        const m = chat[i];
+        const meta = m?.horae_meta;
+        if (!meta?.timestamp?.story_date || meta._skipHorae || m.extra?.life) continue;
+        const tag = horaeTagDate(m.mes);
+        if (tag && dayKey(tag) && dayKey(tag) !== dayKey(meta.timestamp.story_date)) list.push({ i, cur: meta.timestamp.story_date, tag });
+    }
+    movedMemo = { sig, list };
+    return list;
+}
+
+/**
+ * Вернуть даты из текста постов. smart — только там, где дата Horae ложится в ход истории (между соседними
+ * датами), а переставленная — нет: так уходит лишнее, а настоящая правка остаётся. Иначе — все.
+ */
+export async function restoreDates({ smart = true } = {}) {
+    const moved = movedDates();
+    if (!moved.length) return { restored: 0, kept: 0, cleared: 0, moved: 0, stamps: 0 };
+    return changeDates((chat) => {
+        const set = new Map(moved.map(x => [x.i, x]));
+        const curKeys = new Set(moved.map(x => dayKey(x.cur)));
+        // посты со своей датой по порядку; соседи куска — ближайшие непереставленные. Даты, которые Life дописал
+        // постам без тега (той же переставленной датой), — не опора: их ставила та же правка
+        const seq = [];
+        for (let i = 0; i < chat.length; i++) {
+            const m = chat[i];
+            const meta = m?.horae_meta;
+            if (!meta?.timestamp?.story_date || meta._skipHorae || !dayKey(meta.timestamp.story_date)) continue;
+            if (!set.has(i) && !m.extra?.life && !horaeTagDate(m.mes) && curKeys.has(dayKey(meta.timestamp.story_date))) continue;
+            seq.push(i);
+        }
+        const back = [];
+        let kept = 0;
+        for (let k = 0; k < seq.length; k++) {
+            if (!set.has(seq[k])) continue;
+            let a = k; while (a > 0 && set.has(seq[a - 1])) a--;
+            let b = k; while (b < seq.length - 1 && set.has(seq[b + 1])) b++;
+            const prev = a > 0 ? keyDate(dayKey(chat[seq[a - 1]].horae_meta.timestamp.story_date)) : null;
+            const next = b < seq.length - 1 ? keyDate(dayKey(chat[seq[b + 1]].horae_meta.timestamp.story_date)) : null;
+            for (let q = a; q <= b; q++) {
+                const x = set.get(seq[q]);
+                const T = keyDate(dayKey(x.tag)), C = keyDate(dayKey(x.cur));
+                let ret = !smart;
+                if (smart && T && C) {
+                    const fits = (d) => (!prev || prev <= d) && (!next || d <= next);
+                    const near = (d) => Math.abs(d - (prev || next || d));
+                    ret = fits(T) && !fits(C) ? true : fits(C) && !fits(T) ? false : near(T) < near(C);
+                }
+                if (ret) back.push({ ...x, from: a > 0 ? seq[a - 1] + 1 : 0, to: b < seq.length - 1 ? seq[b + 1] - 1 : chat.length - 1 });
+                else kept++;
+            }
+            k = b;
+        }
+        const backKeys = new Set(back.map(x => dayKey(x.cur)));
+        for (const x of back) chat[x.i].horae_meta.timestamp.story_date = x.tag;
+        // даты, которые Life дописал постам без своей (чтобы тянулась новая), — снять там, где вернули
+        let cleared = 0;
+        for (const x of back) {
+            for (let i = x.from; i <= x.to; i++) {
+                const m = chat[i];
+                const meta = m?.horae_meta;
+                if (!meta?.timestamp?.story_date || meta._skipHorae || m.extra?.life || horaeTagDate(m.mes)) continue;
+                if (backKeys.has(dayKey(meta.timestamp.story_date))) { meta.timestamp.story_date = ''; cleared++; }
+            }
+        }
+        return { restored: back.length, kept, cleared };
+    });
+}
+
+// ───────────── лист «Дата не та?» ─────────────
+
+function nightChips(key, chunks) {
+    const kd = keyDate(key);
+    if (!kd) return '';
+    const out = [];
+    for (const c of chunks) {
+        const mid = midnightIn(c);
+        if (!mid) continue;
+        out.push(`<button class="lf-chip" data-act="day-night" data-k="${esc(key)}" data-from="${c.from}" data-to="${mid.before}" data-shift="-1">${A.icon('moon')} до полуночи (#${c.from}–#${mid.before}) — днём раньше</button>`,
+            `<button class="lf-chip" data-act="day-night" data-k="${esc(key)}" data-from="${mid.after}" data-to="${c.to}" data-shift="1">${A.icon('sun')} после полуночи (#${mid.after}–#${c.to}) — днём позже</button>`);
+    }
+    return out.join('');
+}
+
+function dateFixHtml(d, K) {
+    const chunks = dayChunks(d.key);
+    const one = chunks.length === 1;
+    return `<div class="lf-day-fix">
+        <label>${A.icon('calendar')} Дата не та?</label>
+        <small>${one ? `Horae записал ${esc(dayLabel(d.key, d.raw, true))} — посты #${chunks[0].from}–#${chunks[0].to}.` : `<b>Эта дата стоит в чате в ${chunks.length} местах</b> — это могут быть разные дни. Отметь только то место, где дата не та.`} Перепишу дату в самих постах (увидят Horae, Life и модель); остальные посты — при своей, итоги дней не трогаю.</small>
+        <div class="lf-chips wrap">${chunks.map(c => `<button class="lf-chip${one ? ' on' : ''}" data-act="day-chunk" data-k="${K}" data-from="${c.from}" data-to="${c.to}">#${c.from}–#${c.to} · ${c.n} ${A.plural(c.n, 'сообщение', 'сообщения', 'сообщений')}</button>`).join('')}</div>
+        <div class="lf-day-fix-row"><input type="date" data-in="day-date" value="${esc(d.key)}"><span class="lf-day-part" hidden></span></div>
+        <div class="lf-chips wrap lf-day-night">${nightChips(d.key, one ? chunks : [])}</div>
+        <button class="lf-btn full" data-act="day-redate" data-k="${K}">${A.icon('calendar')} Переставить дату</button>
+    </div>`;
 }
 
 // ───────────── вид: Мир → Дни ─────────────
@@ -452,7 +602,7 @@ export function daysHtml() {
         const stale = s && !s.edited && !s.today && s.to !== d.to;
         out.push(`<article class="lf-day${isToday ? ' today' : ''}">
             ${cover ? `<div class="lf-day-img" style="background-image:url('${esc(cover)}')"></div>` : ''}
-            <header><b>${esc(dayLabel(d.key, d.raw, true))}</b><small>${isToday ? 'сегодня · ' : ''}${esc(d.locs.slice(0, 3).join(' · '))}${d.locs.length ? ' · ' : ''}${d.posts} ${A.plural(d.posts, 'пост', 'поста', 'постов')}</small></header>
+            <header><b>${esc(dayLabel(d.key, d.raw, true))}</b><small>${isToday ? 'сегодня · ' : ''}${esc(d.locs.slice(0, 3).join(' · '))}${d.locs.length ? ' · ' : ''}${d.posts} ${A.plural(d.posts, 'пост', 'поста', 'постов')}${(() => { const ch = dayChunks(d.key); return ch.length > 1 ? ` · <span class="lf-warn">в ${ch.length} местах чата</span>` : ''; })()}</small></header>
             ${s?.text && !hollow(s) ? `<p>${esc(s.text)}${s.today ? ' <i>(до этого места)</i>' : ''}</p>` : `<p class="lf-dim">${d.frags.length ? esc(d.frags.slice(0, 3).map(f => f.t).join(' · ')) : hasStuff(d) ? 'Итога ещё нет — «Собрать».' : 'В этом дне нет ни постов, ни событий.'}</p>`}
             ${s?.open?.length ? `<div class="lf-day-open">${s.open.map(o => `<span>${A.icon('pin')} ${esc(o)}</span>`).join('')}</div>` : ''}
             ${d.flash?.length ? `<div class="lf-day-flash">${d.flash.map(f => `<button class="lf-chip" data-act="jump" data-mes="${f.from}">${A.icon('film')} флешбек · ${esc(dayLabel(f.key, f.raw, true))}</button>`).join('')}</div>` : ''}
@@ -467,7 +617,10 @@ export function daysHtml() {
         if (gap) out.push(`<div class="lf-day-gap">⟶ ${esc(gap)}</div>`);
     }
     const missing = days.slice(0, -1).filter(d => hasStuff(d) && (!sum[d.key]?.text || sum[d.key].today || hollow(sum[d.key]))).length;
+    const moved = movedDates();
     return `${head}
+    ${moved.length ? `<div class="lf-day-moved"><b>${A.icon('calendar')} Даты переставлены в ${moved.length} ${A.plural(moved.length, 'посте', 'постах', 'постах')}</b><small>В тексте этих постов у Horae своя дата. «Вернуть, где Horae прав» — только там, где его дата ложится между соседними днями (правка ноября останется, а настоящий декабрь вернётся); «Вернуть все» — как было до правок.</small>
+        <div class="lf-actions"><button class="lf-btn" data-act="days-restore">${A.icon('refresh')} Вернуть, где Horae прав</button><button class="lf-btn ghost" data-act="days-restore" data-all="1">Вернуть все</button></div></div>` : ''}
     ${missing ? `<button class="lf-btn full" data-act="days-all">${A.icon('sparkles')} Собрать все дни (${missing})</button>` : ''}
     <div class="lf-days">${out.join('')}</div>
     <div class="lf-hint">Закрытый день Летописец сжимает сам (последние дни — сразу, старые — кнопкой). Модель каждый ответ видит последние дни парой строк и «сегодня, раньше в этот день», если день длинный. Правка руками держится — Летописец её не перезапишет.</div>`;
@@ -502,27 +655,22 @@ export async function daysClick(act, el) {
             const d = collectDays().find(x => x.key === el.dataset.k);
             const s = M().sum[el.dataset.k] || {};
             const kd = d ? keyDate(d.key) : null;
-            const mid = d && kd ? midnightIn(d) : null;
             const K = esc(el.dataset.k);
             A.openSheet(`${A.icon('calendar')} ${esc(d ? dayLabel(d.key, d.raw, true) : el.dataset.k)}`, `
                 <div class="lf-field"><label>Что было за день</label><textarea data-in="day-text" rows="6">${esc(s.text || '')}</textarea></div>
                 <div class="lf-field"><label>Открыто (через ;)</label><input type="text" data-in="day-open" value="${esc((s.open || []).join('; '))}"></div>
                 <button class="lf-btn primary full" data-act="day-save" data-k="${K}">${A.icon('check')} Сохранить</button>
                 ${s.text ? `<button class="lf-btn ghost full" data-act="day-clear" data-k="${K}">${A.icon('trash')} Стереть итог</button>` : ''}
-                ${d && kd ? `<div class="lf-day-fix">
-                    <label>${A.icon('calendar')} Дата не та?</label>
-                    <small>Horae записал ${esc(dayLabel(d.key, d.raw, true))} — посты #${d.from}–#${d.to}. Поставь настоящую: перепишу дату в самих постах (увидят Horae, Life и модель), посты после останутся при своей.</small>
-                    <div class="lf-day-fix-row">
-                        <input type="date" data-in="day-date" value="${esc(d.key)}">
-                        <span>#<input type="number" inputmode="numeric" data-in="day-from" value="${d.from}" min="0"></span>
-                        <span>– #<input type="number" inputmode="numeric" data-in="day-to" value="${d.to}" min="0"></span>
-                    </div>
-                    ${mid ? `<div class="lf-chips wrap">
-                        <button class="lf-chip" data-act="day-night" data-k="${K}" data-from="${d.from}" data-to="${mid.before}" data-shift="-1">${A.icon('moon')} до полуночи (#${d.from}–#${mid.before}) — днём раньше</button>
-                        <button class="lf-chip" data-act="day-night" data-k="${K}" data-from="${mid.after}" data-to="${d.to}" data-shift="1">${A.icon('sun')} после полуночи (#${mid.after}–#${d.to}) — днём позже</button>
-                    </div>` : ''}
-                    <button class="lf-btn full" data-act="day-redate" data-k="${K}">${A.icon('calendar')} Переставить дату</button>
-                </div>` : ''}`);
+                ${d && kd ? dateFixHtml(d, K) : ''}`);
+            return true;
+        }
+        case 'day-chunk': {
+            // отметить кусок — заново посчитать полночь в отмеченных
+            const box = el.closest('.lf-sheet') || document;
+            el.classList.toggle('on');
+            const sel = [...box.querySelectorAll('[data-act="day-chunk"].on')].map(x => ({ from: Number(x.dataset.from), to: Number(x.dataset.to) }));
+            const nb = box.querySelector('.lf-day-night');
+            if (nb) nb.innerHTML = nightChips(el.dataset.k, sel);
             return true;
         }
         case 'day-night': {
@@ -530,28 +678,40 @@ export async function daysClick(act, el) {
             const kd = keyDate(el.dataset.k);
             if (!kd) return true;
             const cur = box.querySelector('[data-in="day-date"]');
-            const base = cur?.value && keyDate(cur.value) ? keyDate(cur.value) : kd;
-            const d = new Date(base); d.setDate(d.getDate() + (Number(el.dataset.shift) || 0));
+            const d = new Date(kd); d.setDate(d.getDate() + (Number(el.dataset.shift) || 0));
             if (cur) cur.value = ymdOf(d);
-            const f = box.querySelector('[data-in="day-from"]'); if (f) f.value = el.dataset.from;
-            const t = box.querySelector('[data-in="day-to"]'); if (t) t.value = el.dataset.to;
+            box.querySelectorAll('[data-act="day-chunk"]').forEach(x => x.classList.remove('on'));
+            const part = box.querySelector('.lf-day-part');
+            if (part) { part.dataset.from = el.dataset.from; part.dataset.to = el.dataset.to; part.textContent = `только посты #${el.dataset.from}–#${el.dataset.to}`; part.hidden = false; }
             return true;
         }
         case 'day-redate': {
             const box = el.closest('.lf-sheet') || document;
-            const v = (k) => box.querySelector(`[data-in="${k}"]`)?.value ?? '';
-            const date = keyDate(v('day-date'));
+            const date = keyDate(box.querySelector('[data-in="day-date"]')?.value || '');
             if (!date) { A.toast('warning', 'Выбери дату', '✦ Дни', { timeOut: 2000 }); return true; }
+            const part = box.querySelector('.lf-day-part');
+            const chunks = part && !part.hidden ? [{ from: Number(part.dataset.from), to: Number(part.dataset.to) }]
+                : [...box.querySelectorAll('[data-act="day-chunk"].on')].map(x => ({ from: Number(x.dataset.from), to: Number(x.dataset.to) }));
+            if (!chunks.length) { A.toast('warning', 'Отметь, в каком месте чата дата не та', '✦ Дни', { timeOut: 3000 }); return true; }
             let r = null;
             await A.withBusy(el, async () => {
-                try { r = await redateDay(el.dataset.k, date, Number(v('day-from')), Number(v('day-to'))); }
+                try { r = await redateDay(el.dataset.k, date, chunks); }
                 catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Дни', { timeOut: 4000 }); }
             }, 'Переставляю…');
             if (!r) return true;
             A.closeSheet();
-            A.toast('success', `${r.posts} ${A.plural(r.posts, 'пост', 'поста', 'постов')} → ${esc(dayLabel(r.key, '', true))}${r.stamps ? ` · таймеров сдвинула: ${r.stamps}` : ''}<br><small>итоги дня пересоберу сама</small>`, '✦ Дни', { timeOut: 4500, escapeHtml: false });
-            done();
-            rebuildKeys([r.key, el.dataset.k]).catch(() => { });
+            A.toast('success', `${r.posts} ${A.plural(r.posts, 'пост', 'поста', 'постов')} → ${esc(dayLabel(r.key, '', true))}${r.stamps ? ` · таймеров сдвинула: ${r.stamps}` : ''}<br><small>итоги не трогала: поправь ✎ или «Пересобрать»</small>`, '✦ Дни', { timeOut: 5000, escapeHtml: false });
+            return done();
+        }
+        case 'days-restore': {
+            let r = null;
+            await A.withBusy(el, async () => {
+                try { r = await restoreDates({ smart: el.dataset.all !== '1' }); }
+                catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Дни', { timeOut: 4000 }); }
+            }, 'Возвращаю…');
+            if (!r) return true;
+            A.toast('success', `Вернула дату Horae: ${r.restored} ${A.plural(r.restored, 'посту', 'постам', 'постам')}${r.kept ? ` · оставила как поправлено: ${r.kept}` : ''}${r.stamps ? ` · таймеров сдвинула: ${r.stamps}` : ''}`, '✦ Дни', { timeOut: 5000 });
+            return done();
             return true;
         }
         case 'day-save': {

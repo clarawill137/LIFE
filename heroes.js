@@ -12,7 +12,7 @@
 // Лор живёт в её лорбуках и настройках, в коде — ни имён, ни лора.
 
 import { storyYear } from './era.js';
-import { heroRoster, heroOf, fameNow, fameCollect, STATUS, STATUS_SAY, heroOn } from './hero.js';
+import { heroRoster, heroOf, fameNow, fameCollect, STATUS, STATUS_SAY, heroOn, setFeats } from './hero.js';
 import { canonText } from './canon.js';
 
 let A = null;
@@ -142,7 +142,9 @@ export function statusOf(name) {
 /** Подвиги: из лора (до этого года) и из истории. */
 export function featsOf(name) {
     const y = year();
-    const lore = arr(heroOf(name)?.feats).filter(f => !y || !Number(f.year) || Number(f.year) <= y).map(f => ({ ...f, src: 'lore' }));
+    const fy = (f) => parseInt(String(f.year ?? ''), 10);
+    const lore = arr(heroOf(name)?.feats).filter(f => !y || !fy(f) || fy(f) <= y).map(f => ({ ...f, src: 'lore' }))
+        .sort((a, b) => (fy(a) || 0) - (fy(b) || 0));
     const story = scan().feat.filter(x => arr(x.who).some(w => A.sameName(w, name))).map(x => ({ year: y || '', t: str(x.t), public: str(x.public), mes: x.mes, src: 'story' }));
     return [...lore, ...story];
 }
@@ -360,7 +362,7 @@ function heroCard(x) {
     const kn = knowsOf(x.name);
     const cl = cluesOf(x.name).slice(-4).reverse();
     const r = x.h.secret ? riskOf(x.name) : 0;
-    const feats = featsOf(x.name).slice(-6).reverse();
+    const feats = featsOf(x.name).slice(-8);   // по порядку: из лора по годам, потом — из истории
     const open = M().open === x.name;
     return `<section class="lf-hr st-${s.st || 'none'}${open ? ' open' : ''}">
         <div class="lf-hr-top" data-act="hr-open" data-name="${n}">
@@ -393,7 +395,7 @@ function heroCard(x) {
                 <div class="lf-chips wrap"><button class="lf-chip${s.src !== 'hand' ? ' on' : ''}" data-act="hr-status" data-name="${n}" data-st="">по годам</button>${Object.entries(STATUS).map(([k, t]) => `<button class="lf-chip${s.src === 'hand' && s.st === k ? ' on' : ''}" data-act="hr-status" data-name="${n}" data-st="${k}">${t}</button>`).join('')}</div>
                 ${s.why ? `<div class="lf-hint">${esc(s.why)}${s.src === 'ai' ? ` — по посту #${s.mes}` : ''}</div>` : ''}
             </div>
-            ${feats.length ? `<div class="lf-hr-sec"><h4>${A.icon('star')} Подвиги глазами людей</h4><div class="lf-hr-feats">${feats.map(f => `<div class="lf-hr-feat"><b>${esc(f.year || '')}</b><span>${esc(f.t)}${f.public ? `<q>${esc(f.public)}</q>` : ''}</span></div>`).join('')}</div></div>` : ''}
+            <div class="lf-hr-sec"><h4>${A.icon('star')} Подвиги глазами людей <button class="lf-chip" data-act="hr-feats" data-name="${n}" title="поправить">${A.icon('pencil')}</button></h4>${feats.length ? `<div class="lf-hr-feats">${feats.map(f => `<div class="lf-hr-feat"><b>${esc(f.year || '')}</b><span>${esc(f.t)}${f.public ? `<q>${esc(f.public)}</q>` : ''}</span></div>`).join('')}</div>` : '<div class="lf-hint">Пока нет — ✎ впиши сама или «Собрать из лора».</div>'}</div>
         </div>` : ''}
     </section>`;
 }
@@ -477,6 +479,29 @@ export async function heroesClick(act, el) {
     switch (act) {
         case 'hr-open': m.open = m.open === name ? '' : name; A.saveMeta(); A.render(); return true;
         case 'hr-collect': await A.withBusy(el, async () => { const n = await fameCollect({ force: false }); A.toast('success', n ? `Собрала из лора: ${n}` : 'Всё правлено руками — не трогала', '✦ Герои', { timeOut: 2200 }); A.render(); }, 'Читаю лор…'); return true;
+        case 'hr-feats': {
+            const cur = arr(heroOf(name)?.feats).slice().sort((a, b) => (parseInt(a.year, 10) || 0) - (parseInt(b.year, 10) || 0));
+            A.openSheet(`${A.icon('star')} Подвиги — ${esc(short(name))}`, `
+                <div class="lf-field"><label>По строке на подвиг: год | что сделал(а) | как это видели люди</label>
+                <textarea data-in="hr-feats" rows="9" placeholder="2016 | Удержал(а) мост от обрушения | Очевидцы снимали на телефоны — ролик набрал миллионы">${esc(cur.map(f => [f.year, f.t, f.public].map(x => String(x ?? '').trim()).filter((x, k) => x || k < 2).join(' | ')).join('\n'))}</textarea></div>
+                <div class="lf-hint">Год можно отрезком: «2015–2023». Третья часть — по желанию. Правленое Летописец больше не перезаписывает.</div>
+                <button class="lf-btn primary full" data-act="hr-feats-save" data-name="${esc(name)}">${A.icon('check')} Сохранить</button>`);
+            return true;
+        }
+        case 'hr-feats-save': {
+            const sheet = el.closest('.lf-sheet') || document;
+            const lines = String(sheet.querySelector('[data-in="hr-feats"]')?.value || '').split('\n').map(x => x.trim()).filter(Boolean);
+            const feats = lines.map(l => {
+                if (l.includes('|')) { const [y, t, p] = l.split('|').map(x => x.trim()); return { year: y, t, public: p || '' }; }
+                const m2 = l.match(/^(\d{4}(?:\s*[–—-]\s*\d{4})?)\s*[:—–.-]?\s*(.+)$/);
+                return m2 ? { year: m2[1].replace(/\s+/g, ''), t: m2[2], public: '' } : { year: '', t: l, public: '' };
+            }).filter(f => f.t);
+            const n2 = setFeats(name, feats);
+            A.closeSheet();
+            A.toast('success', `Подвиги: ${n2}`, '✦ Герои', { timeOut: 2000 });
+            ver++; A.updatePrompt?.(); A.render();
+            return true;
+        }
         case 'hr-know-add': {
             const who = A.canonName(typed('know'));
             if (!who) return true;
