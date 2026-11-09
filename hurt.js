@@ -521,7 +521,7 @@ export function hurtAfterPost(i, j, msg) {
     if (cfg().dice && !(h.flare && (h.flare.used == null || i - h.flare.used < 6))) {
         const atm = String(A.worldState().scene?.atmosphere || '');
         const pool = [];
-        for (const who of cast()) for (const w of active(who).filter(isOld)) if (FLARE[w.flare]?.[0] && (w.lastFlare == null || i - w.lastFlare > 6)) pool.push([who, w]);
+        for (const who of cast()) for (const w of active(who).filter(isOld)) if (FLARE[w.flare]?.[0] && (w.lastFlare == null || i - w.lastFlare > 6) && !A.skipFlare?.(who, w)) pool.push([who, w]);
         for (const [who, w] of pool.sort(() => Math.random() - 0.5)) {
             if (Math.random() < Math.min(0.5, FLARE[w.flare][0] * flareBoost(w, atm))) { setFlare(who, w, i, 'dice'); break; }
         }

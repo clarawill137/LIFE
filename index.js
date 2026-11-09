@@ -42,6 +42,9 @@ import { initTriggers, trigPrompt, trigChron, trigAfterPost, trigHtml, trigClick
 import { initShards, shardsPrompt, shardsChron, shardsAfterPost, shardsHtml, shardsClick } from './shards.js';
 import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
 import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
+import { initStones, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
+import { initEra, applyEra, eraHtml, eraClick } from './era.js';
+import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
@@ -56,7 +59,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.34.0';
+const VERSION = '0.36.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -811,6 +814,7 @@ function updateMovePrompt(type, consume = false) {
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
+    try { applyEra(); } catch (e) { console.warn('[Life] эпоха', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
     return [text, modes].filter(Boolean).join('\n');
 }
@@ -1892,6 +1896,7 @@ function placeCardHtml(loc, { inline = false } = {}) {
             <h3>${esc(placeName(loc))}</h3>
             <div class="lf-pc-meta">${esc(meta)}</div>
             ${desc && !inline ? `<div class="lf-pc-desc">${esc(cut(desc, 200))}</div>` : ''}
+            ${!here ? (() => { try { return routeHtml(st.scene?.location || '', loc, car ? 'car' : 'walk'); } catch { return ''; } })() : ''}
             ${here ? `<div class="lf-here">${icon('target')} Вы здесь</div>` : `<button class="lf-btn primary serif go" data-act="travel" data-loc="${esc(loc)}">Отправиться ${icon('right')}</button>`}
             <div class="lf-pc-foot">
                 ${!here ? `<span>${icon(car ? 'car' : 'walk')} ${car ? `На машине · ${esc(cut(car, 22))}` : 'Пешком'}</span>` : ''}
@@ -1967,7 +1972,7 @@ function renderMap() {
     </div>` : '';
 
     const mapBox = img ? `<div class="lf-map${ui.editPins ? ' editing' : ''}">
-            <div class="lf-map-in" data-act="map-tap"><img src="${esc(img)}" alt="" draggable="false">${pinHtml}</div>
+            <div class="lf-map-in" data-act="map-tap"><img src="${esc(img)}" alt="" draggable="false">${(() => { try { return selLoc && !ui.editPins ? routeSvg(pins, curLoc, selLoc, '') : ''; } catch { return ''; } })()}${pinHtml}</div>
             ${ui.editPins ? '' : `<div class="lf-map-tools"><button class="lf-glass" data-act="edit-pins" title="Метки">${icon('pencil')}</button><button class="lf-glass" data-act="map-menu" data-key="${esc(level?.key || '')}">${icon('refresh')} ${level ? 'План' : 'Карта'}</button></div>`}
             ${ui.editPins ? `<div class="lf-map-hint">${icon('pencil')} Тапни по карте — поставить метку, тяни метку — подвинуть</div>` : ''}
         </div>`
@@ -2423,7 +2428,7 @@ function renderWorld() {
             ${st.scene?.atmosphere ? `<span>${esc(st.scene.atmosphere)}</span>` : ''}
         </section>
         ${(() => { try { return skipHtml(); } catch (e) { console.warn('[Life] перемотка', e); return ''; } })()}
-        ${(() => { try { return seasonHtml(); } catch (e) { console.warn('[Life] сезон', e); return ''; } })()}
+        ${(() => { try { return seasonHtml() + eraHtml(); } catch (e) { console.warn('[Life] сезон', e); return ''; } })()}
         <div class="lf-chips wrap">${['Прошло несколько часов.', 'Прошёл день.', 'Прошло несколько дней.', 'Прошла неделя.'].map(t => `<button class="lf-chip" data-act="skip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
@@ -2529,9 +2534,16 @@ function travelSheet(loc, { how = '' } = {}) {
             <div class="lf-people wrap">${cast.map(n => `<button class="lf-pers sel${who.some(x => sameName(x, n)) ? ' on' : ''}" data-act="toggle" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span></button>`).join('')}</div></div>
         <div class="lf-field"><label>Как</label>
             <div class="lf-chips wrap" data-how>${hows.map(([h, ic]) => `<button class="lf-chip${h === how || (how && h.startsWith(how)) ? ' on' : ''}" data-act="how" data-how="${esc(h)}">${icon(ic)} ${esc(h)}</button>`).join('')}</div></div>
+        ${(() => { try { return routeHtml(st.scene?.location || '', loc, car ? 'car' : 'walk'); } catch { return ''; } })()}
         <div class="lf-field"><label>Заметка для модели <small>(необязательно)</small></label><input type="text" data-in="note" placeholder="например: едут молча после ссоры"></div>
         <button class="lf-btn primary serif full big" data-act="travel-go" data-loc="${esc(loc)}">${icon('route')} Отправиться</button>
         <div class="lf-hint">В чат встанет разделитель новой главы, Horae запомнит новое место, а модель один раз получит короткую заметку о переходе. Пост пишешь ты, как обычно.</div>`);
+    // дорога: прикинуть сразу, если ещё не знаем
+    const from = st.scene?.location || '';
+    const how0 = car ? 'car' : 'walk';
+    if (from && placeKey(from) !== placeKey(loc) && !routeCached(from, loc, how0)) {
+        routeEstimate(from, loc, how0).then(() => { const b = document.querySelector('#lf-app .lf-sheet .lf-route'); if (b) b.outerHTML = routeHtml(from, loc, how0); }).catch(() => { /* */ });
+    }
 }
 
 async function playTravel(loc, how) {
@@ -3180,14 +3192,22 @@ async function onClick(ev) {
             const on = !el.classList.contains('on');
             el.parentElement.querySelectorAll('.lf-chip').forEach(x => x.classList.remove('on'));
             el.classList.toggle('on', on || act === 'kind');
+            const rb = act === 'how' ? box?.querySelector('.lf-route') : null;
+            if (rb) {
+                const f = rb.dataset.from, t = rb.dataset.to, h = on ? el.dataset.how : '';
+                rb.outerHTML = routeHtml(f, t, h);
+                if (!routeCached(f, t, h)) routeEstimate(f, t, h).then(() => { const b = document.querySelector('#lf-app .lf-sheet .lf-route'); if (b) b.outerHTML = routeHtml(f, t, h); }).catch(() => { /* */ });
+            }
             break;
         }
         case 'travel-go': {
             const st = worldState();
             const who = [...box.querySelectorAll('.lf-pers.sel.on')].map(x => horaeName(x.dataset.name, st));
             const how = box.querySelector('[data-how] .lf-chip.on')?.dataset.how || '';
-            const note = val('[data-in="note"]');
             const raw = getPlace(loc)?.raw || loc;
+            let rn = '';
+            try { rn = routeNote(st.scene?.location || '', raw, how) || routeNote(st.scene?.location || '', loc, how); } catch { /* */ }
+            const note = [val('[data-in="note"]'), rn].filter(Boolean).join(' ');
             closeSheet();
             try { await goTravel(raw, { who, how, note, chapter: !mapLevel() || !placeKey(raw).startsWith(mapLevel().key) }); } catch (e) { toast('warning', esc(String(e?.message || e))); }
             break;
@@ -3735,6 +3755,7 @@ const simApi = {
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
+    skipFlare: (who, w) => stonesOwns(who, w),
 };
 
 /** Персонаж → Жизнь → Психика: триггеры, память, привычки, Камни, голос. */
@@ -3818,7 +3839,12 @@ jQuery(async () => {
     initHabits(extApi);
     initCrowd(extApi);
     hubMods.push({ pre: 'hab-', click: habitsClick, label: 'Привычки' }, { pre: 'crw-', click: crowdClick, label: 'Массовка' });
-    mindParts.push((who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who));
+    initStones(extApi);
+    hubMods.push({ pre: 'kmn-', click: stonesClick, label: 'Камни' });
+    initEra(extApi);
+    initRoute(extApi);
+    hubMods.push({ pre: 'era-', click: eraClick, label: 'Эпоха' }, { pre: 'rt-', click: routeClick, label: 'Дорога' });
+    mindParts.push((who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who));
     hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
     painters.push((el, id) => paintSee(el, id));
     chatClicks.push((act, el) => seeClick(act, el));
@@ -3858,6 +3884,12 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-stones',
+            prompt: (type) => stonesPrompt(type),
+            chron: () => stonesChron(),
+            afterPost: (i, j) => stonesAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-habits',
