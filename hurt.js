@@ -887,3 +887,11 @@ export function hurtRecs(i) {
     }
     return out;
 }
+
+/** Для экрана: насколько больно сейчас — самая тяжёлая свежая рана (0 — целы, 1–4). */
+export function hurtLevel(who) {
+    try {
+        if (!hurtOn()) return 0;
+        return active(who).filter(w => !isOld(w)).reduce((m, w) => Math.max(m, Number(w.sev) || 0), 0);
+    } catch { return 0; }
+}

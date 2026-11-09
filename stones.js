@@ -168,3 +168,10 @@ export function stonesClick(act, el) {
 export function stonesOwns(who, w) {
     try { return stonesOn() && A.sameName(who, cfg().who) && /камн/i.test(String(w?.t || '')); } catch { return false; }
 }
+
+/** Для экрана: чьи Камни и что с ними сейчас — { who, lvl, mode: calm|hum|attack, pend }. */
+export function stonesNow() {
+    if (!A?.hasChat?.() || !stonesOn()) return null;
+    const m = M();
+    return { who: cfg().who, lvl: m.lvl, mode: m.pend ? 'attack' : STATE(m.lvl)[0], pend: !!m.pend };
+}

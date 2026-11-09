@@ -14,7 +14,7 @@ import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
-import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
+import { hurtLevel, initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief } from './days.js';
 import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arcClick } from './arcs.js';
 import { initAlbum, albumHtml, albumClick, albumSetImg } from './album.js';
@@ -42,9 +42,14 @@ import { initTriggers, trigPrompt, trigChron, trigAfterPost, trigHtml, trigClick
 import { initShards, shardsPrompt, shardsChron, shardsAfterPost, shardsHtml, shardsClick } from './shards.js';
 import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
 import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
-import { initStones, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
+import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
-import { initFix, paintFix, fixTap, fixClick } from './fix.js';
+import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
+import { initLore } from './lore.js';
+import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
+import { initLang, langPrompt, langHtml, langInput, langClick } from './lang.js';
+import { initFeel, applyFeel, feelOn, toggleFeel } from './feel.js';
+import { initHand, paintHand, handHtml, handClick } from './hand.js';
 import { initDuo, duoPrompt, duoSpeaker, paintDuo, duoSceneHtml, duoClick, duoCCHtml } from './duo.js';
 import { initCall, callPrompt, callChron, callAfterPost, paintCall, callCfgHtml } from './call.js';
 import { initEcho, echoAdd, paintEcho, echoHtml, echoClick, echoRecs } from './echo.js';
@@ -78,7 +83,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.40.0';
+const VERSION = '0.41.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -839,6 +844,7 @@ function updateMovePrompt(type, consume = false) {
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
     try { applyEra(); } catch (e) { console.warn('[Life] эпоха', e); }
+    try { applyFeel(); } catch (e) { console.warn('[Life] экран', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
     return [text, modes].filter(Boolean).join('\n');
 }
@@ -3777,6 +3783,7 @@ function onChatChanged() {
     setTimeout(() => { try { ambUpdate(); } catch { /* */ } }, 1500);
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
+    setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
@@ -3821,6 +3828,8 @@ const controlApi = {
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     duoHtml: () => (hasChat() && settings().enabled ? duoCCHtml() : ''),
     guide: () => guideSheet(),
+    feel: () => feelOn(),
+    toggleFeel: () => toggleFeel(),
     duoCC: (act, el) => duoClick(act, el),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
 };
@@ -3938,12 +3947,24 @@ jQuery(async () => {
     initDraft(extApi);
     addRecs((i) => coreRecs(i), calRecs, stanceRecs, ritualRecs, stepsRecs, shardsRecs, trigRecs, hurtRecs, simRecs, innerRecs, replyRecs, echoRecs);
     hubMods.push({ pre: 'rec-', click: recsClick, label: 'Что записал пост' });
-    initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i), shootPost: (i, kind, at) => shootShot(i, { kind, at }), recsSheet: (i) => recsSheet(i), guideSheet: (k) => guideSheet(k) });
+    initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i), shootPost: (i, kind, at) => shootShot(i, { kind, at }), recsSheet: (i) => recsSheet(i), guideSheet: (k) => guideSheet(k), coreOf: (w) => coreOf(w) });
+    initLore(extApi);
+    initOoc({ ...extApi, namesInText, rewriteFor: (i, q, w, why) => rewriteFor(i, q, w, why) });
+    initLang(extApi);
+    initFeel({ ...extApi, hurtLevel: (w) => hurtLevel(w), stonesNow: () => stonesNow() });
+    initHand({ ...extApi, namesInText });
+    painters.push((el, id) => paintHand(el, id));
+    hubMods.push({ pre: 'hd-', click: handClick, label: 'Почерк' });
+    painters.push((el, id) => paintOoc(el, id));
+    chatClicks.push((act, el) => oocClick(act, el));
+    hubMods.push({ pre: 'oc-', click: oocClick, label: 'Не он' }, { pre: 'lg-', click: langClick, label: 'Языки' });
+    hubInputs.push(oocInput, langInput);
+    setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 14000);
     painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
     chatClicks.push((act, el) => fixClick(act, el));
     hubMods.push({ pre: 'fx-', click: fixClick, label: 'Правка' });
     hubMods.push({ pre: 'era-', click: eraClick, label: 'Эпоха' }, { pre: 'rt-', click: routeClick, label: 'Дорога' });
-    mindParts.push((who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who));
+    mindParts.push((who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who), (who) => langHtml(who), (who) => handHtml(who), (who) => oocHtml(who));
     hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
     painters.push((el, id) => paintSee(el, id));
     chatClicks.push((act, el) => seeClick(act, el));
@@ -4053,6 +4074,15 @@ jQuery(async () => {
         globalThis.LifeBridge.register({
             id: 'life-duo',
             sceneHtml: () => duoSceneHtml(),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-ooc',
+            chron: (i) => oocChron(i),
+            afterPost: (i, j) => oocAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-lang',
+            prompt: (type) => langPrompt(type),
         });
         globalThis.LifeBridge.register({
             id: 'life-drama',

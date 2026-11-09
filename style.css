@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Oswald:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Marck+Script&family=Bad+Script&family=Amatic+SC:wght@700&display=swap');
 
 :root {
     --lf-bg: #191416;
@@ -2574,3 +2575,52 @@ body.lf-theme.lf-ava-wide #chat .mes .lf-duo-ava img { clip-path: polygon(14% 0,
 .lf-guide-r { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.4; }
 .lf-guide-r b { color: #eab3bc; font-weight: 600; }
 .lf-guide-r span { color: var(--lf-text2); }
+
+/* ───────────── «⚠ не он» ───────────── */
+.mes .lf-ooc { margin: 8px 0 2px; font-size: 12.5px; line-height: 1.35; color: #c9b3f0; animation: lf-rise .4s cubic-bezier(.2, .8, .2, 1) both; }
+.mes .lf-ooc-chip { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: baseline; max-width: 100%; border: 1px solid rgba(201, 179, 240, .38); background: rgba(201, 179, 240, .06); color: inherit; border-radius: 10px; padding: 4px 10px; font: inherit; text-align: left; cursor: pointer; }
+.mes .lf-ooc.open { padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(201, 179, 240, .3); background: rgba(30, 24, 26, .55); color: #ede4df; }
+.mes .lf-ooc-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; color: #c9b3f0; }
+.mes .lf-ooc-h button, .mes .lf-ooc-b button { border: 0; background: none; color: #a3958f; font: inherit; cursor: pointer; padding: 4px 6px; }
+.mes .lf-ooc-i { padding: 8px 0; border-top: 1px solid rgba(236, 222, 216, .1); }
+.mes .lf-ooc-i.done { opacity: .65; }
+.mes .lf-ooc-why { margin-bottom: 4px; color: #c9b3f0; }
+.mes .lf-ooc-i q { display: block; font: italic 13px/1.4 'Playfair Display', Georgia, serif; color: #d6cac5; quotes: '«' '»'; }
+.mes .lf-ooc-b { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.mes .lf-ooc-b span { color: #b9dcb4; }
+.mes .lf-ooc-b button.main { border: 1px solid rgba(201, 179, 240, .45); color: #d9c8f5; border-radius: 9px; padding: 4px 12px; }
+
+/* ───────────── экран чувствует тебя ───────────── */
+#lf-feel { position: fixed; inset: 0; z-index: 40; pointer-events: none; contain: strict; }
+#lf-feel > i { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
+#lf-feel .lf-feel-v { background: radial-gradient(ellipse at center, transparent 52%, rgba(150, 0, 22, .5) 100%); }
+#lf-feel.hurt1 .lf-feel-v { opacity: .22; }
+#lf-feel.hurt2 .lf-feel-v { opacity: .42; }
+#lf-feel.hurt3 .lf-feel-v { opacity: .7; animation: lf-feel-pulse 1.6s ease-in-out infinite; }
+#lf-feel.hurt4 .lf-feel-v { opacity: .9; animation: lf-feel-pulse 1.1s ease-in-out infinite; }
+@keyframes lf-feel-pulse { 0%, 100% { opacity: .5; } 15% { opacity: .95; } 30% { opacity: .62; } 45% { opacity: .85; } }
+#lf-feel .lf-feel-s { background: radial-gradient(ellipse at center, transparent 60%, rgba(255, 228, 170, .16) 100%); mix-blend-mode: screen; }
+#lf-feel.hum .lf-feel-s { opacity: 1; animation: lf-feel-hum 5s ease-in-out infinite; }
+#lf-feel.attack .lf-feel-s { opacity: 1; background: radial-gradient(ellipse at center, transparent 42%, rgba(255, 240, 205, .3) 100%); animation: lf-feel-flick 2.3s steps(1) infinite; }
+@keyframes lf-feel-hum { 0%, 100% { opacity: .35; } 50% { opacity: .85; } }
+@keyframes lf-feel-flick { 0% { opacity: .9; } 7% { opacity: .2; } 9% { opacity: 1; } 14% { opacity: .35; } 40% { opacity: .85; } 43% { opacity: .1; } 46% { opacity: .9; } 78% { opacity: .6; } 80% { opacity: 1; } }
+#lf-feel .lf-feel-t { -webkit-backdrop-filter: blur(2.4px); backdrop-filter: blur(2.4px); -webkit-mask-image: radial-gradient(ellipse at center, transparent 56%, #000 100%); mask-image: radial-gradient(ellipse at center, transparent 56%, #000 100%); }
+#lf-feel.tired .lf-feel-t { opacity: 1; animation: lf-feel-swim 7s ease-in-out infinite; }
+@keyframes lf-feel-swim { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+#lf-feel .lf-feel-k { inset: auto; bottom: -70px; left: 50%; width: 150px; height: 150px; margin-left: -75px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 205, 220, .38), rgba(255, 205, 220, 0) 70%); }
+#lf-feel .lf-feel-k.go { animation: lf-feel-kick 1.4s ease-out; }
+@keyframes lf-feel-kick { 0% { opacity: 0; transform: scale(.4); } 20% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { #lf-feel > i { animation: none !important; } }
+
+/* ───────────── почерк ───────────── */
+.lf-hand-marck { font-family: 'Marck Script', cursive !important; font-size: 1.16em !important; line-height: 1.45 !important; }
+.lf-hand-caveat { font-family: 'Caveat', cursive !important; font-size: 1.2em !important; line-height: 1.4 !important; }
+.lf-hand-bad { font-family: 'Bad Script', cursive !important; font-size: 1.04em !important; line-height: 1.65 !important; }
+.lf-hand-amatic { font-family: 'Amatic SC', cursive !important; font-size: 1.36em !important; line-height: 1.35 !important; letter-spacing: .03em; }
+.lf-mw { display: inline-block; white-space: pre; transform-origin: 50% 60%; }
+.gca.lf-diary .gca-card { background: repeating-linear-gradient(180deg, #f5f0e2 0 27px, #d8ceb6 27px 28px) !important; color: #2b2a30 !important; border-color: #cfc3a6 !important; }
+.gca.lf-diary .gca-hd { display: none !important; }
+.gca.lf-diary .gca-body, .gca.lf-diary .gca-t { color: #2b2a30 !important; }
+.lf-hand-prev { margin: 6px 0 4px; padding: 10px 14px; border-radius: 10px; background: #f3eddd; color: #2b2a30; }
+.lf-hand-prev[data-mess="3"] { transform: rotate(-1.2deg); word-spacing: .2em; }
+.lf-hand-prev[data-mess="1"] { transform: rotate(-.4deg); }

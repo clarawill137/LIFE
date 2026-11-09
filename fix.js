@@ -110,13 +110,27 @@ async function rewriteLine(i, line, how, custom = '', whoArg = '') {
     }
     if (how === 'quiet') task = `Пусть ${sh} здесь промолчит: убери реплики ${sh} из абзаца, вместо слов — молчание, взгляд, жест, действие; смысл можно передать без слов.`;
     if (how === 'own') task = `Что поправить: ${custom}`;
+    if (how === 'ooc') {
+        const vs = linesOf(who).slice(-6).map(x => `«${x.t}»`).join(' ');
+        const core = A.coreOf?.(who) || '';
+        task = `Здесь ${who} звучит не как он${custom ? ` (${custom})` : ''}. Перепиши его реплики и поведение в абзаце так, чтобы это был он — его словарь, ритм, манера${vs ? `; его голос (образцы, не вставлять дословно): ${vs}` : ''}${core ? `\nЯдро характера:\n${A.cut(core, 1200)}` : ''}\nСмысл сцены и действия других — те же.`;
+    }
     const ctxText = A.cut(A.plainText ? A.plainText(m.mes) : plain(m.mes), 3500);
     const out = await ask(`${RULES(user())}\nПерепиши ТОЛЬКО один абзац по указанию. Длина — примерно та же, если не сказано иначе. Ответь только новым абзацем, без пояснений и кавычек вокруг.`,
         `Пост целиком (для контекста):\n${ctxText}\n\nАбзац, который надо переписать:\n${line}\n\nУказание: ${task}`, 700);
     const nl = out.split('\n').map(x => x.trim()).filter(Boolean).join(' ');
     if (!nl || nl.length < 2) throw new Error('модель вернула пустоту');
     const lead = line.match(/^\s*/)[0];
-    await apply(i, String(m.mes).replace(line, () => lead + nl), `абзац: ${HOWS[how]?.[0] || 'своё'}`);
+    await apply(i, String(m.mes).replace(line, () => lead + nl), `абзац: ${how === 'ooc' ? 'не он' : HOWS[how]?.[0] || 'своё'}`);
+}
+
+/** Переписать абзац, где цитата q, голосом who (для «⚠ не он»). why — что не так. */
+export async function rewriteFor(i, q, who, why = '') {
+    const raw = String(A.chatArr()[i]?.mes || '');
+    const loc = locate(raw, q);
+    const line = loc ? rawLines(raw).find(l => l.includes(loc.from)) || rawLines(raw).find(l => toks(l).join(' ').includes(toks(q).slice(0, 4).join(' '))) : null;
+    if (!line) throw new Error('не нашла это место в посте — текст поменялся?');
+    await rewriteLine(i, line, 'ooc', why, who);
 }
 
 async function apply(i, text, label) {
