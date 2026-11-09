@@ -1948,3 +1948,51 @@ body.lf-theme .mes .lf-reply-i { border-color: var(--t-line2); }
 .lf-fr-chip button, .lf-fr-add { border: 0; background: none; color: var(--lf-dim2); padding: 0 4px; cursor: pointer; display: inline-grid; place-items: center; }
 .lf-fr-chip .lf-i, .lf-fr-add .lf-i { width: 12px; height: 12px; }
 .lf-fr-add { width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--lf-line2); }
+
+/* ───────────── 0.21: живая погода ───────────── */
+#lf-wx { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: -1; pointer-events: none; overflow: hidden; contain: strict; }
+#lf-wx .lf-wx-tint { position: absolute; inset: 0; opacity: 0; transition: opacity 3s ease; }
+#lf-wx.t-dawn .lf-wx-tint { opacity: 1; background: linear-gradient(180deg, rgba(255, 170, 130, .14), rgba(255, 200, 150, .04) 45%, transparent 70%); }
+#lf-wx.t-evening .lf-wx-tint { opacity: 1; background: linear-gradient(180deg, rgba(255, 150, 70, .12), rgba(170, 80, 90, .08) 55%, rgba(40, 20, 40, .1)); }
+#lf-wx.t-dusk .lf-wx-tint { opacity: 1; background: linear-gradient(180deg, rgba(60, 50, 110, .18), rgba(20, 20, 60, .16)); }
+#lf-wx.t-night .lf-wx-tint { opacity: 1; background: radial-gradient(120% 80% at 50% 0%, rgba(40, 60, 130, .2), rgba(5, 10, 35, .32)); }
+#lf-wx .lf-wx-fx { position: absolute; inset: 0; }
+#lf-wx .f { position: absolute; top: 0; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 70%); opacity: var(--o); animation: lfWxSnow var(--d) linear var(--del) infinite; will-change: transform; }
+@keyframes lfWxSnow { 0% { transform: translate3d(0, -6vh, 0); } 25% { transform: translate3d(calc(var(--dx) * .4), 22vh, 0); } 50% { transform: translate3d(calc(var(--dx) * -.2), 50vh, 0); } 75% { transform: translate3d(calc(var(--dx) * .7), 78vh, 0); } 100% { transform: translate3d(var(--dx), 106vh, 0); } }
+#lf-wx .r { position: absolute; top: 0; left: var(--x); width: 1px; height: var(--h); background: linear-gradient(180deg, rgba(200, 220, 255, 0), rgba(200, 220, 255, .85)); opacity: var(--o); animation: lfWxRain var(--d) linear var(--del) infinite; will-change: transform; }
+@keyframes lfWxRain { 0% { transform: translate3d(0, -10vh, 0) rotate(12deg); } 100% { transform: translate3d(-24vh, 110vh, 0) rotate(12deg); } }
+#lf-wx .fog { position: absolute; inset: -20% -40%; background: radial-gradient(40% 30% at 30% 60%, rgba(220, 225, 235, .16), transparent 70%), radial-gradient(35% 25% at 70% 40%, rgba(220, 225, 235, .12), transparent 70%); animation: lfWxFog 38s ease-in-out infinite alternate; }
+#lf-wx .fog.b { animation-duration: 52s; animation-direction: alternate-reverse; opacity: .8; }
+@keyframes lfWxFog { from { transform: translate3d(-8%, 0, 0); } to { transform: translate3d(8%, 2%, 0); } }
+#lf-wx .flash { position: absolute; inset: 0; animation: lfWxFlash 11s linear infinite; }
+@keyframes lfWxFlash { 0%, 61%, 63.5%, 64.5%, 66.5%, 100% { background: rgba(210, 225, 255, 0); } 62% { background: rgba(210, 225, 255, .22); } 65.5% { background: rgba(210, 225, 255, .12); } }
+#lf-wx.inside .lf-wx-fx { opacity: .55; }
+#lf-wx.paused * { animation-play-state: paused !important; }
+body.lf-pal-paper #lf-wx .f { background: radial-gradient(circle, rgba(110, 120, 145, .75), rgba(110, 120, 145, 0) 70%); }
+body.lf-pal-paper #lf-wx .r { background: linear-gradient(180deg, rgba(90, 110, 140, 0), rgba(90, 110, 140, .6)); }
+@media (prefers-reduced-motion: reduce) { #lf-wx .lf-wx-fx { display: none; } }
+
+/* ───────────── 0.21: сны и флешбеки ───────────── */
+.mes .lf-frame { margin: 2px 0 6px; }
+.mes .lf-frame button { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px 3px 8px; border-radius: 999px; border: 1px solid rgba(237, 228, 223, .22); background: rgba(255, 255, 255, .03); color: #cbbfb9; font: 600 10.5px/1.4 var(--lf-sans, system-ui); letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+.mes .lf-frame .lf-i { width: 13px; height: 13px; }
+body.lf-theme .mes .lf-frame button { color: var(--t-text2); border-color: var(--t-line2); }
+.mes .lf-frame-dream button { border-color: rgba(185, 164, 232, .45); color: #d6c9f5; }
+.mes .lf-frame-flashback button { border-color: rgba(216, 178, 122, .45); color: #e6cfa6; }
+.mes .lf-frame-memory button { border-color: rgba(159, 176, 196, .45); color: #c3cfdc; }
+.mes .lf-frame-vision button { border-color: rgba(143, 227, 232, .45); color: #b9f0f2; }
+/* сон — лавандовая дымка */
+.mes.lf-fr-dream:not(.lf-fr-part) .mes_text, .mes.lf-fr-dream .lf-fr-p { color: color-mix(in srgb, var(--t-text, #ede4df) 80%, #b9a4e8); text-shadow: 0 0 14px rgba(185, 164, 232, .35); }
+.mes.lf-fr-dream:not(.lf-fr-part) .mes_text { position: relative; padding: 10px 14px; border-radius: 18px; background: radial-gradient(70% 80% at 50% 50%, rgba(185, 164, 232, .1), transparent 75%); box-shadow: inset 0 0 30px rgba(185, 164, 232, .08); }
+/* флешбек — сепия, зерно, перфорация плёнки */
+.mes.lf-fr-flashback:not(.lf-fr-part) .mes_text, .mes.lf-fr-flashback .lf-fr-p { color: color-mix(in srgb, var(--t-text, #ede4df) 70%, #d8b27a); }
+.mes.lf-fr-flashback:not(.lf-fr-part) .mes_text { padding: 12px 14px; border-radius: 4px; border-top: 5px dashed rgba(216, 178, 122, .22); border-bottom: 5px dashed rgba(216, 178, 122, .22); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .85 0 0 0 0 .72 0 0 0 0 .5 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E"), linear-gradient(rgba(120, 85, 40, .16), rgba(80, 55, 25, .1)); box-shadow: inset 0 0 44px rgba(0, 0, 0, .35); }
+/* воспоминание — выцветшее */
+.mes.lf-fr-memory:not(.lf-fr-part) .mes_text, .mes.lf-fr-memory .lf-fr-p { color: color-mix(in srgb, var(--t-text, #ede4df) 70%, #9fb0c4); }
+.mes.lf-fr-memory:not(.lf-fr-part) .mes_text { padding: 8px 14px; border-left: 2px solid rgba(159, 176, 196, .4); background: linear-gradient(90deg, rgba(159, 176, 196, .08), transparent 70%); }
+/* видение — холодный двоящийся свет */
+.mes.lf-fr-vision:not(.lf-fr-part) .mes_text, .mes.lf-fr-vision .lf-fr-p { color: color-mix(in srgb, var(--t-text, #ede4df) 74%, #8fe3e8); text-shadow: 1px 0 rgba(255, 80, 120, .35), -1px 0 rgba(80, 220, 255, .35); }
+.mes.lf-fr-vision:not(.lf-fr-part) .mes_text { padding: 10px 14px; border-radius: 10px; box-shadow: inset 0 0 32px rgba(143, 227, 232, .1), 0 0 0 1px rgba(143, 227, 232, .14); }
+/* кусок поста — полоса слева */
+.mes.lf-fr-part .lf-fr-p { padding-left: 12px; border-left: 2px solid currentColor; border-left-color: color-mix(in srgb, currentColor 40%, transparent); }
+.mes.lf-fr-part.lf-fr-flashback .lf-fr-p { border-left-style: dashed; }

@@ -18,6 +18,8 @@ import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClic
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick } from './days.js';
 import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
+import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick } from './frames.js';
+import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -30,7 +32,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.20.0';
+const VERSION = '0.21.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2607,6 +2609,7 @@ function placeBg(loc, period) {
 
 let lastBgLoc = '';
 function updateSceneBg() {
+    try { updateWeather(); } catch (e) { console.warn('[Life] погода', e); }
     const s = settings();
     if (!s.enabled || !s.sceneBg || !hasChat()) { setSceneBg(''); return; }
     const st = worldState();
@@ -2671,6 +2674,7 @@ function chronSheet(i) {
         ${e.rel?.length ? `${sec('Отношения')}<div class="lf-list">${e.rel.map(r => `<div class="lf-row">${icon('rings')}<span>${esc(r.a)} ${r.dir ? '→' : '×'} ${esc(r.b)}: ${SCALES.filter(([f]) => r[f]).map(([f, label]) => `${label.toLowerCase()} ${r[f] > 0 ? '+' : ''}${r[f]}`).join(', ')}${r.moment ? ` — ${esc(r.moment)}` : ''}</span></div>`).join('')}</div>` : ''}
         ${e.sec?.length ? `${sec('Тайны')}<div class="lf-list">${e.sec.map(x => `<div class="lf-row">${icon('lock')}<span>${esc(x.text)} <small>знает: ${esc(x.knows.join(', '))}</small></span></div>`).join('')}</div>` : ''}
         ${e.place ? `<div class="lf-hint">Место: ${esc(e.place.location)}${e.place.region ? ` · район «${esc(e.place.region)}»` : ''}</div>` : ''}
+        ${(() => { try { return frameRowHtml(i); } catch { return ''; } })()}
         ${sec('Деталь крупным планом')}
         ${e.detImg ? `<div class="lf-detprev" style="background-image:url('${esc(e.detImg)}')"></div>` : ''}
         ${e.det ? `<div class="lf-hint"><b>${esc(e.det.caption || '')}</b> · движение: ${esc(e.det.motion || 'drift')}<br><small>${esc(e.det.prompt)}</small></div>` : '<div class="lf-hint">Детали к этому посту нет.</div>'}
@@ -2873,6 +2877,11 @@ async function onClick(ev) {
     }
     if (act === 'days-n' || act === 'days-all' || act.startsWith('day-')) {
         try { await daysClick(act, el); } catch (e) { console.warn('[Life] дни', e); toast('warning', esc(String(e?.message || e)), '✦ Дни'); }
+        return;
+    }
+    if (act === 'fm-set') {
+        try { frameClick(act, el); } catch (e) { console.warn('[Life] вид поста', e); }
+        chronSheet(Number(el.dataset.mes));
         return;
     }
     if (act.startsWith('fr-')) {
@@ -3628,6 +3637,7 @@ const controlApi = {
     modesHtml: (tt) => (hasChat() && settings().enabled ? modesHtml(esc, tt) : ''),
     toggleMode: (v) => toggleMode(v),
     armOnce: (v) => { const id = armOnce(v); if (id) clearTwist(); return id; },
+    wxLabel: () => wxLabel(), wxLevel: () => wxLevel(), cycleWx: () => cycleWx(),
     twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
@@ -3681,7 +3691,10 @@ jQuery(async () => {
     initDays(extApi);
     initReply(extApi);
     initFresh(extApi);
-    painters.push((el, id) => paintReply(el, id));
+    initFrames(extApi);
+    initWeather(extApi);
+    painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id));
+    chatClicks.push((act, el) => frameClick(act, el));
     try {
         globalThis.LifeBridge.register({
             id: 'life-twist',
@@ -3693,6 +3706,11 @@ jQuery(async () => {
             id: 'life-reply',
             chron: () => replyChron(),
             afterPost: (i, j) => { replyAfterPost(i, j); daysAfterPost(); freshAfterPost(); },
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-frames',
+            chron: () => framesChron(),
+            afterPost: (i, j) => framesAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-hurt',
