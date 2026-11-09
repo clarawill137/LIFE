@@ -7,6 +7,7 @@ import { rpNow, hoursSince, nowSlot, simCfg, lifeKey } from './sim.js';
 import { moodNow, BOND_HEAVY } from './mood.js';
 import { agendaCardHtml } from './agenda.js';
 import { hurtSection, hurtCap, hurtCount } from './hurt.js';
+import { armSection } from './arm.js';
 
 let A = null;
 export function initInner(api) { A = api; }
@@ -486,6 +487,7 @@ export function renderInner(who) {
     ${A.sec('Тело', p.metab >= 2 ? 'метаболизм ×2' : '')}
     <div class="lf-bars lf-in-body" data-act="in-body" data-name="${esc(who)}">${b.needs.map(n => `<div class="lf-bar-row${n.v < 30 ? ' low' : ''}">${icon(n.ic)}<span>${esc(n.word)}</span><i class="lf-meter"><b style="width:${n.v}%"></b></i><small>${n.v}</small></div>`).join('')}</div>
     ${(() => { try { return hurtSection(who); } catch (e) { console.warn('[Life] раны', e); return ''; } })()}
+    ${(() => { try { return armSection(who); } catch (e) { console.warn('[Life] рука', e); return ''; } })()}
     ${A.sec('На уме', th.length ? 'что тяготит и занимает' : '')}
     ${th.length ? th.map(t => `<div class="lf-idea${arm === t ? ' armed' : ''}"><span class="lf-idea-ic" data-act="in-w" data-name="${esc(who)}" data-id="${t.id}">${dots(t.w)}</span>
         <span class="lf-idea-t"><small>${arm === t ? 'поделится в следующем ответе' : t.shared ? `${g(f, 'делился', 'делилась')} · #${t.shared}` : SRC[t.src] || ''}</small><b>${esc(t.t)}</b></span>

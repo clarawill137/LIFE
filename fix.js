@@ -1,8 +1,10 @@
 // Фиксы вместо реролла. «✎ править» под ответом — всё про правку поста в одном месте, с подписями:
 //  • абзац (тап по нему в тексте): жёстче / мягче / короче / голосом (из банка реплик) / пусть промолчит / своё —
 //    меняется только он; «отсюда заново» — с фразы, куда тапнула, и до конца переписать; «кадр здесь»;
-//  • весь пост: «<персона> — моя» (убрать написанное за героиню), «+ бит», «из свайпов» (новым свайпом),
+//  • весь пост: «<персона> — моя» (убрать написанное за героиню), «+ бит», «🐢 притормози» (пробежал момент галопом —
+//    тот же кусок медленнее, до места, где нужна реакция героини), «из свайпов» (новым свайпом),
 //    «плашки» (починить разметку, текст не трогая), «что записал пост», «вернуть» — как было до последней правки;
+//  • ↻ на каждой плашке GC (шапка, «В сцене», заметки, карточки, дневник, матрица…) — заново только она, с подсказкой;
 //  • «что где» — гайд по Life.
 // Правит дешёвая модель Летописца — дешевле реролла и не трогает удачное.
 
@@ -17,6 +19,7 @@ const esc = (v) => A.esc(v);
 const on = new Set();            // посты в режиме правки
 const busy = new Set();
 let pick = null;                 // { mes, line, who, sent } — выбранный абзац (who — чья часть в посте на двоих, sent — фраза под пальцем)
+let plq = null;                  // { mes, k, label } — выбранная плашка
 const user = () => A.canonName(A.ctx().name1) || 'игрок';
 
 function M() {
@@ -203,6 +206,163 @@ async function restFrom(i, line, sent, hint) {
     await apply(i, `${head}${joiner}${rest}${tail}`, 'отсюда заново');
 }
 
+/** Притормози: пост пробежал момент галопом — тот же кусок медленнее, и стоп там, где нужна реакция героини. */
+async function slow(i, line, hint) {
+    const m = A.chatArr()[i];
+    const raw = String(m?.mes || '');
+    const [body, tail] = splitTail(raw);
+    const lines = rawLines(body);
+    if (!lines.length) throw new Error('в посте нечего замедлять');
+    const U = user();
+    const who = A.canonName(speakerOf(i));
+    const at = line ? lines.indexOf(line) : -1;
+    const numbered = lines.map((l, k) => `[${k + 1}] ${l.trim()}`).join('\n');
+    const out = await ask(`${RULES(U)}
+Пост пробежал сцену галопом: перескочил время, свернул в пару фраз момент, который надо прожить. ${at >= 0 ? `Спешка — с абзаца [${at + 1}]: перепиши кусок с него` : 'Найди абзац, с которого началась спешка, и перепиши кусок с него'} МЕДЛЕННЕЕ — тот же момент, но раскрытый: действия по шагам, взгляды, паузы, детали, реплики; без новых событий и без прыжков во времени. Остановись там, где нужна реакция ${U} — её слова, решение или действие, — и закончи на этом, не пиши за неё. Всё, что в старом тексте шло дальше этой точки, — выбрось.
+Ответ: первая строка «С: N» — номер абзаца, с которого переписываешь (всё до него остаётся как есть); дальше — новый текст от лица ${who}, в том же голосе, стиле и разметке, без номеров абзацев.`,
+        `Пост по абзацам:\n${A.cut(numbered, 7000)}${hint ? `\n\nГде притормозить, что раскрыть: ${hint}` : ''}`, Math.max(4000, Number(A.settings().chron?.tokens) || 0));
+    const mm = out.match(/^\s*[СсCc]\s*[:：.]?\s*(\d{1,3})\s*\n+([\s\S]+)$/);
+    let n = at >= 0 ? at : mm ? Number(mm[1]) - 1 : 0;
+    n = Math.max(0, Math.min(lines.length - 1, n));
+    const text = (mm ? mm[2] : out).replace(/^\s*\[\d{1,3}\]\s*/gm, '').trim();
+    if (text.length < 60) throw new Error('модель вернула слишком мало — не меняю');
+    const cutAt = body.indexOf(lines[n]);
+    if (cutAt < 0) throw new Error('пост уже поменялся — открой правку заново');
+    const head = body.slice(0, cutAt).replace(/\s+$/, '');
+    await apply(i, `${head}${head ? '\n\n' : ''}${text}${tail}`, 'притормози');
+}
+
+// ───────────── плашки: одна заново ─────────────
+
+const ART_NAMES = { sms: 'СМС', chat: 'Переписка', voice: 'Голосовое', song: 'Песня', music: 'Песня', note: 'Записка', letter: 'Письмо', news: 'Новость', post: 'Пост в соцсети', receipt: 'Чек', doc: 'Документ', file: 'Документ', photo: 'Фото' };
+const TAGS = { diary: 'Дневник', matrix: 'Матрица отношений', preg: 'Беременность', compass: 'Компас' };
+
+/** Конец парного блока с вложенностью: s[from] — начало «<tag». Возвращает индекс за «</tag>» или -1. */
+function closeOf(s, from, tag) {
+    const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi');
+    re.lastIndex = from;
+    let depth = 0;
+    let m;
+    while ((m = re.exec(s))) {
+        if (m[1]) { depth--; if (depth === 0) return m.index + m[0].length; }
+        else depth++;
+    }
+    return -1;
+}
+
+/** Плашки поста по порядку: { kind: top|details|art|diary|matrix|preg|compass, at, full, label, type }. */
+export function plaqueBlocks(mes) {
+    const s = String(mes || '');
+    const out = [];
+    const taken = [];
+    const free = (a) => !taken.some(([x, y]) => a >= x && a < y);
+    const add = (kind, at, end, label, type = '') => { if (end > at && free(at)) { out.push({ kind, at, full: s.slice(at, end), label, type }); taken.push([at, end]); } };
+    for (const m of s.matchAll(/<div\b[^>]*\bdata-gc\s*=\s*["']top["'][^>]*>/gi)) add('top', m.index, closeOf(s, m.index, 'div'), 'Шапка');
+    for (const [tag, label] of Object.entries(TAGS)) for (const m of s.matchAll(new RegExp(`<${tag}>[\\s\\S]*?<\\/${tag}>`, 'gi'))) add(tag, m.index, m.index + m[0].length, label);
+    for (const m of s.matchAll(/<art\b([^>]*)>[\s\S]*?<\/art>/gi)) {
+        const type = ((m[1] || '').match(/\btype\s*=\s*"([^"]*)"/i)?.[1] || '').toLowerCase();
+        add('art', m.index, m.index + m[0].length, ART_NAMES[type] || (type ? `Карточка «${type}»` : 'Карточка'), type);
+    }
+    for (const m of s.matchAll(/<details\b[^>]*>/gi)) {
+        if (!free(m.index)) continue;
+        const end = closeOf(s, m.index, 'details');
+        if (end < 0) continue;
+        const full = s.slice(m.index, end);
+        const sum = (full.match(/<summary\b[^>]*>([\s\S]*?)<\/summary>/i)?.[1] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const scene = /data-gc\s*=\s*["']scene["']/i.test(m[0]);
+        add('details', m.index, end, scene ? 'В сцене' : (A ? A.cut(sum, 40) : sum.slice(0, 40)) || 'Свёрнутый блок');
+    }
+    return out.sort((a, b) => a.at - b.at);
+}
+
+/** Эта же плашка в прошлых ответах — для преемственности (числа матрицы, время в шапке…). */
+function prevPlaque(i, b) {
+    const chat = A.chatArr();
+    for (let j = i - 1; j >= 0 && j > i - 40; j--) {
+        const m = chat[j];
+        if (!m || m.is_user || m.is_system) continue;
+        const hit = plaqueBlocks(m.mes).find(x => x.kind === b.kind && (b.kind !== 'details' || A.norm(x.label) === A.norm(b.label)) && (b.kind !== 'art' || x.type === b.type));
+        if (hit) return hit.full;
+    }
+    return '';
+}
+
+const IMG_RE = /<img\b[^>]*>/gi;
+
+async function regenPlaque(i, k, hint) {
+    const m = A.chatArr()[i];
+    const raw = String(m?.mes || '');
+    const b = plaqueBlocks(raw)[k];
+    if (!b) throw new Error('плашка уже поменялась — тапни ↻ заново');
+    let prose = raw;
+    for (const x of plaqueBlocks(raw).reverse()) prose = prose.slice(0, x.at) + prose.slice(x.at + x.full.length);
+    prose = A.plainText ? A.plainText(prose) : plain(prose);
+    const st = A.worldState?.() || {};
+    const world = [[st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(' '), st.scene?.location, st.scene?.atmosphere, (st.scene?.characters_present || []).join(', ')].filter(Boolean).join(' · ');
+    const prev = prevPlaque(i, b);
+    const out = await ask(`Ты — служебная часть длинной ролевой на русском (пресет God Complex): пишешь плашки к постам. Перепиши ОДНУ плашку заново. Её разметка — образец формата: те же теги и атрибуты, те же маркеры-эмодзи, строки, порядок и язык. Содержание — по посту, к которому она относится, и по прошлой версии этой плашки (если есть — для преемственности чисел, дат и фактов), с учётом подсказки. Картинки <img …> внутри оставь тем же тегом целиком, если подсказка не просит другую картинку. Пост не пересказывай и не меняй. Не пиши за ${user()} её мысли и чувства. Ответь только плашкой — от открывающего тега до закрывающего, без пояснений.`,
+        `Плашка «${b.label}» (написать заново):\n${b.full}\n\nПост (текст без плашек):\n${A.cut(prose, 5000)}${prev ? `\n\nЭта же плашка в прошлом ответе:\n${A.cut(prev, 2500)}` : ''}${world ? `\n\nМир сейчас: ${world}` : ''}${hint ? `\n\nЧто поправить: ${hint}` : ''}`,
+        Math.max(2500, Math.ceil(b.full.length / 2) + 1200, Number(A.settings().chron?.tokens) || 0));
+    const got = plaqueBlocks(out);
+    const nb = got.find(x => x.kind === b.kind && (b.kind !== 'details' || A.norm(x.label) === A.norm(b.label))) || got.find(x => x.kind === b.kind);
+    if (!nb) throw new Error('модель вернула не плашку — попробуй ещё раз');
+    let text = nb.full;
+    // картинка: без просьбы — та же (уже нарисованная), а не новая
+    const oldImgs = b.full.match(IMG_RE) || [];
+    if (oldImgs.length && !/фото|картин|снимок|кадр|изображ|photo|image/i.test(hint || '')) {
+        const newImgs = text.match(IMG_RE) || [];
+        if (!newImgs.length) {
+            const close = text.lastIndexOf('</');
+            text = `${text.slice(0, close).replace(/\s+$/, '')}\n${oldImgs.join('\n')}\n${text.slice(close)}`;
+        } else {
+            let n = 0;
+            text = text.replace(IMG_RE, (tag) => oldImgs[n++] || tag);
+        }
+    }
+    if (text.trim() === b.full.trim()) throw new Error('вышла та же плашка — подскажи, что поправить');
+    await apply(i, raw.slice(0, b.at) + text + raw.slice(b.at + b.full.length), `плашка «${b.label}»`);
+    // скрипты GC перерисуют плашку — вернуть ↻ на место
+    setTimeout(() => A.paintSoon?.(), 450);
+    setTimeout(() => A.paintSoon?.(), 1600);
+}
+
+/** Плашки в посте на экране ↔ блоки текста: [[элемент, k]]. */
+function plaqueEls(el, list) {
+    const box = el.querySelector('.mes_text');
+    if (!box || !list.length) return [];
+    const out = [];
+    const used = new Set();
+    const take = (node, k) => { if (node && k >= 0 && !used.has(node) && !out.some(([, kk]) => kk === k)) { used.add(node); out.push([node, k]); } };
+    const arts = list.map((b, k) => [b, k]).filter(([b]) => b.kind === 'art');
+    [...box.querySelectorAll('.gca')].filter(c => !c.parentElement?.closest('.gca')).forEach((c, n) => take(c, arts[n]?.[1] ?? -1));
+    for (const [kind, sel] of [['diary', '.gc-diary'], ['matrix', '.gc-mx'], ['preg', '.gc-preg'], ['compass', '.cmp']]) take(box.querySelector(sel), list.findIndex(b => b.kind === kind));
+    take(box.querySelector('[data-gc="top"]'), list.findIndex(b => b.kind === 'top'));
+    const dets = [...box.querySelectorAll('details')].filter(d => !d.matches('.gc-diary, .gc-mx, .gc-preg, .cmp') && !d.closest('.gca, .gc-diary, .gc-mx, .gc-preg, .cmp') && !d.parentElement?.closest('details'));
+    for (const d of dets) {
+        const lab = A.norm(d.querySelector('summary')?.textContent || '').replace(/[↻▸▾►▼]/g, '').trim();
+        const scene = d.matches('[data-gc="scene"]');
+        const k = list.findIndex((b, j) => b.kind === 'details' && !out.some(([, kk]) => kk === j) && (scene ? b.label === 'В сцене' : !!lab && (A.norm(b.label) === lab || lab.startsWith(A.norm(b.label)) || A.norm(b.label).startsWith(lab.slice(0, 20)))));
+        take(d, k);
+    }
+    return out;
+}
+
+/** ↻ на каждой плашке поста — только в режиме правки. */
+function paintPlaques(el, id, open) {
+    if (!open) { el.querySelectorAll('.lf-plq').forEach(x => x.remove()); return; }
+    const m = A.chatArr()[id];
+    const list = plaqueBlocks(m?.mes);
+    for (const [node, k] of plaqueEls(el, list)) {
+        const host = node.matches('details') ? node.querySelector('summary') || node : node;
+        const cur = host.querySelector(':scope > .lf-plq');
+        const on = plq?.mes === id && plq.k === k;
+        if (cur && cur.dataset.k === String(k)) { cur.classList.toggle('on', on); continue; }
+        cur?.remove();
+        if (!node.matches('details') && getComputedStyle(node).position === 'static') node.style.position = 'relative';
+        host.insertAdjacentHTML('beforeend', `<span class="lf-own lf-plq${on ? ' on' : ''}${host !== node ? ' in-sum' : ''}" data-k="${k}"><button type="button" data-act="fx-plq" data-mes="${id}" data-k="${k}" title="заново только эту плашку">↻</button></span>`);
+    }
+}
+
 // ───────────── плашки: разметка ─────────────
 
 const PAIRED = ['details', 'summary', 'div', 'art', 'blockquote', 'span', 'center', 'font', 'table'];
@@ -319,10 +479,11 @@ const row = (act, id, title, sub, extra = '') => `<button class="lf-fix-a" data-
 export function paintFix(el, id) {
     const m = A.chatArr()[id];
     const old = el.querySelector(':scope .lf-fix');
-    if (!m || m.is_user || m.is_system || !A.settings().enabled) { old?.remove(); return; }
+    if (!m || m.is_user || m.is_system || !A.settings().enabled) { old?.remove(); el.querySelectorAll('.lf-plq').forEach(x => x.remove()); return; }
     const open = on.has(id);
     const u = M().undo[id];
     const sel = pick?.mes === id ? pick : null;
+    const psel = plq?.mes === id ? plq : null;
     const U = esc(A.shortName(user()));
     const owner = esc(A.shortName(A.canonName(sel?.who || speakerOf(id))));
     const html = !open
@@ -337,14 +498,21 @@ export function paintFix(el, id) {
                 <div class="lf-fix-grid">
                     ${row('fx-rest', id, '⤵ Отсюда заново', sel.sent ? 'с этой фразы и до конца — переписать; подсказка — в поле' : 'с этого абзаца и до конца — переписать; подсказка — в поле')}
                     ${A.shootPost ? row('fx-shot', id, '🎞 Кадр здесь', 'картинка этого момента прямо в посте') : ''}
-                </div>` : '<div class="lf-fix-hint">Тапни абзац в тексте — появятся правки абзаца, «отсюда заново» и кадр в этом месте.</div>'}
+                </div>` : '<div class="lf-fix-hint">Тапни абзац в тексте — появятся правки абзаца, «отсюда заново» и кадр в этом месте. ↻ на плашке — заново только она.</div>'}
             </div>
+            ${psel ? `<div class="lf-fix-sec">
+                <div class="lf-fix-h">Плашка</div>
+                <q>${esc(psel.label)}</q>
+                <div class="lf-fix-own"><input type="text" class="lf-fix-plq" placeholder="что поправить (необязательно)"><button data-act="fx-plq-go" data-mes="${id}" title="заново только эту плашку">↻</button></div>
+                <div class="lf-fix-hint">Заново только она — текст поста и остальные плашки не трогаю${/<img/i.test(plaqueBlocks(m.mes)[psel.k]?.full || '') ? '; картинка внутри останется, если не попросишь другую' : ''}.</div>
+            </div>` : ''}
             <div class="lf-fix-sec">
                 <div class="lf-fix-h">Весь пост</div>
-                <input type="text" class="lf-fix-in beat" placeholder="подсказка для «+ бит» (необязательно)">
+                <input type="text" class="lf-fix-in beat" placeholder="подсказка для «+ бит» и «притормози» (необязательно)">
                 <div class="lf-fix-grid">
                     ${row('fx-mine', id, `${U} — моя`, `убрать всё, что модель написала за ${U}`)}
                     ${row('fx-beat', id, '+ бит', 'дописать абзац в конец, по подсказке или сам')}
+                    ${row('fx-slow', id, '🐢 Притормози', sel ? 'с выбранного абзаца — медленнее, до твоей реакции' : 'пробежал момент галопом — раскрыть медленнее и встать там, где нужна твоя реакция')}
                     ${(m.swipes || []).length > 1 ? row('fx-merge', id, 'Из свайпов', 'собрать из абзацев разных вариантов') : ''}
                     ${row('fx-mark', id, 'Плашки', 'починить разметку GC, текст не трогать')}
                     ${A.recsSheet ? row('fx-recs', id, 'Что записал пост', 'что Life взяла из поста — убрать лишнее') : ''}
@@ -353,9 +521,10 @@ export function paintFix(el, id) {
             </div>
         </div>`;
     const sig = A.hash(html);
-    if (old && old.dataset.sig === sig) { markParas(el, open, id); return; }
+    if (old && old.dataset.sig === sig) { markParas(el, open, id); try { paintPlaques(el, id, open); } catch (e) { console.warn('[Life] плашки: ↻', e); } return; }
     const typed = old?.querySelector('.lf-fix-in:not(.beat)')?.value;
     const typedBeat = old?.querySelector('.lf-fix-in.beat')?.value;
+    const typedPlq = old?.querySelector('.lf-fix-plq')?.value;
     old?.remove();
     const host = el.querySelector('.mes_block') || el;
     const tmp = document.createElement('div');
@@ -364,9 +533,11 @@ export function paintFix(el, id) {
     node.dataset.sig = sig;
     if (typed && node.querySelector('.lf-fix-in:not(.beat)')) node.querySelector('.lf-fix-in:not(.beat)').value = typed;
     if (typedBeat && node.querySelector('.lf-fix-in.beat')) node.querySelector('.lf-fix-in.beat').value = typedBeat;
+    if (typedPlq && node.querySelector('.lf-fix-plq')) node.querySelector('.lf-fix-plq').value = typedPlq;
     const anchor = host.querySelector(':scope > .mes_text');
     if (anchor) anchor.after(node); else host.append(node);
     markParas(el, open, id);
+    try { paintPlaques(el, id, open); } catch (e) { console.warn('[Life] плашки: ↻', e); }
 }
 
 function markParas(el, open, id) {
@@ -432,7 +603,29 @@ export async function fixClick(act, el) {
         finally { busy.delete(i); A.paintSoon?.(); }
     };
     switch (act) {
-        case 'fx-open': if (on.has(i)) { on.delete(i); if (pick?.mes === i) pick = null; } else on.add(i); A.paintSoon?.(); return true;
+        case 'fx-open': if (on.has(i)) { on.delete(i); if (pick?.mes === i) pick = null; if (plq?.mes === i) plq = null; } else on.add(i); A.paintSoon?.(); return true;
+        case 'fx-plq': {
+            const k = Number(el.dataset.k);
+            const b = plaqueBlocks(A.chatArr()[i]?.mes)[k];
+            if (!b) return true;
+            plq = plq?.mes === i && plq.k === k ? null : { mes: i, k, label: b.label };
+            on.add(i);
+            A.paintSoon?.();
+            return true;
+        }
+        case 'fx-plq-go': {
+            const sel = plq?.mes === i ? plq : null;
+            if (!sel) return true;
+            const hint = box?.querySelector('.lf-fix-plq')?.value?.trim() || '';
+            await run(async () => { await regenPlaque(i, sel.k, hint); plq = null; }, `«${sel.label}» — заново`);
+            return true;
+        }
+        case 'fx-slow': {
+            const sel = pick?.mes === i ? pick : null;
+            const hint = box?.querySelector('.lf-fix-in.beat')?.value?.trim() || '';
+            await run(async () => { await slow(i, sel?.line || '', hint); pick = null; }, 'Притормозила');
+            return true;
+        }
         case 'fx-guide': A.guideSheet?.('fix'); return true;
         case 'fx-p': {
             const sel = pick?.mes === i ? pick : null;

@@ -2649,3 +2649,50 @@ b.k-therapy { background: #b3a3d8 !important; } b.k-training { background: #7fb4
 .lf-hero-now { position: absolute; top: -9px; left: 12px; padding: 2px 8px; border-radius: 999px; background: #4a1f2a; border: 1px solid rgba(217, 104, 123, .45); color: var(--lf-rose2); font: 600 9.5px/1.3 var(--lf-sans); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .lf-hero-era.now { padding-top: 14px !important; }
 .lf-hero-era input[type="text"] { padding: 8px 11px !important; font-size: 13.5px !important; }
+
+/* ───────────── рука (протез) ───────────── */
+.lf-arm { display: grid; grid-template-columns: 64px 1fr; gap: 8px 12px; align-items: center; margin: 0 0 12px; padding: 12px; border-radius: 16px; border: 1px solid var(--lf-line); background: linear-gradient(135deg, rgba(167, 178, 189, .10), rgba(0, 0, 0, .14)); }
+.lf-arm-fig { position: relative; width: 64px; height: 64px; border-radius: 15px; display: grid; place-items: center; background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .09), transparent 70%), rgba(0, 0, 0, .28); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.lf-arm-svg { width: 56px; height: 56px; overflow: visible; transition: transform .5s var(--lf-ease), opacity .5s; }
+.lf-arm-p { fill: url(#lf-arm-g); stroke: #2b333c; stroke-width: 1.1; transition: fill .4s, stroke .4s; }
+.lf-arm-l { fill: none; stroke: #3b4550; stroke-width: .9; stroke-linecap: round; opacity: .85; }
+.lf-arm-j { fill: #3b4550; }
+.lf-arm-crack { fill: none; stroke: #ff5a4f; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; filter: drop-shadow(0 0 2px rgba(255, 90, 79, .7)); }
+.lf-arm-spark path { fill: none; stroke: #ffd36b; stroke-width: 1.5; stroke-linecap: round; opacity: 0; filter: drop-shadow(0 0 2px rgba(255, 211, 107, .9)); }
+.lf-arm.st-off .lf-arm-p { fill: rgba(167, 178, 189, .06); stroke: var(--lf-dim); stroke-dasharray: 2.4 2; }
+.lf-arm.st-off .lf-arm-l { opacity: .2; }
+.lf-arm.st-off .lf-arm-svg { transform: rotate(-14deg) translateY(5px); opacity: .75; }
+.lf-arm.st-service .lf-arm-svg { opacity: .5; filter: grayscale(.7); }
+.lf-arm.st-broken .lf-arm-crack { opacity: 1; }
+.lf-arm.st-broken .lf-arm-p { filter: brightness(.82); }
+.lf-arm.st-glitch .lf-arm-spark path { animation: lf-arm-spark 1.7s steps(1) infinite; }
+.lf-arm.st-glitch .lf-arm-spark path:nth-child(2) { animation-delay: .35s; }
+.lf-arm.st-glitch .lf-arm-spark path:nth-child(3) { animation-delay: .8s; }
+.lf-arm.st-glitch .lf-arm-b { animation: lf-arm-jit 2.6s ease-in-out infinite; transform-origin: 24px 44px; }
+@keyframes lf-arm-spark { 0%, 100% { opacity: 0; } 6% { opacity: 1; } 12% { opacity: 0; } 50% { opacity: 1; } 54% { opacity: 0; } }
+@keyframes lf-arm-jit { 0%, 46%, 58%, 100% { transform: none; } 49% { transform: rotate(-5deg); } 52% { transform: rotate(3deg); } 55% { transform: rotate(-1deg); } }
+@media (prefers-reduced-motion: reduce) { .lf-arm .lf-arm-b, .lf-arm .lf-arm-spark path { animation: none !important; } }
+.lf-arm-badge { position: absolute; right: -5px; bottom: -5px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #2a2124; border: 1px solid var(--lf-line2); color: var(--lf-rose2); font-style: normal; }
+.lf-arm-badge svg { width: 13px; height: 13px; }
+.lf-arm-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lf-arm-t small { color: var(--lf-dim); font-size: 11.5px; letter-spacing: .02em; }
+.lf-arm-t b { font: 600 18px/1.2 var(--lf-serif); color: #dfe6ee; }
+.lf-arm.st-off .lf-arm-t b, .lf-arm.st-service .lf-arm-t b { color: #cdbda9; }
+.lf-arm.st-broken .lf-arm-t b { color: #ff8f86; }
+.lf-arm.st-glitch .lf-arm-t b { color: #ffd36b; }
+.lf-arm-t em { font-style: normal; color: var(--lf-text2); font-size: 13.5px; }
+.lf-arm-src { margin-top: 2px; color: var(--lf-dim2); font-size: 11px; }
+.lf-arm-acts { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
+#lf-app .lf-arm-in { padding: 8px 11px; font-size: 13.5px; }
+.lf-arm-log { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 5px; padding-top: 9px; border-top: 1px dashed var(--lf-line); }
+.lf-arm-log span { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--lf-text2); }
+.lf-arm-log span svg { width: 13px; height: 13px; opacity: .8; }
+.lf-arm-log small { margin-left: auto; color: var(--lf-dim2); font-size: 11px; }
+
+/* ───────────── ↻ одной плашки (в режиме правки) ───────────── */
+.mes .lf-plq { position: absolute; top: -12px; right: 12px; z-index: 4; animation: lf-rise .3s cubic-bezier(.2, .8, .2, 1) both; }
+.mes .gca > .lf-plq { right: 48px; }
+.mes .lf-plq.in-sum { position: relative; top: auto; right: auto; left: auto; display: inline-flex; margin-left: 10px; vertical-align: middle; }
+.mes .lf-plq button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(217, 104, 123, .6); background: rgba(30, 24, 26, .88); color: #f0b7c1; font: 600 15px/1 -apple-system, system-ui, sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.mes .lf-plq.on button { background: #7b2d3d; border-color: #eab3bc; color: #fff; box-shadow: 0 0 0 3px rgba(217, 104, 123, .25), 0 2px 10px rgba(0, 0, 0, .45); }
+.mes .lf-fix-plq { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(237, 228, 223, .18); background: rgba(255, 255, 255, .04); color: #ede4df; font: 13px -apple-system, sans-serif; }

@@ -71,6 +71,7 @@ import { replyRecs } from './reply.js';
 import { initCanon, canonEnsure, canonClick } from './canon.js';
 import { initHero, heroClick, heroInput, fameEnsure } from './hero.js';
 import { makeAskJson } from './ask.js';
+import { initArm, armPrompt, armChron, armAfterPost, armSceneHtml, armNote, armRecs, armClick, armCfgHtml } from './arm.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
@@ -87,7 +88,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.43.0';
+const VERSION = '0.44.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -720,6 +721,8 @@ async function refData(path, max = 1024) {
 async function drawPicture(prompt, { aspect = '4:3', max = 1600, refs = [], prefix = 'life', who = null } = {}) {
     // живот по сроку: у кого в кадре какой срок (who — кто в кадре; не передали — ищу имена в промпте)
     try { const bn = bellyNote(Array.isArray(who) ? who : namesInText(prompt)); if (bn) prompt = `${prompt}\n${bn}`; } catch (e) { console.warn('[Life] живот по сроку', e); }
+    // протез: в кадре без руки, если её сняли (или разбита)
+    try { const an = armNote(Array.isArray(who) ? who : namesInText(prompt)); if (an) prompt = `${prompt}\n${an}`; } catch (e) { console.warn('[Life] рука', e); }
     let mod;
     try { mod = await import(WARDROBE_DRAW); } catch { throw new Error('Рисую через Гардероб, а он не найден. Можно загрузить свою картинку.'); }
     const c = ctx();
@@ -2534,6 +2537,7 @@ function renderCfg() {
         ${sw('pets', 'Питомцы с потребностями', simCfg(), 'sim.pets')}
         ${sw('inner', 'Внутренняя жизнь: тело, состояние, мысли, свои желания, ухаживания', simCfg(), 'sim.inner')}
         ${(() => { try { return agendaCfgHtml(); } catch { return ''; } })()}
+        ${(() => { try { return armCfgHtml(); } catch { return ''; } })()}
         ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
@@ -4004,6 +4008,18 @@ jQuery(async () => {
     hubInputs.push(recapInput);
     setTimeout(() => { try { recapMaybe('load'); } catch (e) { console.warn('[Life] ранее в', e); } }, 3500);
     hubMods.push({ pre: 'st-', click: stageClick, label: 'Мизансцена' });
+    initArm(extApi);
+    hubMods.push({ pre: 'arm-', click: armClick, label: 'Рука' });
+    addRecs(armRecs);
+    try {
+        globalThis.LifeBridge.register({
+            id: 'life-arm',
+            prompt: (type) => armPrompt(type),
+            chron: (i) => armChron(i),
+            afterPost: (i, j) => armAfterPost(i, j),
+            sceneHtml: () => armSceneHtml(),
+        });
+    } catch (e) { console.warn('[Life] рука', e); }
     try {
         globalThis.LifeBridge.register({
             id: 'life-arc',
