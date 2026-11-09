@@ -33,6 +33,8 @@ import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
 import { initPush, push as pushBanner } from './push.js';
 import { initGraph, graphHtml, graphClick } from './graph.js';
 import { initBelly, bellyNote, bellyWardrobeHtml, bellyClick } from './belly.js';
+import { initStance, stancePrompt, stanceChron, stanceAfterPost, stanceSceneHtml, stanceClick } from './stance.js';
+import { initRitual, ritualPrompt, ritualChron, ritualAfterPost, ritualHtml, ritualClick } from './ritual.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
@@ -47,7 +49,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.28.0';
+const VERSION = '0.29.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2203,6 +2205,7 @@ function renderRelations(who, st) {
         body = ms.length ? `<div class="lf-timeline">${ms.map(m => `<button class="lf-tl" data-act="jump" data-mes="${m.mes}"><span class="lf-tl-dot"></span><span class="lf-tl-txt"><b>${esc(m.text)}</b><small>${esc(whenLabel(m.ts?.story_date, m.ts?.story_time))}</small></span></button>`).join('')}</div>`
             : `<div class="lf-empty small">Ключевые моменты появятся, когда Летописец их заметит.</div>`;
         if (hrel.length) body = `<div class="lf-hrel">${hrel.map(r => `<span>${esc(r.type || '')}${r.note ? ` — ${esc(cut(r.note, 90))}` : ''}</span>`).join('')}</div>${body}`;
+        try { body += ritualHtml(who, other); } catch (e) { console.warn('[Life] своё', e); }
         const own = secrets.filter(x => x.knows.length === 1)[0];
         if (own) body += `<button class="lf-secret big" data-act="jump" data-mes="${own.mes}">${icon('lock')}<span><b>Знает только ${esc(shortName(canonName(own.knows[0])))}</b>${esc(own.text)}</span></button>`;
     }
@@ -3781,6 +3784,9 @@ jQuery(async () => {
     initRecap({ ...extApi, daysBrief, closeHub, chapterCover });
     initBelly({ ...extApi, faceRef });
     hubMods.push({ pre: 'bl-', click: bellyClick, label: 'Живот по сроку' });
+    initStance(extApi);
+    initRitual(extApi);
+    hubMods.push({ pre: 'stn-', click: stanceClick, label: 'Споры' }, { pre: 'rit-', click: ritualClick, label: 'Своё' });
     initAmbient({ ...extApi, musicNow: () => Music.now() });
     hubMods.push({ pre: 'am-', click: ambClick, label: 'Звук и запах' });
     setTimeout(() => { try { ambUpdate(); } catch (e) { console.warn('[Life] эмбиент', e); } }, 2500);
@@ -3816,6 +3822,19 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-stance',
+            prompt: (type) => stancePrompt(type),
+            chron: () => stanceChron(),
+            afterPost: (i, j) => stanceAfterPost(i, j),
+            sceneHtml: () => stanceSceneHtml(),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-ritual',
+            prompt: (type) => ritualPrompt(type),
+            chron: () => ritualChron(),
+            afterPost: (i, j) => ritualAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-smell',

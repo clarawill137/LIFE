@@ -2260,3 +2260,32 @@ body.lf-pal-paper .lf-push-h, body.lf-pal-paper .lf-push-x { color: rgba(43, 36,
 .lf-smell > .lf-i { width: 16px; height: 16px; flex: none; color: var(--lf-rose2); }
 .lf-smell span { flex: 1; }
 .lf-smell small { display: block; font-style: normal; font-family: var(--lf-sans); font-size: 12px; color: var(--lf-dim); margin-top: 2px; }
+
+/* ───────────── 0.29: споры ───────────── */
+.lf-stn { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 8px; }
+.lf-stn-q { padding: 10px 12px; border-radius: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); border-left: 3px solid rgba(233, 164, 106, .55); }
+.lf-stn-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.lf-stn-h b { font-family: var(--lf-serif); font-weight: 500; font-size: 15px; line-height: 1.3; }
+.lf-stn-h span { display: flex; gap: 2px; flex: none; }
+.lf-stn-h button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-stn-h .lf-i { width: 14px; height: 14px; }
+.lf-stn-p { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: var(--lf-text2); }
+.lf-stn-p .lf-ava.xs { margin: 0; width: 24px; height: 24px; }
+.lf-stn-p span { flex: 1; min-width: 0; }
+.lf-stn-p span b { color: var(--lf-text); }
+.lf-stn-p small { display: block; color: var(--lf-dim); font-size: 11.5px; }
+.lf-stn-f { display: flex; gap: 3px; flex: none; }
+.lf-stn-f b { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .12); }
+.lf-stn-f b.on { background: #e9a46a; }
+.lf-link { border: 0; background: none; color: var(--lf-rose2); font: inherit; padding: 0; cursor: pointer; text-decoration: underline dotted; }
+
+/* ───────────── 0.29: своё (шутки и ритуалы) ───────────── */
+.lf-rit { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.lf-rit-c { display: inline-flex; align-items: center; gap: 6px; padding: 6px 4px 6px 10px; border-radius: 14px; background: rgba(234, 179, 188, .06); border: 1px solid rgba(234, 179, 188, .2); font-size: 13px; color: var(--lf-text); max-width: 100%; }
+.lf-rit-c > .lf-i { width: 14px; height: 14px; flex: none; color: var(--lf-rose2); }
+.lf-rit-c.k-joke > .lf-i { color: #e7c77a; } .lf-rit-c.k-ritual > .lf-i { color: #c9a27c; } .lf-rit-c.k-phrase > .lf-i { color: #8fc3d6; }
+.lf-rit-c b { font-weight: 600; }
+.lf-rit-c small { color: var(--lf-dim); font-size: 11.5px; }
+.lf-rit-c i { font-style: normal; color: var(--lf-dim); font-size: 11px; }
+.lf-rit-c button { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--lf-dim2); cursor: pointer; }
+.lf-rit-c button .lf-i { width: 12px; height: 12px; }
