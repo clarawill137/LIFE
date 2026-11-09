@@ -15,6 +15,9 @@ import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cyc
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
 import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
+import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick } from './days.js';
+import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
+import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -27,7 +30,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.19.1';
+const VERSION = '0.20.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -763,6 +766,8 @@ function updateMovePrompt(type, consume = false) {
         try { const pr = pressPrompt(); if (pr) parts.push(pr); } catch (e) { console.warn('[Life] СМИ', e); }
         try { const pl = platesPrompt(); if (pl) parts.push(pl); } catch (e) { console.warn('[Life] плашки', e); }
         parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
+        try { const dp = daysPrompt(type); if (dp) parts.unshift(dp); } catch (e) { console.warn('[Life] дни', e); }
+        try { const fp = freshPrompt(type); if (fp) parts.push(fp); } catch (e) { console.warn('[Life] свежесть', e); }
     }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
@@ -771,12 +776,15 @@ function updateMovePrompt(type, consume = false) {
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
     try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
+    try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
     return [text, modes].filter(Boolean).join('\n');
 }
 
 globalThis.life_intercept = async function (_chat, _size, _abort, type) {
+    // «не пропусти»: дождаться разбора поста игрока (не дольше нескольких секунд)
+    try { if (type !== 'quiet' && settings().enabled) await replyReady(type); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { if (type !== 'quiet') updateMovePrompt(type, true); } catch (e) { console.warn('[Life] перехват', e); }
 };
 
@@ -969,7 +977,8 @@ async function runChron(i, { force = false } = {}) {
         invalidate();
         if (store[key].det && !store[key].detImg && s.detail.auto) queueDetail(key);
         try { simAfterPost(i, res, m); updateMovePrompt(); } catch (e) { console.warn('[Life] Жизнь после поста', e); }
-        if (ext.length) { bridgeEach(x => x.afterPost?.(i, j, m), 'после поста'); updateMovePrompt(); }
+        bridgeEach(x => x.afterPost?.(i, j, m), 'после поста');
+        updateMovePrompt();
     } catch (e) {
         console.warn('[Life] Летописец:', e);
         toast('warning', `${esc(String(e?.message || e))}<br><small>Тапни сюда — перечитает пост #${i}</small>`, '✦ Летописец', { timeOut: 12000, escapeHtml: false, onclick: () => { queueChron(i, { force: true }); toast('info', `Летописец перечитывает #${i}…`); } });
@@ -1400,7 +1409,7 @@ function lastChron(from = chatArr().length - 1, to = 0) {
 // ───────────── чат: разделители, главы, плашки ─────────────
 
 const ui = {
-    open: false, tab: 'scene', focus: 'last', who: '', pTab: 'life', itemsTab: 'with', item: '', worldTab: 'events',
+    open: false, tab: 'scene', focus: 'last', who: '', pTab: 'life', itemsTab: 'with', item: '', worldTab: 'days',
     mapStack: [], region: '', sel: '', atlas: false, editPins: false, chShow: 30, pair: '', relTab: 'common', car: '', wset: '', galShow: 48,
     room: '', tracePin: '',
 };
@@ -1454,12 +1463,17 @@ function cutCardHtml(i) {
     </div>`).join('');
 }
 
+// свои отрисовщики поста: «не пропусти», сны/флешбеки и т. п. — и их кнопки в чате
+const painters = [];
+const chatClicks = [];
+
 function paintChips() {
     const chatEl = document.getElementById('chat');
     if (!chatEl || !settings().enabled) return;
     chatEl.querySelectorAll(':scope > .mes[mesid]').forEach(el => {
         const id = Number(el.getAttribute('mesid'));
         try { paintShots(el, id); } catch (e) { console.warn('[Life] кадры в посте', e); }
+        for (const p of painters) { try { p(el, id); } catch (e) { console.warn('[Life] пост', e); } }
         const host0 = el.querySelector('.mes_block') || el;
         const oldCut = host0.querySelector(':scope > .lf-cutcards');
         const cutHtml = cutCardHtml(id);
@@ -1556,6 +1570,16 @@ function hookChat() {
 async function onChatClick(ev) {
     if (onArtClick(ev)) return;
     if (onShotClick(ev)) return;
+    // свои кнопки в посте (чипы «не пропусти» и т. п.)
+    const own = ev.target.closest('.lf-reply [data-act], .lf-frame [data-act]');
+    if (own) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const act = own.dataset.act;
+        try { if (replyClick(act, own)) return; } catch (e) { console.warn('[Life] не пропусти', e); }
+        for (const h of chatClicks) { try { if (await h(act, own)) return; } catch (e) { console.warn('[Life] пост', e); } }
+        return;
+    }
     const det = ev.target.closest('.lf-detail, .lf-detpick');
     if (det) {
         if (ev.target.closest('input')) { ev.stopPropagation(); return; } // поле «что поправить» — дать фокус
@@ -2289,7 +2313,9 @@ function renderWorld() {
     const st = worldState();
     const tab = ui.worldTab;
     let body = '';
-    if (tab === 'events') {
+    if (tab === 'days') {
+        body = (() => { try { return daysHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
+    } else if (tab === 'events') {
         const ev = horaeEvents().slice(-60).reverse();
         const lc = lastChron();
         const fsImg = lc ? (imageNear(imgs(), lc.i)?.src || chapterCover(chapterOf(lc.i) || {})) : '';
@@ -2335,6 +2361,7 @@ function renderWorld() {
         </div>
         <div class="lf-list">${rows.join('') || '<div class="lf-empty small">Летописец ещё ничего не записал.</div>'}</div>
         ${ag.length ? `${sec('Планы')}<div class="lf-list">${ag.map(a => `<button class="lf-row" data-act="jump" data-mes="${a.messageIndex}">${icon('calendar')}<span>${a.date ? `<b>${esc(a.date)}</b> · ` : ''}${esc(a.text)}</span>${icon('chevR', 'dim')}</button>`).join('')}</div>` : ''}`;
+        try { body += freshHtml(); } catch (e) { console.warn('[Life] свежесть', e); }
     } else if (tab === 'rumors') {
         body = renderPress(renderRumors());
     } else if (tab === 'time') {
@@ -2348,7 +2375,7 @@ function renderWorld() {
         <div class="lf-hint">Скачок времени — это новая глава со строчкой для модели. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2842,6 +2869,14 @@ async function onClick(ev) {
     if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
     if (act.startsWith('tw-')) {
         try { await twistClick(act, el, { at: 'data-act', openSheet, closeSheet, rerender: render, busy: withBusy }); } catch (e) { console.warn('[Life] твист', e); toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
+        return;
+    }
+    if (act === 'days-n' || act === 'days-all' || act.startsWith('day-')) {
+        try { await daysClick(act, el); } catch (e) { console.warn('[Life] дни', e); toast('warning', esc(String(e?.message || e)), '✦ Дни'); }
+        return;
+    }
+    if (act.startsWith('fr-')) {
+        try { await freshClick(act, el); } catch (e) { console.warn('[Life] свежесть', e); toast('warning', esc(String(e?.message || e)), '✦ Свежесть'); }
         return;
     }
     if (act.startsWith('hu-')) {
@@ -3642,12 +3677,22 @@ jQuery(async () => {
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     initTwists({ ...simApi, plainText, peopleList, onArm: () => disarmOnce() });
     initHurt(simApi);
+    const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
+    initDays(extApi);
+    initReply(extApi);
+    initFresh(extApi);
+    painters.push((el, id) => paintReply(el, id));
     try {
         globalThis.LifeBridge.register({
             id: 'life-twist',
             chron: () => twistChron(),
             afterPost: (i, j) => twistAfterPost(i, j),
             sceneHtml: () => `${sec('Твист', 'на следующий ответ')}${twistsHtml({ log: true })}`,
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-reply',
+            chron: () => replyChron(),
+            afterPost: (i, j) => { replyAfterPost(i, j); daysAfterPost(); freshAfterPost(); },
         });
         globalThis.LifeBridge.register({
             id: 'life-hurt',
@@ -3692,7 +3737,11 @@ jQuery(async () => {
     if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, (id) => { try { artOnReceived(Number(id)); } catch (e) { console.warn('[Life] карточки', e); } });
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
-    if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, () => { ui.focus = 'last'; later(); });
+    if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, (id) => {
+        ui.focus = 'last'; later();
+        // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
+        try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
+    });
     if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => { if (!dry && type !== 'quiet') genActive = true; });
     const endGen = () => {
         genActive = false;
