@@ -2515,3 +2515,26 @@ body.lf-theme.lf-ava-wide #chat .mes .lf-duo-ava img { clip-path: polygon(14% 0,
 .mes .lf-ft-pill .lf-i { width: 14px; height: 14px; }
 .mes .lf-ft-pill b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .9; }
 .mes .lf-ft-pill.end { background: rgba(255, 59, 48, .16); border: 1px solid rgba(255, 59, 48, .35); color: #ff8a80; }
+
+/* ───────────── эхо решений ───────────── */
+.mes .lf-echo { margin: 6px 0 2px; }
+.mes .lf-echo button { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; border: 1px solid rgba(232, 195, 122, .32); background: rgba(232, 195, 122, .06); color: #d9c08d; border-radius: 8px; padding: 3px 9px; font: 12px/1.35 -apple-system, sans-serif; text-align: left; cursor: pointer; }
+.mes .lf-echo button span { overflow: hidden; text-overflow: ellipsis; }
+.mes .lf-echo.done button { border-color: rgba(217, 104, 123, .4); background: rgba(217, 104, 123, .08); color: #f0a0ad; }
+.lf-echo-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 14px; }
+.lf-echo-i { position: relative; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(232, 195, 122, .04); }
+.lf-echo-i.echo { background: rgba(217, 104, 123, .06); border-color: rgba(217, 104, 123, .28); }
+.lf-echo-t b { display: block; font: 600 14px/1.35 var(--lf-sans); color: var(--lf-text); }
+.lf-echo-t small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--lf-dim); }
+.lf-echo-m { margin-top: 6px; font-size: 11.5px; letter-spacing: .03em; color: #d9c08d; }
+.lf-echo-ev { margin-top: 6px; font-size: 13px; color: var(--lf-text2); }
+.lf-echo-b { display: flex; justify-content: flex-end; gap: 2px; margin-top: 4px; }
+.lf-echo-b .lf-iconbtn.on { color: #e8c37a; }
+
+/* ───────────── накал ───────────── */
+.lf-dr { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.lf-dr-bars { width: 100%; height: 38px; display: block; }
+.lf-dr-st { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--lf-text2); }
+.lf-dr-st .lf-i { width: 16px; height: 16px; color: #e07a5f; flex: none; }
+.lf-dr .lf-chips { margin: 0; }
+.lf-dr .lf-btn.on { border-color: rgba(224, 122, 95, .6); color: #f3b39f; }

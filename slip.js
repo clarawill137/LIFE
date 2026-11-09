@@ -5,6 +5,7 @@
 import { setMesText } from './mend.js';
 import { hurtFacts } from './hurt.js';
 import { pregnancies } from './zr.js';
+import { canonText, eraLine, canonCfgHtml, canonInput, canonClick } from './canon.js';
 
 let A = null;
 export function initSlip(api) { A = api; }
@@ -87,11 +88,14 @@ function factsText(i) {
     if (here.length) L.push(`- В сцене до этого поста: ${here.join(', ')}${cast.filter(n => !here.some(h => A.sameName(h, n))).length ? `; не было: ${cast.filter(n => !here.some(h => A.sameName(h, n))).join(', ')}` : ''}`);
     const when = [b.date, b.time].filter(Boolean).join(', ');
     if (when || b.loc || b.atm) L.push(`- Было: ${[when, b.loc, b.atm].filter(Boolean).join(' · ')}`);
+    // канон и эпоха
+    try { const er = eraLine(); if (er) L.push(`- Эпоха: ${er}`); } catch { /* */ }
+    try { const cn = canonText(); if (cn) L.push(`- Канон этой истории (жёсткие факты):\n${cn}`); } catch { /* */ }
     return L.join('\n');
 }
 
 const RULE = `
-slip — ЛЯПЫ этого поста против «Сверки»: [{"q":"дословная цитата из поста с ляпом, 3–20 слов, без изменений","why":"что не так, 3–10 слов","fix":"та же цитата, исправленная минимально"}]. Ляп — только прямое противоречие сверке, которое сам пост не объясняет: перепутана рука (живая / металлическая) или сторона тела, одежда не та и в посте не переодевались, рана забыта (бегает с ножевым в бедре без боли) или зажила слишком рано, живот и срок не те, говорит или действует тот, кого не было в сцене и кто в посте не пришёл, день вместо ночи. Переоделся, пришёл, рассвело, перевязали — в самом посте — не ляп. Стиль, сюжет, выдумки и мелочи, которых нет в сверке, — не ляп. Нет ляпов — [] (так почти всегда).`;
+slip — ЛЯПЫ этого поста против «Сверки»: [{"q":"дословная цитата из поста с ляпом, 3–20 слов, без изменений","why":"что не так, 3–10 слов","fix":"та же цитата, исправленная минимально"}]. Ляп — только прямое противоречие сверке, которое сам пост не объясняет: перепутана рука (живая / металлическая) или сторона тела, одежда не та и в посте не переодевались, рана забыта (бегает с ножевым в бедре без боли) или зажила слишком рано, живот и срок не те, говорит или действует тот, кого не было в сцене и кто в посте не пришёл, день вместо ночи. Переоделся, пришёл, рассвело, перевязали — в самом посте — не ляп. Ещё ляп — анахронизм по «Эпохе» (вещь, техника, слово или событие не своего времени; то, что ещё не случилось, — как прошлое) и расхождение с «Каноном» (текст прямо противоречит жёсткому факту: кто был мёртв или пылью, кто где был, кто кого знал и когда, даты, возраст); для них why начинай с «эпоха:» или «канон:». Персонаж может врать, ошибаться или не знать — это не ляп; ляп — только когда неверное утверждает сам текст. Стиль, сюжет, выдумки и мелочи, которых нет в сверке, — не ляп. Нет ляпов — [] (так почти всегда).`;
 
 export function slipChron(i) {
     if (!A?.hasChat?.() || !slipOn() || !Number.isFinite(i)) return null;
@@ -224,6 +228,7 @@ export function paintSlip(el, id) {
 const busy = new Set();
 
 export async function slipClick(act, el) {
+    if (act.startsWith('cn-')) return canonClick(act, el);
     if (!act.startsWith('sl-')) return false;
     const i = Number(el.dataset.mes);
     const n = Number(el.dataset.n);
@@ -267,10 +272,12 @@ export function slipCfgHtml() {
     return `${A.sec('Ляп-фикс', slipOn() ? 'сверяет каждый пост' : 'выключен')}
     <label class="lf-switch"><input type="checkbox" data-act="sl-on" ${slipOn() ? 'checked' : ''}><span></span>Сверять посты (чип ⚠ под постом)</label>
     <div class="lf-sl-facts">${names.map(n => `<div class="lf-field"><label>${esc(n)} — неизменное</label><input type="text" data-in="sl-fact" data-name="${esc(n)}" value="${esc(factsOf(n))}" placeholder="что модели нельзя путать: рука, шрам, цвет глаз…"></div>`).join('')}</div>
-    <div class="lf-hint">Ещё сверяется сама: одежда из Гардероба, раны, срок из Зёрнышка, кто был в сцене, время и место. Правит только кривую фразу — остальной пост не трогает.</div>`;
+    <div class="lf-hint">Ещё сверяется сама: одежда из Гардероба, раны, срок из Зёрнышка, кто был в сцене, время и место. Правит только кривую фразу — остальной пост не трогает.</div>
+    ${canonCfgHtml()}`;
 }
 
 export function slipInput(el) {
+    if (canonInput(el)) return true;
     if (el.dataset.in !== 'sl-fact') return false;
     const c = cfg();
     const name = el.dataset.name;

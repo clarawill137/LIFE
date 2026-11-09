@@ -9,6 +9,7 @@ import { simCfg, nowSlot } from './sim.js';
 import { innerBrief } from './inner.js';
 import { peopleList, findPerson, peopleAdd } from './people.js';
 import { moodNow } from './mood.js';
+import { echoForAgenda, echoMark } from './echo.js';
 
 let A = null;
 let speaker = '';
@@ -174,7 +175,8 @@ function systemPrompt(withEvents) {
 - knows — что он знает и чего НЕ знает о последних событиях: знает только то, при чём был или что ему рассказали.
 - Тон живой и приземлённый: бытовуха, работа, отношения, мелкие и средние конфликты, иногда сюжетные крючки. По-русски, коротко: 1–2 предложения на поле.
 Ответ — только JSON без пояснений:
-{"chars":{"<Имя главного>":{"now":"","where":"где он сейчас — место коротко, как его называют в истории (Башня Старка · мастерская)","want":"","hide":"","next":"что сделает сам в ближайшее время, без ${U}","knows":"","mood":""},"<Имя второстепенного>":{"now":"","want":""}},"events":[{"who":"","what":"что произошло за кадром","how":"звонок | СМС | новость | визит | последствие","when":"скоро | позже","to_user":false}]}
+{"chars":{"<Имя главного>":{"now":"","where":"где он сейчас — место коротко, как его называют в истории (Башня Старка · мастерская)","want":"","hide":"","next":"что сделает сам в ближайшее время, без ${U}","knows":"","mood":""},"<Имя второстепенного>":{"now":"","want":""}},"events":[{"who":"","what":"что произошло за кадром","how":"звонок | СМС | новость | визит | последствие","when":"скоро | позже","to_user":false,"echo":""}]}
+echo — id её решения из списка «Решения», если событие — его последствие; иначе пусто.
 ${withEvents ? `В events дай 1–2 правдоподобных события за кадром с участием персонажей из состава.` : 'В этот раз events — [].'}
 to_user: true — если это ГЛАВНЫЙ персонаж, которого сейчас нет рядом с ${U}, сам выходит на связь с ней: звонит ей, пишет ей, едет к ней (how — звонок | СМС | визит, what — зачем, одной фразой). ${U} увидит это как «стук» и решит сама, пустить ли его в сцену. Не чаще одного такого на обновление, и только если у него правда есть повод по его повестке.`;
 }
@@ -202,14 +204,17 @@ export async function agendaUpdate({ manual = false } = {}) {
     try {
         const cfg = agendaCfg();
         const a = M();
-        const withEvents = Math.random() * 100 < cfg.chance;
+        // эхо решений: если какому-то её выбору пора аукнуться — события в этот раз будут
+        let echo = null;
+        try { echo = echoForAgenda(); } catch (e) { console.warn('[Life] эхо решений', e); }
+        const withEvents = !!echo?.force || Math.random() * 100 < cfg.chance;
         const st = A.worldState();
         const prev = names.map(n => {
             const g = a.chars[charKey(n)];
             return `### ${n}\n${g ? FIELDS.filter(([k]) => g[k]).map(([k, l]) => `${l}: ${g[k]}`).join('\n') : '(повестки ещё нет — создай по контексту)'}`;
         }).join('\n\n');
         const prevEv = a.events.filter(e => e.status !== 'gone').slice(-4).map(e => `- ${e.who ? `${e.who} — ` : ''}${e.what}`).join('\n') || '(нет)';
-        const user = `СОСТАВ ЭТОЙ ВЕТКИ:\n${rosterText()}\n\nСЕЙЧАС: ${[st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(' ') || 'время не записано'}; место сцены: ${st.scene?.location || '—'}; в сцене: ${(st.scene?.characters_present || []).join(', ') || '—'}.\n\nПРОШЛЫЕ ПОВЕСТКИ:\n${prev}\n\nПРОШЛЫЕ СОБЫТИЯ ЗА КАДРОМ (если уже всплыли в чате — не повторяй):\n${prevEv}\n\nПОСЛЕДНИЕ СООБЩЕНИЯ ЧАТА:\n${transcript(cfg.ctx)}\n\nОбнови повестки всех персонажей из состава. Ответ — только JSON.`;
+        const user = `СОСТАВ ЭТОЙ ВЕТКИ:\n${rosterText()}\n\nСЕЙЧАС: ${[st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(' ') || 'время не записано'}; место сцены: ${st.scene?.location || '—'}; в сцене: ${(st.scene?.characters_present || []).join(', ') || '—'}.\n\nПРОШЛЫЕ ПОВЕСТКИ:\n${prev}\n\nПРОШЛЫЕ СОБЫТИЯ ЗА КАДРОМ (если уже всплыли в чате — не повторяй):\n${prevEv}\n\nПОСЛЕДНИЕ СООБЩЕНИЯ ЧАТА:\n${transcript(cfg.ctx)}${echo?.text && withEvents ? `\n\n${echo.text}` : ''}\n\nОбнови повестки всех персонажей из состава. Ответ — только JSON.`;
         const out = await A.askModel([{ role: 'system', content: systemPrompt(withEvents) }, { role: 'user', content: user }], 2600);
         if (A.ctx().getCurrentChatId?.() !== chatId) return false;
         const j = A.extractJson(out);
@@ -231,7 +236,11 @@ export async function agendaUpdate({ manual = false } = {}) {
             for (const e of a.events) if (e.status === 'new') e.status = 'old';
             for (const e of ev.slice(0, 3)) {
                 const what = str(e?.what || e?.['что'] || (typeof e === 'string' ? e : ''));
-                if (what) a.events.push({ id: A.uid(), who: str(e?.who || e?.['кто']), what: what.slice(0, 300), how: str(e?.how || e?.['как_всплывёт']).slice(0, 80), when: str(e?.when || e?.['когда']) || 'скоро', toUser: e?.to_user === true || e?.toUser === true, mes: i, status: 'new' });
+                if (!what) continue;
+                const nev = { id: A.uid(), who: str(e?.who || e?.['кто']), what: what.slice(0, 300), how: str(e?.how || e?.['как_всплывёт']).slice(0, 80), when: str(e?.when || e?.['когда']) || 'скоро', toUser: e?.to_user === true || e?.toUser === true, mes: i, status: 'new' };
+                const eid = str(e?.echo);
+                if (eid) { try { if (echoMark(eid, nev)) { nev.echo = eid; nev.when = 'скоро'; } } catch (err) { console.warn('[Life] эхо решений', err); } }
+                a.events.push(nev);
             }
         } else if (!withEvents) {
             const live = a.events.filter(e => e.status === 'new');

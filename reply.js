@@ -55,7 +55,8 @@ function userIndexBefore(i) {
 const SYSTEM = `Ты помощник рассказчика в литературной ролевой на русском. Тебе дают пост игрока и, для контекста, конец предыдущего поста.
 Выпиши, на что в посте игрока персонажи ОБЯЗАТЕЛЬНО должны отреагировать в следующем ответе, чтобы ничего не потерялось: прямые вопросы, просьбы и предложения, признания, брошенные фразы и шутки, подколы, жесты и прикосновения, отданные или показанные вещи, решения, новости.
 1–5 пунктов, только значимое, по порядку поста; не пересказывай пост целиком и не придумывай. Пометки в /…/, ((…)), [OOC] — режиссура для модели, их не выписывай.
-Ответь только JSON: {"items":[{"t":"что, 4–12 слов; реплику — короткой цитатой «…»","to":"кому адресовано — имя, или пусто, если всем"}]}`;
+Ещё choice — только если в этом посте игрок принимает КРУПНОЕ решение со ставками, которое может аукнуться позже: соврать или скрыть важное, пощадить или сдать кого-то, нарушить обещание, рискнуть собой, уйти, согласиться на сделку, взять вину на себя, выбрать одного вместо другого. {"what":"что она выбрала, 5–14 слов","stake":"чем может аукнуться — кому и как, 5–14 слов","who":["кого коснётся"],"weight":1–3 (3 — меняет жизнь)}. Бытовые выборы (что надеть, съесть, заказать, куда сесть) — не решения: null.
+Ответь только JSON: {"items":[{"t":"что, 4–12 слов; реплику — короткой цитатой «…»","to":"кому адресовано — имя, или пусто, если всем"}],"choice":null}`;
 
 const pending = new Map(); // key → Promise
 
@@ -71,7 +72,7 @@ async function extract(u) {
     const out = await A.askModel([{ role: 'system', content: SYSTEM }, { role: 'user', content: input }], 700);
     const j = A.extractJson(out);
     const items = (Array.isArray(j?.items) ? j.items : []).map(x => ({ t: String(x?.t || '').trim().slice(0, 140), to: String(x?.to || '').trim().slice(0, 40) })).filter(x => x.t).slice(0, 5);
-    return { items };
+    return { items, choice: j?.choice && typeof j.choice === 'object' && !Array.isArray(j.choice) ? j.choice : null };
 }
 
 /** Начать разбор поста u (если ещё не разобран). Возвращает промис записи. */
@@ -91,6 +92,8 @@ export function warm(u) {
         const carry = prevRec ? prevRec.items.filter((x, n) => prevRec.state?.[n] === 'miss' && !x.carry).map(x => ({ ...x, carry: true })).slice(0, 2) : [];
         const rec = { items: [...r.items, ...carry], state: {}, at: Date.now(), skip: !!r.skip };
         M().list[key] = rec;
+        // крупное решение со ставками — в «Эхо решений»
+        if (r.choice) { try { A.onChoice?.(u, r.choice); } catch (e) { console.warn('[Life] эхо решений', e); } }
         // держать только последние 40 разборов
         const keys = Object.keys(M().list).sort((a, b) => parseInt(a) - parseInt(b));
         for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete M().list[k];

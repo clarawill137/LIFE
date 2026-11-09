@@ -10,7 +10,7 @@ import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, pe
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
 import { initErrors } from './errors.js';
 import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
-import { agendaClick, agendaCfgHtml } from './agenda.js';
+import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
@@ -47,6 +47,9 @@ import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick } from './fix.js';
 import { initDuo, duoPrompt, duoSpeaker, paintDuo, duoSceneHtml, duoClick, duoCCHtml } from './duo.js';
 import { initCall, callPrompt, callChron, callAfterPost, paintCall, callCfgHtml } from './call.js';
+import { initEcho, echoAdd, paintEcho, echoHtml, echoClick } from './echo.js';
+import { initCanon, canonEnsure, canonClick } from './canon.js';
+import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
@@ -62,7 +65,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.38.0';
+const VERSION = '0.39.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -809,9 +812,13 @@ function updateMovePrompt(type, consume = false) {
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
     // режимы — отдельным ключом, который сортируется последним: самый конец промпта
+    // накал — до режимов: «на один ответ» и твист ещё взведены, их видно
+    let drama = '';
+    try { drama = settings().enabled && hasChat() ? dramaPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] накал', e); }
     let modes = '';
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
     try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
+    if (drama) modes = [modes, drama].filter(Boolean).join('\n');
     try { const ap = settings().enabled && hasChat() ? arcOnce(type, consume) : ''; if (ap) modes = [modes, ap].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] ружьё', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { const dp = settings().enabled && hasChat() ? duoPrompt(type, consume) : ''; if (dp) modes = [modes, dp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вдвоём', e); }
@@ -2379,10 +2386,12 @@ function renderWorld() {
     } else if (tab === 'cal') {
         body = (() => { try { return calHtml(); } catch (e) { console.warn('[Life] календарь', e); return ''; } })();
     } else if (tab === 'events') {
+        let echoTop = '';
+        try { echoTop = echoHtml(); } catch (e) { console.warn('[Life] эхо решений', e); }
         const ev = horaeEvents().slice(-60).reverse();
         const lc = lastChron();
         const fsImg = lc ? (imageNear(imgs(), lc.i)?.src || chapterCover(chapterOf(lc.i) || {})) : '';
-        body = `${ev.length ? `<div class="lf-events">${ev.map(e => {
+        body = `${echoTop}${echoTop && ev.length ? sec('События') : ''}${ev.length ? `<div class="lf-events">${ev.map(e => {
             const ch = chapterOf(e.messageIndex);
             const cover = imageNear(imgs(), e.messageIndex)?.src || (ch ? chapterCover(ch) : '');
             return `<button class="lf-ev" data-act="jump" data-mes="${e.messageIndex}">
@@ -3710,6 +3719,7 @@ function onChatChanged() {
     setTimeout(runAutopay, 2500);
     setTimeout(() => { try { ambUpdate(); } catch { /* */ } }, 1500);
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
+    setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
@@ -3813,7 +3823,7 @@ jQuery(async () => {
     initHurt(simApi);
     const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
     initDays(extApi);
-    initReply(extApi);
+    initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c) });
     initFresh(extApi);
     initFrames(extApi);
     initArcs({ ...extApi, peopleList, daysBrief });
@@ -3854,6 +3864,13 @@ jQuery(async () => {
     hubMods.push({ pre: 'kmn-', click: stonesClick, label: 'Камни' });
     initEra(extApi);
     initRoute(extApi);
+    initEcho({ ...extApi, openHub, agendaRun: () => agendaUpdate().then(ok => { if (ok && ui.open) render(); }) });
+    initCanon(extApi);
+    initDrama(extApi);
+    painters.push((el, id) => paintEcho(el, id));
+    chatClicks.push((act, el) => echoClick(act, el));
+    hubMods.push({ pre: 'echo-', click: echoClick, label: 'Эхо решений' }, { pre: 'cn-', click: canonClick, label: 'Канон' }, { pre: 'dr-', click: dramaClick, label: 'Накал' });
+    setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 9000);
     initDuo({ ...extApi, namesInText, emoSrc: (i, w) => emoSrc(i, w) });
     initCall({ ...extApi, emoSrc: (i, w) => emoSrc(i, w) });
     painters.push((el, id) => paintDuo(el, id), (el, id) => paintCall(el, id));
@@ -3973,6 +3990,10 @@ jQuery(async () => {
         globalThis.LifeBridge.register({
             id: 'life-duo',
             sceneHtml: () => duoSceneHtml(),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-drama',
+            sceneHtml: () => dramaSceneHtml(),
         });
         globalThis.LifeBridge.register({
             id: 'life-stage',
