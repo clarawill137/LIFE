@@ -2058,3 +2058,47 @@ body.lf-theme .mes .lf-frame button { color: var(--t-text2); border-color: var(-
 .lf-emo.empty i { border-style: dashed; background: rgba(255, 255, 255, .02); }
 .lf-emo.empty .lf-i { width: 16px; height: 16px; opacity: .5; }
 .lf-emo-big { aspect-ratio: 3 / 4; max-height: 52vh; margin: 0 auto 12px; border-radius: 16px; background: #2a2224 center/cover no-repeat; }
+
+/* ───────────── 0.24: голос (банк реплик) ───────────── */
+.lf-vpill { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); z-index: 10050; max-width: min(94vw, 560px); display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-radius: 18px; background: rgba(30, 24, 26, .94); border: 1px solid rgba(236, 222, 216, .16); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: #ede4df; font: 13px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: transform .25s cubic-bezier(.2, .8, .2, 1), opacity .2s; -webkit-user-select: none; user-select: none; }
+.lf-vpill.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.lf-vpill-q { color: #d6cac5; font-family: 'Playfair Display', Georgia, serif; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-vpill-who { display: flex; flex-wrap: wrap; gap: 6px; }
+.lf-vpill-who button { border: 1px solid rgba(236, 222, 216, .2); background: rgba(255, 255, 255, .04); color: #ede4df; border-radius: 999px; padding: 7px 12px; font: inherit; cursor: pointer; }
+.lf-vpill-who button.main { background: linear-gradient(135deg, #7b2d3d, #5e1f2c); border-color: rgba(234, 179, 188, .35); }
+.lf-vpill-who button b { font-weight: 600; }
+.lf-vo-cta { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 12px 14px; border-radius: 15px; border: 1px dashed var(--lf-line2); color: var(--lf-text); }
+.lf-vo-cta > .lf-i { width: 24px; height: 24px; color: #e7c77a; flex: none; }
+.lf-vo-cta b { display: block; font-family: var(--lf-serif); font-weight: 500; font-size: 15px; }
+.lf-vo-cta small { display: block; color: var(--lf-dim); font-size: 12px; margin-top: 2px; line-height: 1.35; }
+.lf-vo-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-vo { display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--lf-line); border-left: 2px solid rgba(231, 199, 122, .35); }
+.lf-vo.pin { border-left-color: #e7c77a; background: rgba(231, 199, 122, .05); }
+.lf-vo q { flex: 1; font-family: var(--lf-serif); font-style: italic; font-size: 14px; line-height: 1.45; color: var(--lf-text); quotes: '«' '»'; }
+.lf-vo-b { display: flex; gap: 2px; flex: none; }
+.lf-vo-b button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-vo-b .lf-i { width: 14px; height: 14px; }
+.lf-vo.pin .lf-vo-b button[data-act="vo-pin"] { color: #e7c77a; }
+.lf-vo-qs { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.lf-vo-q { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .02); color: var(--lf-text2); font: italic 13.5px/1.4 var(--lf-serif); text-align: left; cursor: pointer; }
+.lf-vo-q .lf-i { width: 15px; height: 15px; flex: none; margin-top: 2px; opacity: .45; }
+.lf-vo-q.on { border-color: rgba(231, 199, 122, .45); color: var(--lf-text); }
+.lf-vo-q.on .lf-i { color: #e7c77a; opacity: 1; }
+
+/* ───────────── 0.24: ляп-фикс ───────────── */
+.mes .lf-slip { margin: 8px 0 2px; font-size: 12.5px; line-height: 1.35; color: #e9c48a; animation: lf-rise .4s cubic-bezier(.2, .8, .2, 1) both; }
+.mes .lf-slip-chip { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: baseline; max-width: 100%; border: 1px solid rgba(233, 196, 138, .38); background: rgba(233, 196, 138, .06); color: inherit; border-radius: 10px; padding: 4px 10px; font: inherit; text-align: left; cursor: pointer; }
+.mes .lf-slip.open { padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(233, 196, 138, .3); background: rgba(30, 24, 26, .55); color: #ede4df; }
+.mes .lf-slip-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; color: #e9c48a; }
+.mes .lf-slip-h button, .mes .lf-slip-b button { border: 0; background: none; color: #a3958f; font: inherit; cursor: pointer; padding: 4px 6px; }
+.mes .lf-slip-i { padding: 8px 0; border-top: 1px solid rgba(236, 222, 216, .1); }
+.mes .lf-slip-i.done { opacity: .65; }
+.mes .lf-slip-why { font-weight: 600; color: #e9c48a; margin-bottom: 4px; }
+.mes .lf-slip-diff { display: flex; flex-direction: column; gap: 3px; font-family: 'Playfair Display', Georgia, serif; font-style: italic; }
+.mes .lf-slip-diff s { color: #f0a0ad; text-decoration-color: rgba(240, 160, 173, .6); }
+.mes .lf-slip-diff ins { color: #b9dcb4; text-decoration: none; }
+.mes .lf-slip-b { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.mes .lf-slip-b span { color: #b9dcb4; }
+.mes .lf-slip-b button.main { border: 1px solid rgba(185, 220, 180, .4); color: #b9dcb4; border-radius: 9px; padding: 4px 12px; }
+.mes .lf-slip-all { width: 100%; margin-top: 6px; border: 1px solid rgba(185, 220, 180, .4); background: rgba(185, 220, 180, .06); color: #b9dcb4; border-radius: 10px; padding: 7px; font: inherit; cursor: pointer; }
+.lf-sl-facts { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 6px; }

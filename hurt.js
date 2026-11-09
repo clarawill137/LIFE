@@ -289,6 +289,15 @@ export function hurtCap(who, now) {
     try { return hurtOn() && active(who).length ? Math.max(5, Math.round(100 - burden(who, now || rpNow()) * 7)) : 100; } catch { return 100; }
 }
 export function hurtCount(who) { try { return hurtOn() ? active(who).length : 0; } catch { return 0; } }
+/** Коротко для сверки (ляп-фикс): что сейчас с телом — раны с местом, стадией и чем мешают. */
+export function hurtFacts(who) {
+    try {
+        if (!hurtOn()) return '';
+        const now = rpNow();
+        const hm = healOf(who);
+        return active(who).map(w => (isOld(w) ? `${w.t}${w.part ? ` (${w.part})` : ''} — старое${w.fx.length ? `: ${w.fx.join(', ')}` : ''}` : line(w, now, hm))).join('; ');
+    } catch { return ''; }
+}
 
 function cast() {
     const out = [A.canonName(A.ctx().name1)].filter(Boolean);

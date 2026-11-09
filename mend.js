@@ -164,6 +164,15 @@ export function stitch(base, cont) {
 
 const rendered = (i) => !!document.querySelector(`#chat .mes[mesid="${i}"]`);
 
+/** Для соседних модулей (ляп-фикс): заменить текст поста целиком и сохранить чат. */
+export async function setMesText(i, text) {
+    const m = A?.ctx?.().chat?.[i];
+    if (!m || typeof text !== 'string' || !text.trim()) return false;
+    const ok = await apply(i, m, text);
+    if (ok) { try { await A.ctx().saveChat(); } catch (e) { console.warn('[Life] сохранить пост', e); } }
+    return ok;
+}
+
 /** Поменять текст поста в памяти и на экране. Чат НЕ сохраняет — сохранение одно, в конце (чат ~40 МБ). */
 async function apply(i, m, text) {
     const c = A.ctx();

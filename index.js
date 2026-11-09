@@ -23,6 +23,9 @@ import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintRe
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
 import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick } from './frames.js';
 import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather.js';
+import { initZr } from './zr.js';
+import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
+import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput } from './slip.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -35,7 +38,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.23.1';
+const VERSION = '0.24.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -946,7 +949,7 @@ async function runChron(i, { force = false } = {}) {
         });
         let so = null;
         try { so = simChronOpts(); } catch (e) { console.warn('[Life] Жизнь: опции', e); }
-        const ext = bridgeEach(m => m.chron?.(), 'Летописец');
+        const ext = bridgeEach(x => x.chron?.(i), 'Летописец');
         const input = chronInput({
             cast, location: st.scene?.location, when: fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time),
             regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: m.name, prev,
@@ -1472,6 +1475,9 @@ function cutCardHtml(i) {
 // свои отрисовщики поста: «не пропусти», сны/флешбеки и т. п. — и их кнопки в чате
 const painters = [];
 const chatClicks = [];
+// модули со своими кнопками в хабе: префикс data-act → обработчик; и свои поля (change)
+const hubMods = [];
+const hubInputs = [];
 
 function paintChips() {
     const chatEl = document.getElementById('chat');
@@ -1577,7 +1583,7 @@ async function onChatClick(ev) {
     if (onArtClick(ev)) return;
     if (onShotClick(ev)) return;
     // свои кнопки в посте (чипы «не пропусти» и т. п.)
-    const own = ev.target.closest('.lf-reply [data-act], .lf-frame [data-act]');
+    const own = ev.target.closest('.lf-reply [data-act], .lf-frame [data-act], .lf-own [data-act]');
     if (own) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -1991,7 +1997,7 @@ function renderPerson() {
     if (ui.pTab === 'money' && !me) ui.pTab = 'life';
     const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(me ? [['money', 'Деньги']] : [])];
     const tabs = seg(tabList, ui.pTab, 'p-tab').replace('lf-seg', `lf-seg${tabList.length > 5 ? ' many' : ''}`);
-    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
+    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}${(() => { try { return voiceHtml(who); } catch (e) { console.warn('[Life] голос', e); return ''; } })()}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -2370,6 +2376,7 @@ function renderWorld() {
         <div class="lf-list">${rows.join('') || '<div class="lf-empty small">Летописец ещё ничего не записал.</div>'}</div>
         ${ag.length ? `${sec('Планы')}<div class="lf-list">${ag.map(a => `<button class="lf-row" data-act="jump" data-mes="${a.messageIndex}">${icon('calendar')}<span>${a.date ? `<b>${esc(a.date)}</b> · ` : ''}${esc(a.text)}</span>${icon('chevR', 'dim')}</button>`).join('')}</div>` : ''}`;
         try { body += freshHtml(); } catch (e) { console.warn('[Life] свежесть', e); }
+        try { body += slipCfgHtml(); } catch (e) { console.warn('[Life] ляп-фикс', e); }
     } else if (tab === 'rumors') {
         body = renderPress(renderRumors());
     } else if (tab === 'time') {
@@ -2681,6 +2688,7 @@ function chronSheet(i) {
         ${e.sec?.length ? `${sec('Тайны')}<div class="lf-list">${e.sec.map(x => `<div class="lf-row">${icon('lock')}<span>${esc(x.text)} <small>знает: ${esc(x.knows.join(', '))}</small></span></div>`).join('')}</div>` : ''}
         ${e.place ? `<div class="lf-hint">Место: ${esc(e.place.location)}${e.place.region ? ` · район «${esc(e.place.region)}»` : ''}</div>` : ''}
         ${(() => { try { return frameRowHtml(i); } catch { return ''; } })()}
+        ${(() => { try { return voiceRowHtml(i); } catch { return ''; } })()}
         ${sec('Деталь крупным планом')}
         ${e.detImg ? `<div class="lf-detprev" style="background-image:url('${esc(e.detImg)}')"></div>` : ''}
         ${e.det ? `<div class="lf-hint"><b>${esc(e.det.caption || '')}</b> · движение: ${esc(e.det.motion || 'drift')}<br><small>${esc(e.det.prompt)}</small></div>` : '<div class="lf-hint">Детали к этому посту нет.</div>'}
@@ -2876,6 +2884,11 @@ async function onClick(ev) {
     if (act === 'bond') { cycleBond(); render(); return; }
     if (act === 'btone') { const t = setBondTone(el.dataset.v); render(); toast('info', t ? 'Оттенок уйдёт модели до конца главы' : 'Оттенок — сам, по ходу сцены', '✦ Близость', { timeOut: 1600 }); return; }
     if (act === 'iopt') { toggleIntimOpt(el.dataset.v); render(); return; }
+    for (const hm of hubMods) {
+        if (!act.startsWith(hm.pre)) continue;
+        try { await hm.click(act, el); } catch (e) { console.warn(`[Life] ${hm.label}`, e); toast('warning', esc(String(e?.message || e)), `✦ ${hm.label}`); }
+        return;
+    }
     if (act.startsWith('sh-')) { shotAct(act, el); directorSheet(); return; }
     if (act.startsWith('tw-')) {
         try { await twistClick(act, el, { at: 'data-act', openSheet, closeSheet, rerender: render, busy: withBusy }); } catch (e) { console.warn('[Life] твист', e); toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
@@ -3412,6 +3425,7 @@ async function onChange(ev) {
     const el = ev.target;
     const s = settings();
     if (el.dataset.rng) { const out = el.closest('.lf-field')?.querySelector('[data-out]'); if (out) out.textContent = el.value; return; }
+    for (const h of hubInputs) { try { if (h(el)) return; } catch (e) { console.warn('[Life] поле', e); } }
     if (el.dataset.set) {
         const path = el.dataset.set.split('.');
         const obj = path.length > 1 ? s[path[0]] : s;
@@ -3717,8 +3731,13 @@ jQuery(async () => {
     initAlbum({ ...extApi, faceRef });
     initEmo({ ...extApi, faceRef, lifeKey: simLifeKey, refreshAvatars });
     initWeather(extApi);
-    painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id));
-    chatClicks.push((act, el) => frameClick(act, el));
+    initZr(extApi);
+    initVoice(extApi);
+    initSlip(extApi);
+    painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id), (el, id) => paintSlip(el, id));
+    chatClicks.push((act, el) => frameClick(act, el), (act, el) => slipClick(act, el));
+    hubMods.push({ pre: 'vo-', click: voiceClick, label: 'Голос' }, { pre: 'sl-', click: slipClick, label: 'Ляп-фикс' });
+    hubInputs.push(slipInput);
     try {
         globalThis.LifeBridge.register({
             id: 'life-arc',
@@ -3747,6 +3766,15 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-voice',
+            prompt: (type) => voicePrompt(type),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-slip',
+            chron: (i) => slipChron(i),
+            afterPost: (i, j) => slipAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-hurt',
