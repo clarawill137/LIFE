@@ -496,8 +496,8 @@ export function hurtAfterPost(i, j, msg) {
             if (Math.random() < compChance(w, hm, true)) comps.push([k, w, addComp(k, w, i, pick(COMP[w.kind] || COMP.other))]);
         }
     }
-    // 3) приступ старой травмы — кубиком, по одному за раз
-    if (cfg().dice && !(h.flare && h.flare.used == null)) {
+    // 3) приступ старой травмы — кубиком, по одному за раз и не впритык к прошлому (даже другой травмы)
+    if (cfg().dice && !(h.flare && (h.flare.used == null || i - h.flare.used < 6))) {
         const atm = String(A.worldState().scene?.atmosphere || '');
         const pool = [];
         for (const who of cast()) for (const w of active(who).filter(isOld)) if (FLARE[w.flare]?.[0] && (w.lastFlare == null || i - w.lastFlare > 6)) pool.push([who, w]);
