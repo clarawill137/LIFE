@@ -35,6 +35,8 @@ import { initGraph, graphHtml, graphClick } from './graph.js';
 import { initBelly, bellyNote, bellyWardrobeHtml, bellyClick } from './belly.js';
 import { initStance, stancePrompt, stanceChron, stanceAfterPost, stanceSceneHtml, stanceClick } from './stance.js';
 import { initRitual, ritualPrompt, ritualChron, ritualAfterPost, ritualHtml, ritualClick } from './ritual.js';
+import { initSteps, stepsPrompt, stepsChron, stepsAfterPost, stepsHtml, stepsClick } from './steps.js';
+import { initSee, seeWarm, seeReady, seePrompt, paintSee, seeClick } from './see.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
@@ -49,7 +51,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.29.0';
+const VERSION = '0.31.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -810,6 +812,8 @@ function updateMovePrompt(type, consume = false) {
 globalThis.life_intercept = async function (_chat, _size, _abort, type) {
     // «не пропусти»: дождаться разбора поста игрока (не дольше нескольких секунд)
     try { if (type !== 'quiet' && settings().enabled) await replyReady(type); } catch (e) { console.warn('[Life] не пропусти', e); }
+    // «покажи им»: дождаться, пока модель разглядит картинку из поста игрока
+    try { if (type !== 'quiet' && settings().enabled) await seeReady(type); } catch (e) { console.warn('[Life] покажи им', e); }
     try { if (type !== 'quiet') updateMovePrompt(type, true); } catch (e) { console.warn('[Life] перехват', e); }
 };
 
@@ -2173,7 +2177,7 @@ function renderRelations(who, st) {
     }
     const other = ui.pair;
     const tab = ui.relTab;
-    if (tab === 'map') return `<div class="lf-pagehead"><h1>${icon('rings', 'h')} Отношения</h1></div>${seg([['common', 'Общее'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', 'Трое'], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}${(() => { try { return graphHtml(who); } catch (e) { console.warn('[Life] карта связей', e); return ''; } })()}`;
+    if (tab === 'map') return `<div class="lf-pagehead"><h1>${icon('rings', 'h')} Отношения</h1></div>${seg([['common', 'Общее'], ['steps', 'Прожитое'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', 'Трое'], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}${(() => { try { return graphHtml(who); } catch (e) { console.warn('[Life] карта связей', e); return ''; } })()}`;
     if (!other && tab !== 'tri') return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
     const pp = pairs[pairKey(who, other)];
     const mine = pp ? relSide(pp, who) : scaleBase(), theirs = pp ? relSide(pp, other) : scaleBase();
@@ -2197,6 +2201,8 @@ function renderRelations(who, st) {
             : `<div class="lf-empty small">Тайн между ними пока нет.</div>`;
     } else if (tab === 'album') {
         body = (() => { try { return albumHtml(who, other, p.moments); } catch (e) { console.warn('[Life] альбом', e); return ''; } })();
+    } else if (tab === 'steps') {
+        body = (() => { try { return stepsHtml(who, other); } catch (e) { console.warn('[Life] прожитое', e); return ''; } })();
     } else if (tab === 'history') {
         body = events.length ? `<div class="lf-timeline">${events.map(e => `<button class="lf-tl" data-act="jump" data-mes="${e.messageIndex}"><span class="lf-tl-dot"></span><span class="lf-tl-txt"><small>${esc(whenLabel(e.timestamp?.story_date, e.timestamp?.story_time))}</small>${esc(e.event?.summary)}</span></button>`).join('')}</div>`
             : `<div class="lf-empty small">Общих событий Horae пока не записал.</div>`;
@@ -2218,7 +2224,7 @@ function renderRelations(who, st) {
         <h2>${esc(A)} <i>×</i> ${esc(B)}</h2>
     </section>
     ${bars}` : ''}
-    ${seg([['common', 'Общее'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
+    ${seg([['common', 'Общее'], ['steps', 'Прожитое'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
     ${body}`;
 }
 
@@ -3787,6 +3793,11 @@ jQuery(async () => {
     initStance(extApi);
     initRitual(extApi);
     hubMods.push({ pre: 'stn-', click: stanceClick, label: 'Споры' }, { pre: 'rit-', click: ritualClick, label: 'Своё' });
+    initSteps(extApi);
+    initSee(extApi);
+    painters.push((el, id) => paintSee(el, id));
+    chatClicks.push((act, el) => seeClick(act, el));
+    hubMods.push({ pre: 'stp-', click: stepsClick, label: 'Прожитое' });
     initAmbient({ ...extApi, musicNow: () => Music.now() });
     hubMods.push({ pre: 'am-', click: ambClick, label: 'Звук и запах' });
     setTimeout(() => { try { ambUpdate(); } catch (e) { console.warn('[Life] эмбиент', e); } }, 2500);
@@ -3822,6 +3833,16 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-see',
+            prompt: (type) => seePrompt(type),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-steps',
+            prompt: (type) => stepsPrompt(type),
+            chron: () => stepsChron(),
+            afterPost: (i, j) => stepsAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-stance',
@@ -3911,6 +3932,7 @@ jQuery(async () => {
         try { recapSeen(); } catch { /* */ }
         // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
         try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
+        try { if (settings().enabled) seeWarm(Number(id)); } catch (e) { console.warn('[Life] покажи им', e); }
     });
     if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => { if (!dry && type !== 'quiet') genActive = true; });
     const endGen = () => {
