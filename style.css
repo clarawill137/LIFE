@@ -2624,3 +2624,11 @@ body.lf-theme.lf-ava-wide #chat .mes .lf-duo-ava img { clip-path: polygon(14% 0,
 .lf-hand-prev { margin: 6px 0 4px; padding: 10px 14px; border-radius: 10px; background: #f3eddd; color: #2b2a30; }
 .lf-hand-prev[data-mess="3"] { transform: rotate(-1.2deg); word-spacing: .2em; }
 .lf-hand-prev[data-mess="1"] { transform: rotate(-.4deg); }
+.lf-arc-poster { position: relative; display: block; width: 100%; height: 240px; margin: 0 0 10px; padding: 0; border: 0; border-radius: 14px; background-size: cover; background-position: center 30%; cursor: zoom-in; overflow: hidden; }
+.lf-arc-poster span { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 14px 12px; background: linear-gradient(180deg, transparent, rgba(10, 8, 9, .82)); color: #fff; font: 600 19px/1.2 var(--lf-serif, 'Playfair Display', Georgia, serif); letter-spacing: .02em; text-align: left; text-shadow: 0 2px 10px rgba(0, 0, 0, .6); }
+b.k-date { background: #f0a0ad !important; } b.k-dinner { background: #e3b98a !important; } b.k-party { background: #c9a2e0 !important; } b.k-holiday { background: #f2d36b !important; } b.k-wedding { background: #f4e3c1 !important; }
+b.k-mission { background: #c2534a !important; } b.k-work { background: #a7b4c4 !important; } b.k-meeting { background: #b9c9a0 !important; } b.k-trip { background: #8fb4ff !important; } b.k-baby { background: #f7c6d6 !important; }
+b.k-therapy { background: #b3a3d8 !important; } b.k-training { background: #7fb48f !important; } b.k-funeral { background: #6c6a75 !important; }
+.lf-cal-ev.k-date .lf-cal-ic { color: #f0a0ad; } .lf-cal-ev.k-dinner .lf-cal-ic { color: #e3b98a; } .lf-cal-ev.k-party .lf-cal-ic { color: #c9a2e0; } .lf-cal-ev.k-holiday .lf-cal-ic { color: #f2d36b; } .lf-cal-ev.k-wedding .lf-cal-ic { color: #f4e3c1; }
+.lf-cal-ev.k-mission .lf-cal-ic { color: #e07a6f; } .lf-cal-ev.k-work .lf-cal-ic { color: #a7b4c4; } .lf-cal-ev.k-meeting .lf-cal-ic { color: #b9c9a0; } .lf-cal-ev.k-trip .lf-cal-ic { color: #8fb4ff; } .lf-cal-ev.k-baby .lf-cal-ic { color: #f7c6d6; }
+.lf-cal-ev.k-therapy .lf-cal-ic { color: #b3a3d8; } .lf-cal-ev.k-training .lf-cal-ic { color: #7fb48f; } .lf-cal-ev.k-funeral .lf-cal-ic { color: #9a98a3; }

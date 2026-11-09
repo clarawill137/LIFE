@@ -26,13 +26,27 @@ export const dayLabel = (d) => `${WD[d.getDay()]} ${dm(d)}`;
 export const KINDS = {
     promise: ['Обещание', 'handshake'],
     plan: ['План', 'calendar'],
+    date: ['Свидание', 'heart'],
+    dinner: ['Семейный ужин', 'utensils'],
+    party: ['Вечеринка', 'martini'],
+    holiday: ['Праздник', 'star'],
+    wedding: ['Свадьба', 'rings'],
+    mission: ['Миссия', 'target'],
+    work: ['Работа', 'briefcase'],
+    meeting: ['Встреча', 'users'],
+    trip: ['Поездка', 'plane'],
     appointment: ['Приём', 'hospital'],
+    baby: ['Малыш', 'baby'],
+    therapy: ['Терапия', 'brain'],
+    training: ['Тренировка', 'dumbbell'],
     anniversary: ['Годовщина', 'rings'],
     birthday: ['День рождения', 'gift'],
+    funeral: ['Похороны', 'moon'],
     deadline: ['Срок', 'clock'],
     bill: ['Платёж', 'wallet'],
 };
-const YEARLY = ['anniversary', 'birthday'];
+const YEARLY = ['anniversary', 'birthday', 'holiday'];
+const KIND_LIST = Object.keys(KINDS).filter(k => k !== 'bill');
 
 function cfg() {
     const s = A.settings();
@@ -223,7 +237,7 @@ export function calPrompt(type) {
 // ───────────── Летописец ─────────────
 
 const RULE = `
-cal — новые договорённости и даты из ЭТОГО поста: [{"t":"что, 3–8 слов","when":"как сказано в посте: завтра / в пятницу / 24 декабря / через неделю / в 7 вечера","date":"ДД.ММ.ГГГГ — посчитай от «Сегодня»","time":"ЧЧ:ММ или пусто","who":["кто обещал, идёт или чей это день"],"kind":"promise|plan|appointment|anniversary|birthday|deadline"}]. Только конкретное, у чего есть день: обещания («в субботу свожу тебя на каток»), планы и встречи, приёмы у врача, дедлайны и сроки, дни рождения и годовщины. Без дня («как-нибудь», «потом») — не пиши. Уже есть в «Календаре» — не повторяй. Нечего — [].
+cal — новые договорённости и даты из ЭТОГО поста: [{"t":"что, 3–8 слов","when":"как сказано в посте: завтра / в пятницу / 24 декабря / через неделю / в 7 вечера","date":"ДД.ММ.ГГГГ — посчитай от «Сегодня»","time":"ЧЧ:ММ или пусто","who":["кто обещал, идёт или чей это день"],"kind":"${KIND_LIST.join('|')}"}]. kind: promise — обещание; plan — план; date — свидание; dinner — семейный ужин; party — вечеринка; holiday — праздник; wedding — свадьба; mission — миссия, операция; work — работа, дела; meeting — встреча; trip — поездка; appointment — приём у врача; baby — УЗИ, роды, всё про малыша; therapy — терапия; training — тренировка; anniversary — годовщина; birthday — день рождения; funeral — похороны; deadline — срок. Только конкретное, у чего есть день: обещания («в субботу свожу тебя на каток»), планы и встречи, приёмы, миссии, праздники, дедлайны, дни рождения и годовщины. Без дня («как-нибудь», «потом») — не пиши. Уже есть в «Календаре» — не повторяй. Нечего — [].
 calDone — id из «Календаря», что в этом посте случилось или отменилось: [{"id":"c3","how":"done|cancel"}]. Нечего — [].`;
 
 export function calChron(i) {
@@ -338,7 +352,7 @@ export function calHtml() {
         </div>
         <div class="lf-cal-wd">${['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(x => `<span>${x}</span>`).join('')}</div>
         <div class="lf-cal-grid">${cells.join('')}</div>
-        <div class="lf-cal-legend">${Object.entries(KINDS).map(([k, [l]]) => `<span><b class="k-${k}"></b>${l}</span>`).join('')}</div>
+        <div class="lf-cal-legend">${Object.entries(KINDS).filter(([k]) => evs.some(e => e.kind === k)).map(([k, [l]]) => `<span><b class="k-${k}"></b>${l}</span>`).join('')}</div>
     </div>
     ${A.sec(sel === td ? 'Сегодня' : dayLabel(fromYmd(sel)), dayList.length ? String(dayList.length) : '')}
     <div class="lf-cal-list">${dayList.length ? dayList.map(row).join('') : '<div class="lf-empty small">Ничего не записано.</div>'}</div>
@@ -374,12 +388,30 @@ export async function calClick(act, el) {
             const me = A.canonName(A.ctx().name1);
             if (me && !names.some(n => A.sameName(n, me))) names.unshift(me);
             A.openSheet(`${A.icon('calendar')} Событие`, `
-                <div class="lf-field"><label>Что</label><input type="text" data-in="cal-t" placeholder="ужин у Старков, годовщина, приём у Васкез"></div>
+                <div class="lf-field"><label>Опиши словами — заполню сама</label><div class="lf-inline"><input type="text" data-in="cal-ai" placeholder="в субботу в 7 ужин у отца, все вместе"><button class="lf-btn" data-act="cal-ai">${A.icon('sparkles')}</button></div></div>
+                <div class="lf-field"><label>Что</label><input type="text" data-in="cal-t" placeholder="ужин, годовщина, приём, миссия"></div>
                 <div class="lf-field two"><div><label>День</label><input type="date" data-in="cal-d" value="${esc(el.dataset.d || ymd(today() || new Date()))}"></div><div><label>Время</label><input type="time" data-in="cal-time"></div></div>
                 <div class="lf-field"><label>Что это</label><select data-in="cal-k">${Object.entries(KINDS).filter(([k]) => k !== 'bill').map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
                 <div class="lf-field"><label>Кто</label><div class="lf-chips wrap">${names.map(n => `<label class="lf-chip"><input type="checkbox" data-in="cal-who" value="${esc(n)}"> ${esc(A.shortName(n))}</label>`).join('')}</div></div>
                 <label class="lf-switch"><input type="checkbox" data-in="cal-y"><span></span>Каждый год</label>
                 <button class="lf-btn primary full" data-act="cal-save">${A.icon('check')} Записать</button>`);
+            return true;
+        }
+        case 'cal-ai': {
+            const box = el.closest('.lf-sheet') || document;
+            const text = box.querySelector('[data-in="cal-ai"]')?.value?.trim() || '';
+            if (!text) { A.toast('info', 'Опиши событие словами'); return true; }
+            await A.withBusy(el, async () => {
+                const r = await aiFill(text);
+                const set = (k, v) => { const x = box.querySelector(`[data-in="${k}"]`); if (x && v != null && v !== '') x.value = v; };
+                set('cal-t', r.t);
+                set('cal-d', r.d);
+                set('cal-time', r.time);
+                if (r.kind) set('cal-k', r.kind);
+                box.querySelectorAll('[data-in="cal-who"]').forEach(x => { x.checked = r.who.some(n => A.sameName(n, x.value)); });
+                const y = box.querySelector('[data-in="cal-y"]');
+                if (y) y.checked = !!r.yearly;
+            }, '…');
             return true;
         }
         case 'cal-save': {
@@ -416,4 +448,27 @@ export function calRecs(i) {
         t: `${e.t}${e.d ? ` — ${e.d}${e.time ? ` ${e.time}` : ''}` : ''}`,
         del: () => { const k = L.indexOf(e); if (k >= 0) L.splice(k, 1); },
     }));
+}
+
+/** Заполнить форму события по словам: что, когда, что это, кто. */
+async function aiFill(text) {
+    const t0 = today() || new Date();
+    const names = [A.canonName(A.ctx().name1), ...A.groupMembers().map(A.canonName)].filter(Boolean);
+    const sys = `Разбери описание события для календаря ролевой истории. Сегодня в истории: ${WDF[t0.getDay()]}, ${pad(t0.getDate())}.${pad(t0.getMonth() + 1)}.${t0.getFullYear()}.
+Ответь только JSON: {"t":"что, 3–8 слов","date":"ДД.ММ.ГГГГ — посчитай от «сегодня»","time":"ЧЧ:ММ или пусто","kind":"${KIND_LIST.join('|')}","who":["имена только из списка: ${names.join(', ')}"],"yearly":false}. yearly — true для годовщин, дней рождения и праздников.`;
+    const out = await A.askModel([{ role: 'system', content: sys }, { role: 'user', content: text }], 300);
+    const j = A.extractJson(out) || {};
+    let d = '';
+    const p = A.parseDate(str(j.date));
+    if (p && !isNaN(p)) d = ymd(p);
+    else { const w = parseWhen(text, t0); if (w) d = ymd(w); }
+    const tm = str(j.time).match(/^(\d{1,2})[:.](\d{2})$/);
+    return {
+        t: str(j.t).slice(0, 80),
+        d,
+        time: tm ? `${pad(+tm[1])}:${tm[2]}` : (parseTime(text, '') || ''),
+        kind: KIND_LIST.includes(str(j.kind)) ? str(j.kind) : '',
+        who: (Array.isArray(j.who) ? j.who : []).map(str).filter(Boolean),
+        yearly: j.yearly === true,
+    };
 }

@@ -9,7 +9,7 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
 import { initErrors } from './errors.js';
-import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
+import { peopleDedupe, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
@@ -46,6 +46,8 @@ import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, ston
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
 import { initLore } from './lore.js';
+import { splitEvent } from './hsplit.js';
+import { crossSame } from './names.js';
 import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
 import { initLang, langPrompt, langHtml, langInput, langClick } from './lang.js';
 import { initFeel, applyFeel, feelOn, toggleFeel } from './feel.js';
@@ -83,7 +85,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.41.0';
+const VERSION = '0.42.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -260,10 +262,11 @@ function worldState() {
 }
 
 function horaeEvents() {
-    try { if (horaeOn()) return window.Horae.getEvents(0) || []; } catch (e) { console.warn('[Life] Horae.getEvents', e); }
+    // склеенные Horae события («…event:Important|… event:Normal|…») — каждое своей строкой
+    try { if (horaeOn()) return (window.Horae.getEvents(0) || []).flatMap(splitEvent); } catch (e) { console.warn('[Life] Horae.getEvents', e); }
     const out = [];
     chatArr().forEach((m, i) => (m?.horae_meta?.events || []).forEach((event, j) => { if (event?.summary) out.push({ messageIndex: i, eventIndex: j, timestamp: m.horae_meta.timestamp, event }); }));
-    return out;
+    return out.flatMap(splitEvent);
 }
 
 function horaeAgenda() {
@@ -330,7 +333,7 @@ function chapters() {
         cur.endDate = date || cur.endDate;
         cur.endTime = time || cur.endTime;
         if (!cur.date && date) { cur.date = date; cur.time = time; }
-        if (m && !m.is_system) {
+        if (isPost(m)) {
             cur.count++;
             if (cur.previewId < 0) cur.previewId = i;
             cur.lastId = i;
@@ -463,12 +466,24 @@ function canonName(name) {
     const cards = (c.characters || []).map(x => x.name).filter(Boolean);
     const exact = cards.find(x => norm(x) === n) || (norm(c.name1) === n ? c.name1 : '');
     if (exact) return exact;
-    for (const [card, list] of Object.entries(aliasTable())) {
+    const table = aliasTable();
+    for (const [card, list] of Object.entries(table)) {
         if (list.some(a => norm(a) === n || norm(a).split(' ')[0] === n || n.split(' ')[0] === norm(a))) return card;
     }
-    return cards.find(x => norm(x).split(' ')[0] === n.split(' ')[0]) || String(name).trim();
+    const first = cards.find(x => norm(x).split(' ')[0] === n.split(' ')[0]);
+    if (first) return first;
+    // то же имя другим алфавитом: «Гельмут» → карточка «Helmut Zemo», «Pepper» → «Пеппер Поттс»
+    const raw = String(name).trim();
+    if (crossSame(c.name1, raw)) return c.name1;
+    const cross = cards.find(x => crossSame(x, raw));
+    if (cross) return cross;
+    for (const [card, list] of Object.entries(table)) if (list.some(a => crossSame(a, raw))) return card;
+    return raw;
 }
 function sameName(a, b) { return !!a && !!b && norm(canonName(a)) === norm(canonName(b)); }
+
+/** Пост истории: обычный или скрытый от модели (/hide ставит is_system, но extra.type не трогает). Не пост — системные сообщения ST и разделители Life. */
+function isPost(m) { return !!m && (!m.is_system || (!m.extra?.type && !m.extra?.life)); }
 
 function groupMembers() {
     const c = ctx();
@@ -1803,7 +1818,7 @@ function lastPost(ch) {
     const chat = chatArr();
     for (let i = ch.end; i >= ch.start; i--) {
         const m = chat[i];
-        if (!m || m.is_system) continue;
+        if (!isPost(m)) continue;
         const t = plainText(m.mes);
         if (!t) continue;
         const lines = t.split(/\n+/).map(x => x.trim()).filter(Boolean);
@@ -3784,6 +3799,7 @@ function onChatChanged() {
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
+    setTimeout(() => { try { daysAfterPost(); } catch (e) { console.warn('[Life] дни', e); } }, 20000);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
@@ -3840,7 +3856,7 @@ const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
-    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(),
+    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
     skipFlare: (who, w) => stonesOwns(who, w),
@@ -3878,6 +3894,8 @@ jQuery(async () => {
     } catch (e) { console.warn('[Life] страховка FM', e); }
     settings();
     initSim(simApi);
+    // одна карточка человека на двух алфавитах («Гельмут» и «Helmut») — склеить
+    setTimeout(() => { try { const n = peopleDedupe(); if (n) console.info(`[Life] люди: склеила дублей ${n}`); } catch (e) { console.warn('[Life] люди: склейка', e); } }, 3000);
     initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
     initPress({ ...simApi, faceRef });
     // для патча телефона (phone-draw): те же лица, что в кадрах и СМИ
@@ -3893,7 +3911,7 @@ jQuery(async () => {
     initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c) });
     initFresh(extApi);
     initFrames(extApi);
-    initArcs({ ...extApi, peopleList, daysBrief });
+    initArcs({ ...extApi, peopleList, daysBrief, faceRef });
     initAlbum({ ...extApi, faceRef });
     initEmo({ ...extApi, faceRef, lifeKey: simLifeKey, refreshAvatars });
     initWeather(extApi);

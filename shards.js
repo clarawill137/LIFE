@@ -118,7 +118,7 @@ async function scan(who, el) {
     const chat = A.chatArr();
     const rows = [];
     for (const e of A.horaeEvents?.() || []) if (e?.event?.summary) rows.push(`#${e.messageIndex} ${e.event.summary}`);
-    if (rows.length < 20) for (let i = 0; i < chat.length; i++) { const m = chat[i]; if (m && !m.is_system && !m.is_user && String(m.mes || '').length > 40) rows.push(`#${i} ${A.cut(A.plainText(m.mes), 420)}`); }
+    if (rows.length < 20) for (let i = 0; i < chat.length; i++) { const m = chat[i]; if ((A.isPost ? A.isPost(m) : m && !m.is_system) && !m.is_user && String(m.mes || '').length > 40) rows.push(`#${i} ${A.cut(A.plainText(m.mes), 420)}`); }
     const parts = [];
     let cur = [], size = 0;
     for (const r of rows) { if (size + r.length > 9000 && cur.length) { parts.push(cur); cur = []; size = 0; } cur.push(r); size += r.length + 1; }

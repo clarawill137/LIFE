@@ -127,7 +127,7 @@ function chronicle() {
     try { for (const p of Object.values(A.relationsState?.() || {})) for (const m of p.moments || []) rows.push({ i: m.mes, t: `${p.a} и ${p.b}: ${m.text}` }); } catch { /* */ }
     if (rows.length < 20) {
         const chat = A.chatArr();
-        for (let i = 0; i < chat.length; i++) { const m = chat[i]; if (m && !m.is_system && String(m.mes || '').length > 40) rows.push({ i, t: `${m.name}: ${A.cut(A.plainText(m.mes), 380)}` }); }
+        for (let i = 0; i < chat.length; i++) { const m = chat[i]; if ((A.isPost ? A.isPost(m) : m && !m.is_system) && String(m.mes || '').length > 40) rows.push({ i, t: `${m.name}: ${A.cut(A.plainText(m.mes), 380)}` }); }
     }
     return rows.sort((a, b) => a.i - b.i);
 }

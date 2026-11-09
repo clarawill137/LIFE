@@ -3,6 +3,7 @@
 // Летописец дописывает, что о них стало известно в истории, и замечает новые лица.
 // Когда NPC в сцене или его упомянули — модель получает короткую справку, чтобы он звучал как он.
 
+import { crossSame } from './names.js';
 import { icon } from './icons.js';
 import { agendaPeopleHtml, agendaNpcHtml } from './agenda.js';
 
@@ -41,6 +42,10 @@ function CM() {
 }
 
 export function peopleList() { return P().list; }
+/** id карточки и тех, что в неё склеены (факты в других чатах лежат под старыми id). */
+function idsOf(x) { const mg = P().merged || {}; return [x.id, ...Object.keys(mg).filter(k => mg[k] === x.id)]; }
+const factsOf = (cm, x) => idsOf(x).flatMap(id => cm.facts[id] || []);
+const statusFor = (cm, x) => idsOf(x).map(id => cm.status[id]).find(Boolean);
 export function personById(id) { return P().list.find(x => x.id === id) || null; }
 
 const keysOf = (x) => [x.name, ...(x.aliases || [])].map(A.norm).filter(k => k.length >= 3);
@@ -51,7 +56,39 @@ export function findPerson(name) {
     const list = P().list;
     return list.find(x => keysOf(x).includes(n))
         || list.find(x => keysOf(x).some(k => k.split(' ')[0] === first && first.length >= 3))
+        // то же имя другим алфавитом: «Helmut» — это «Гельмут»
+        || list.find(x => [x.name, ...(x.aliases || [])].some(k => crossSame(k, name)))
         || null;
+}
+
+/**
+ * Склеить карточки одного человека на двух алфавитах («Гельмут» и «Helmut», «Пеппер» и «Pepper»):
+ * остаётся старшая, у неё — второе имя в «ещё зовут», пустые поля, фото, факты и статус этого чата.
+ */
+export function peopleDedupe() {
+    const p = P();
+    const list = p.list;
+    if (!p.merged || typeof p.merged !== 'object') p.merged = {};
+    const cm = CM();
+    let n = 0;
+    for (let a = 0; a < list.length; a++) {
+        const x = list[a];
+        for (let b = list.length - 1; b > a; b--) {
+            const y = list[b];
+            const hit = [x.name, ...(x.aliases || [])].some(k => [y.name, ...(y.aliases || [])].some(q => crossSame(k, q)));
+            if (!hit) continue;
+            x.aliases = [...new Set([...(x.aliases || []), y.name, ...(y.aliases || [])])].filter(v => A.norm(v) !== A.norm(x.name));
+            for (const [k, v] of Object.entries(y)) if (!['id', 'name', 'aliases', 'at'].includes(k) && v && (!x[k] || (Array.isArray(x[k]) && !x[k].length))) x[k] = v;
+            if (cm.facts[y.id]) { cm.facts[x.id] = [...(cm.facts[x.id] || []), ...cm.facts[y.id]]; delete cm.facts[y.id]; }
+            if (cm.status[y.id] && !cm.status[x.id]) cm.status[x.id] = cm.status[y.id];
+            delete cm.status[y.id];
+            p.merged[y.id] = x.id;
+            list.splice(b, 1);
+            n++;
+        }
+    }
+    if (n) { A.saveSettings(); A.saveMeta(); }
+    return n;
 }
 
 /** Главные герои — участники группы и персона игрока (не все, кто мелькнул в сцене). */
@@ -66,11 +103,13 @@ export function npcImg(name) {
 
 // ───────────── кто сейчас рядом или упомянут ─────────────
 
+// падежные окончания имени: «Пак» → Пака, Паку, Паком — но не «паковалась» и «пакет»; «Карла» → Карлы, Карле — но не «Карлтон»
+const ENDS = '(?:а|я|у|ю|е|и|ы|о|ой|ей|ою|ею|ом|ем|ам|ям|ах|ях|ами|ями|ов|ев|ую|юю|ь|й)?';
 function stemRe(word) {
     const w = A.norm(word);
     if (w.length < 3) return null;
-    const stem = w.length <= 4 ? w : w.slice(0, -1);
-    return new RegExp(`(^|[^a-zа-яё])${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+    const stem = w.length >= 4 && /[аяеиоуыьй]$/.test(w) ? w.slice(0, -1) : w;
+    return new RegExp(`(^|[^a-zа-яё])${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${ENDS}(?![a-zа-яё])`, 'i');
 }
 function mentions(x, text) {
     if (!text) return false;
@@ -78,7 +117,7 @@ function mentions(x, text) {
     return [x.name, ...(x.aliases || [])].some(k => {
         const words = String(k).split(/\s+/).filter(w => w.length >= 3);
         // фамилия или имя — как отдельное слово; «Джек Томпсон III» ловится и по «Томпсон»
-        return words.some(w => { const re = stemRe(w); return re && !/^(доктор|профессор|барон|мистер|миссис|агент|капитан)$/i.test(w) && re.test(t); });
+        return words.some(w => { const re = stemRe(w); return re && !/^(доктор|док|профессор|барон|баронесса|мистер|миссис|мисс|агент|капитан|медсестра|медбрат|сестра|офицер|сержант|лейтенант|майор|полковник|генерал|детектив|судья|сэр|леди|лорд|фрау|герр|мадам|месье|синьор|отец|мать|дядя|тётя|тетя)$/i.test(w) && re.test(t); });
     });
 }
 
@@ -105,9 +144,9 @@ export function peoplePrompt(type) {
     if (type === 'quiet' || type === 'impersonate' || !P().inject || !P().list.length) return '';
     const cm = CM();
     const lines = nearby().filter(n => n.x.inject !== false).slice(0, 3).map(({ x }) => {
-        const st = cm.status[x.id]?.v || x.status;
+        const st = statusFor(cm, x)?.v || x.status;
         const tag = [x.group, x.role].filter(Boolean).join(', ');
-        const facts = (cm.facts[x.id] || []).slice(-2).map(f => f.t).join('; ');
+        const facts = factsOf(cm, x).slice(-2).map(f => f.t).join('; ');
         const dead = st === 'dead' ? ' — погиб(ла); если всплывёт, то только в памяти и разговорах' : st === 'missing' ? ' — пропал(а)' : st === 'away' ? ' — сейчас далеко' : '';
         return `${x.name}${tag ? ` (${tag})` : ''}${dead}: ${A.cut(x.brief || x.bio || x.traits?.join(', ') || '', 240)}${x.voice ? ` Манера: ${A.cut(x.voice, 120).replace(/[.!?…]?$/, '.')}` : ''}${facts ? ` Недавно в истории: ${facts}.` : ''}`;
     });
@@ -235,7 +274,7 @@ function mergePerson(raw, src) {
 // ───────────── вкладка «Люди» ─────────────
 
 function cardHtml(x, near) {
-    const st = statusOf(CM().status[x.id]?.v || x.status);
+    const st = statusOf(statusFor(CM(), x)?.v || x.status);
     const letter = esc(String(x.name || '?').trim().charAt(0).toUpperCase());
     return `<button class="lf-npc${near ? ' near' : ''}${st[0] === 'dead' ? ' dead' : ''}" data-act="pp-open" data-id="${esc(x.id)}">
         <span class="lf-npc-img${x.img ? ' lf-fit' : ''}"${x.img ? A.fitAttr(x.img) : ''}>${x.img ? '<i class="lf-fit-i"></i>' : `<i class="lf-npc-l">${letter}</i>`}</span>
@@ -301,8 +340,8 @@ function relLines(x) {
 
 function renderNpc(x) {
     const cm = CM();
-    const st = statusOf(cm.status[x.id]?.v || x.status);
-    const facts = (cm.facts[x.id] || []).slice().reverse();
+    const st = statusOf(statusFor(cm, x)?.v || x.status);
+    const facts = factsOf(cm, x).slice().reverse();
     const ev = A.horaeEvents().filter(e => mentions(x, e.event?.summary || '')).slice(-8).reverse();
     const field = (label, v) => (v ? `${A.sec(label)}<div class="lf-npc-p">${esc(v)}</div>` : '');
     const near = nearbyIds().has(x.id);

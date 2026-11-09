@@ -193,6 +193,7 @@ export function arcSceneHtml() {
     const gunSt = (g) => g.fired != null ? `💥 выстрелило · #${g.fired}` : g.arm === 'fire' ? '🔫 выстрелит в следующем ответе' : g.planted != null ? `🔫 заложено · #${g.planted}` : g.arm === 'plant' ? '🌱 заложится в следующем ответе' : `ждёт · к биту ${g.beat}`;
     return `${A.sec('Сюжетка', `${d} из ${c.beats.length}`)}
     <section class="lf-arc">
+        ${c.poster ? `<button class="lf-arc-poster" data-act="lightbox" data-src="${esc(c.poster)}" style="background-image:url('${esc(c.poster)}')"><span>${esc(c.title)}</span></button>` : ''}
         <header><b>${esc(c.title)}</b><button class="lf-iconbtn sm" data-act="arc-edit" title="Поправить">${A.icon('pencil')}</button></header>
         <div class="lf-arc-bar">${c.beats.map((b, n) => `<button class="lf-arc-dot${b.done != null ? ' done' : b === nb ? ' next' : ''}" data-act="arc-beat" data-n="${n}" title="${esc(b.t)}"><i></i></button>`).join('<span class="lf-arc-line"></span>')}</div>
         <ol class="lf-arc-beats">${c.beats.map((b, n) => `<li class="${b.done != null ? 'done' : b === nb ? 'next' : ''}"><button data-act="arc-beat" data-n="${n}">${esc(b.t)}${b.done != null ? ` <i>#${b.done}</i>` : ''}</button></li>`).join('')}</ol>
@@ -200,7 +201,7 @@ export function arcSceneHtml() {
             <div><b>${esc(g.t)}</b><small>→ ${esc(g.pay)}</small><small class="st">${gunSt(g)}</small></div>
             ${g.fired == null ? `<button class="lf-chip" data-act="arc-gun" data-id="${g.id}">${g.planted == null ? (g.arm === 'plant' ? 'не сейчас' : 'Заложить') : (g.arm === 'fire' ? 'не сейчас' : 'Выстрелить')}</button>` : ''}
         </div>`).join('')}</div>` : ''}
-        <div class="lf-actions tight"><button class="lf-btn" data-act="arc-gun-add">${A.icon('plus')} Ружьё</button><button class="lf-btn ghost" data-act="arc-close">${A.icon('check')} Закрыть сюжетку</button></div>
+        <div class="lf-actions tight"><button class="lf-btn" data-act="arc-gun-add">${A.icon('plus')} Ружьё</button><button class="lf-btn" data-act="arc-poster">${A.icon('film')} ${c.poster ? 'Другой постер' : 'Постер'}</button><button class="lf-btn ghost" data-act="arc-close">${A.icon('check')} Закрыть сюжетку</button></div>
     </section>`;
 }
 
@@ -287,6 +288,29 @@ export async function arcClick(act, el) {
             return done();
         }
         case 'arc-close': closeArc(true); A.toast('info', 'Летописец придумает, что дальше', '✦ Сюжетка', { timeOut: 2500 }); return done();
+        case 'arc-poster': {
+            if (!c) return true;
+            await A.withBusy(el, async () => {
+                c.poster = await drawPoster(c);
+                A.saveMeta();
+                A.render();
+            }, 'Рисую постер…');
+            return true;
+        }
     }
     return false;
+}
+
+/** Постер сюжетки — как афиша фильма: живёт только в Сцене, в чат не встаёт. */
+async function drawPoster(c) {
+    let here = [];
+    try { here = (A.worldState().scene?.characters_present || []).map(A.canonName); } catch { /* */ }
+    const names = (here.length ? here : A.groupMembers().map(A.canonName)).slice(0, 2);
+    const refs = [];
+    const got = [];
+    for (const n of names) { try { const r = await A.faceRef?.(n, 640); if (r) { refs.push(r); got.push(n); } } catch { /* */ } }
+    const beats = c.beats.map(b => b.t).slice(0, 5).join('; ');
+    const prompt = `Cinematic movie poster for a story arc: ${c.title}. What the story is about: ${beats}.
+${got.length ? `The people on the poster, in order of the reference images: ${got.join(', ')} — keep their faces, hair and marks exactly as in the references.\n` : ''}Dramatic film-poster composition and lighting, strong mood, one striking image. Style: ${A.style ? A.style() : 'cinematic'}. No text, no letters, no title, no credits, no watermark.`;
+    return A.drawPicture(prompt, { aspect: '4:5', max: 1400, refs, prefix: 'life_poster', who: got });
 }

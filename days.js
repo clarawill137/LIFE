@@ -3,10 +3,14 @@
 // Модель каждый ответ видит последние N дней и «сегодня, раньше в этот день» — чтобы не забывала недавнее.
 // Вид — Мир → Дни: карточки по дням, правка руками, пересобрать.
 
+import { splitSummary } from './hsplit.js';
+
 let A = null;
 export function initDays(api) { A = api; }
 
 const esc = (v) => A.esc(v);
+// скрытый от модели пост (/hide) — всё равно пост истории: у неё старые посты скрыты, а дни по ним нужны
+const isPost = (m) => (A.isPost ? A.isPost(m) : !!m && (!m.is_system || (!m.extra?.type && !m.extra?.life)));
 const MON = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -103,24 +107,25 @@ export function collectDays() {
         const meta = m.horae_meta;
         if (flash[i] && host) {
             host.to = Math.max(host.to, i);
-            if (m.is_system) continue;
+            if (!isPost(m)) continue;
             let fl = host.flash.find(f => f.key === k);
             if (!fl) { fl = { key: k, raw: rawAt[i], from: i, to: i, frags: [] }; host.flash.push(fl); }
             fl.to = i;
-            for (const ev of meta?.events || []) { const t = String(ev?.summary || '').trim(); if (t && !fl.frags.includes(t)) fl.frags.push(t); }
+            for (const ev of meta?.events || []) for (const { t } of splitSummary(ev?.summary)) if (t && !fl.frags.includes(t)) fl.frags.push(t);
             continue;
         }
         let d = byKey.get(k);
         if (!d) { d = { key: k, raw: rawAt[i], from: i, to: i, locs: [], frags: [], chips: [], posts: 0, flash: [] }; byKey.set(k, d); order.push(d); }
         host = d;
         d.to = Math.max(d.to, i);
-        if (m.is_system) continue;
+        if (!isPost(m)) continue;
         d.posts++;
         const loc = String(meta?.scene?.location || '').split(/[·,]/)[0].trim();
         if (loc && !d.locs.includes(loc)) d.locs.push(loc);
         for (const ev of meta?.events || []) {
-            const t = String(ev?.summary || '').trim();
-            if (t && !d.frags.some(f => f.t === t)) d.frags.push({ t, i, imp: !!(ev?.is_important || ev?.level === 'important' || ev?.level === 'critical') });
+            for (const p of splitSummary(ev?.summary, ev?.level || '')) {
+                if (p.t && !d.frags.some(f => f.t === p.t)) d.frags.push({ t: p.t, i, imp: !!(ev?.is_important || /important|critical|key|major/.test(p.level || '')) });
+            }
         }
         if (!m.is_user) { const c = A.chronOf(i)?.chips?.[0]; if (c) d.chips.push({ t: c, i }); }
     }
@@ -131,6 +136,10 @@ export function collectDays() {
 }
 
 const todayOf = (days) => days[days.length - 1] || null;
+/** Есть из чего собирать: посты, события трекера или плашки. */
+const hasStuff = (d) => !!(d && (d.posts || d.frags.length || d.chips.length || d.flash?.length));
+/** Итог-пустышка («не зафиксировано событий») — собран, когда дню не дали материала: считать несобранным. */
+const hollow = (s) => !!s && !s.edited && (!String(s.text || '').trim() || (String(s.text).length < 220 && /не (было )?зафиксирован|нет (никаких |значимых |записанных )?событий|событий не (было|записано)|ничего (значимого |особенного )?не (происходило|произошло|случилось)|без (значимых )?событий/i.test(s.text)));
 
 // ───────────── сжать день ─────────────
 
@@ -143,7 +152,7 @@ function dayInput(d, upto = Infinity) {
     const chips = d.chips.filter(c => c.i <= upto).map(c => c.t);
     const chat = A.chatArr();
     let tail = '';
-    for (let i = Math.min(d.to, upto); i >= d.from && !tail; i--) if (chat[i] && !chat[i].is_system && !chat[i].is_user) tail = A.cut(A.plainText(chat[i].mes), 900);
+    for (let i = Math.min(d.to, upto); i >= d.from && !tail; i--) if (isPost(chat[i]) && !chat[i].is_user) tail = A.cut(A.plainText(chat[i].mes), 900);
     const fl = (d.flash || []).filter(f => f.from <= upto).map(f => `Флешбек (${dayLabel(f.key, f.raw, true)}): ${f.frags.join('; ') || 'без записанных событий'}`);
     return [`Дата: ${dayLabel(d.key, d.raw, true)}`, d.locs.length ? `Места: ${d.locs.join(', ')}` : '',
         frags.length ? `События (трекер):\n${A.cut(frags.join('\n'), 5000)}` : '', fl.length ? fl.join('\n') : '', chips.length ? `После постов:\n${A.cut(chips.join('\n'), 3000)}` : '',
@@ -154,7 +163,9 @@ let busy = false;
 const queue = [];
 
 async function summarize(d, upto = Infinity) {
-    const out = await A.askModel([{ role: 'system', content: SUM_SYSTEM }, { role: 'user', content: dayInput(d, upto) }], 900);
+    const input = dayInput(d, upto);
+    if (!/События \(трекер\)|После постов|Конец дня|Флешбек/.test(input)) throw new Error(`${dayLabel(d.key, d.raw, true)}: в этом дне нет ни постов, ни событий — собирать не из чего`);
+    const out = await A.askModel([{ role: 'system', content: SUM_SYSTEM }, { role: 'user', content: input }], 900);
     const j = A.extractJson(out);
     const text = String(j?.text || '').trim();
     if (!text) throw new Error('Летописец не прислал итог дня');
@@ -170,12 +181,14 @@ function wanted(all = false) {
     const pool = all ? closed : closed.slice(-(cfg().n + 2));
     for (const d of pool) {
         const s = sum[d.key];
-        if (s?.edited) continue;
-        if (!s || (s.to !== d.to && !s.today)) out.push({ d, today: false });
+        if (s?.edited || !hasStuff(d)) continue;
+        if (!s || hollow(s) || (s.to !== d.to && !s.today)) out.push({ d, today: false });
         else if (s.today) out.push({ d, today: false }); // день закрылся — итог по всему дню
     }
+    // пустышки, собранные, когда дню не дали материала (скрытые посты), — пересобрать, даже если день старый
+    if (!all) for (const d of closed) if (!pool.includes(d) && hollow(sum[d.key]) && hasStuff(d)) out.push({ d, today: false });
     const t = todayOf(days);
-    if (t && t.to - t.from >= 24) {
+    if (t && t.to - t.from >= 24 && hasStuff(t)) {
         const s = sum[t.key];
         const upto = t.to - 12; // последние посты модель и так видит целиком
         if (!s || (s.today && upto - (s.to ?? 0) >= 14)) out.push({ d: t, today: true, upto });
@@ -183,13 +196,20 @@ function wanted(all = false) {
     return out;
 }
 
+let last = { err: '', want: 0, busy: false };
+/** Что было в последний прогон: { err, want, busy } — для честного тоста. */
+export const daysLast = () => last;
+
 export async function runDays({ all = false, onStep } = {}) {
-    if (busy || !A.hasChat()) return 0;
+    if (busy || !A.hasChat()) { last = { err: busy ? 'уже собираю — дождись' : '', want: 0, busy }; return 0; }
     busy = true;
     let n = 0;
+    last = { err: '', want: 0, busy: false };
     try {
         const cm = A.chatMeta();
-        for (const w of wanted(all)) {
+        const list = wanted(all);
+        last.want = list.length;
+        for (const w of list) {
             await A.genIdle?.();
             if (A.chatMeta() !== cm) break;
             try {
@@ -198,7 +218,7 @@ export async function runDays({ all = false, onStep } = {}) {
                 A.saveMeta();
                 n++;
                 onStep?.(n);
-            } catch (e) { console.warn('[Life] дни', e); if (all) A.toast('warning', esc(String(e?.message || e)), '✦ Дни', { timeOut: 4000 }); break; }
+            } catch (e) { console.warn('[Life] дни', e); last.err = String(e?.message || e); break; }
         }
     } finally { busy = false; }
     if (n) { A.updatePrompt(); A.render?.(); }
@@ -229,7 +249,7 @@ export function daysPrompt(type) {
         const gap = prev ? gapWord(prev.key, d.key) : '';
         if (gap) lines.push(`(${gap})`);
         const fb = (d.flash || []).map(f => `флешбек в ${dayLabel(f.key, f.raw, true)}${f.frags.length ? `: ${f.frags[0]}` : ''}`).join('; ');
-        const body = s?.text && !s.today ? s.text : [d.frags.filter(f => f.imp).concat(d.frags.filter(f => !f.imp)).slice(0, 4).map(f => f.t).join('; '), fb ? `(${fb})` : ''].filter(Boolean).join(' ');
+        const body = s?.text && !s.today && !hollow(s) ? s.text : [d.frags.filter(f => f.imp).concat(d.frags.filter(f => !f.imp)).slice(0, 4).map(f => f.t).join('; '), fb ? `(${fb})` : ''].filter(Boolean).join(' ');
         if (body) lines.push(`• ${dayLabel(d.key, d.raw, d.key.slice(0, 4) !== ty)} — ${dot(body)}${s?.open?.length ? ` Открыто: ${s.open.join('; ')}.` : ''}`);
         prev = d;
     }
@@ -270,12 +290,12 @@ export function daysHtml() {
         out.push(`<article class="lf-day${isToday ? ' today' : ''}">
             ${cover ? `<div class="lf-day-img" style="background-image:url('${esc(cover)}')"></div>` : ''}
             <header><b>${esc(dayLabel(d.key, d.raw, true))}</b><small>${isToday ? 'сегодня · ' : ''}${esc(d.locs.slice(0, 3).join(' · '))}${d.locs.length ? ' · ' : ''}${d.posts} ${A.plural(d.posts, 'пост', 'поста', 'постов')}</small></header>
-            ${s?.text ? `<p>${esc(s.text)}${s.today ? ' <i>(до этого места)</i>' : ''}</p>` : `<p class="lf-dim">${d.frags.length ? esc(d.frags.slice(0, 3).map(f => f.t).join(' · ')) : 'Событий не записано.'}</p>`}
+            ${s?.text && !hollow(s) ? `<p>${esc(s.text)}${s.today ? ' <i>(до этого места)</i>' : ''}</p>` : `<p class="lf-dim">${d.frags.length ? esc(d.frags.slice(0, 3).map(f => f.t).join(' · ')) : hasStuff(d) ? 'Итога ещё нет — «Собрать».' : 'В этом дне нет ни постов, ни событий.'}</p>`}
             ${s?.open?.length ? `<div class="lf-day-open">${s.open.map(o => `<span>${A.icon('pin')} ${esc(o)}</span>`).join('')}</div>` : ''}
             ${d.flash?.length ? `<div class="lf-day-flash">${d.flash.map(f => `<button class="lf-chip" data-act="jump" data-mes="${f.from}">${A.icon('film')} флешбек · ${esc(dayLabel(f.key, f.raw, true))}</button>`).join('')}</div>` : ''}
             <div class="lf-day-acts">
                 <button class="lf-chip" data-act="jump" data-mes="${d.from}">${A.icon('arrowUp')} #${d.from}</button>
-                ${!isToday || d.to - d.from >= 24 ? `<button class="lf-chip" data-act="day-redo" data-k="${esc(d.key)}">${A.icon('refresh')} ${s?.text ? (stale ? 'Пересобрать (день вырос)' : 'Пересобрать') : 'Собрать'}</button>` : ''}
+                ${(!isToday || d.to - d.from >= 24) && hasStuff(d) ? `<button class="lf-chip" data-act="day-redo" data-k="${esc(d.key)}">${A.icon('refresh')} ${s?.text && !hollow(s) ? (stale ? 'Пересобрать (день вырос)' : 'Пересобрать') : 'Собрать'}</button>` : ''}
                 <button class="lf-chip" data-act="day-edit" data-k="${esc(d.key)}">${A.icon('pencil')}</button>
             </div>
         </article>`);
@@ -283,7 +303,7 @@ export function daysHtml() {
         const gap = older ? gapWord(older.key, d.key) : '';
         if (gap) out.push(`<div class="lf-day-gap">⟶ ${esc(gap)}</div>`);
     }
-    const missing = days.slice(0, -1).filter(d => !sum[d.key]?.text || sum[d.key].today).length;
+    const missing = days.slice(0, -1).filter(d => hasStuff(d) && (!sum[d.key]?.text || sum[d.key].today || hollow(sum[d.key]))).length;
     return `${head}
     ${missing ? `<button class="lf-btn full" data-act="days-all">${A.icon('sparkles')} Собрать все дни (${missing})</button>` : ''}
     <div class="lf-days">${out.join('')}</div>
@@ -295,15 +315,23 @@ export async function daysClick(act, el) {
     const done = () => { A.saveMeta(); A.updatePrompt(); A.render(); return true; };
     switch (act) {
         case 'days-n': cfg().n = Number(el.dataset.v) || 0; cfg().on = cfg().n > 0; A.saveSettings(); A.updatePrompt(); A.render(); return true;
-        case 'days-all': await A.withBusy(el, async () => { const n = await runDays({ all: true }); A.toast('success', n ? `Собрала дней: ${n}` : 'Нечего собирать', '✦ Дни', { timeOut: 2000 }); }, 'Собираю…'); return true;
+        case 'days-all': await A.withBusy(el, async () => {
+            const n = await runDays({ all: true });
+            const r = daysLast();
+            if (r.err) A.toast('warning', `${n ? `Собрала ${n} из ${r.want}. ` : ''}${esc(r.err)}`, '✦ Дни', { timeOut: 6000 });
+            else if (n) A.toast('success', `Собрала дней: ${n}`, '✦ Дни', { timeOut: 2000 });
+            else A.toast('info', 'Все дни, где что-то было, уже собраны', '✦ Дни', { timeOut: 2500 });
+        }, 'Собираю…'); A.render(); return true;
         case 'day-redo': {
             const d = collectDays().find(x => x.key === el.dataset.k);
             if (!d) return true;
             const isToday = d === todayOf(collectDays());
             await A.withBusy(el, async () => {
                 const upto = isToday ? d.to - 12 : Infinity;
-                const r = await summarize(d, upto);
-                M().sum[d.key] = { ...r, from: d.from, to: isToday ? upto : d.to, today: isToday, at: Date.now() };
+                try {
+                    const r = await summarize(d, upto);
+                    M().sum[d.key] = { ...r, from: d.from, to: isToday ? upto : d.to, today: isToday, at: Date.now() };
+                } catch (e) { A.toast('warning', esc(String(e?.message || e)), '✦ Дни', { timeOut: 5000 }); }
             }, 'Собираю…');
             return done();
         }
