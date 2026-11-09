@@ -1140,3 +1140,22 @@ export async function simClick(act, el, ev) {
 
 /** Фото питомца загрузили. */
 export function simSetPetImg(id, path) { const p = petById(id); if (p) { p.img = path; A.saveMeta(); } }
+
+/** Что записал пост i: вкусы, идеи инициативы, следы в местах. */
+export function simRecs(i) {
+    const m = M();
+    const out = [];
+    for (const [who, arr] of Object.entries(m.prefs)) for (const x of arr) {
+        if (x.mes !== i) continue;
+        out.push({ id: `pref:${who}:${x.t}`, g: 'Вкусы', icon: 'heart', t: `${short(who)} ${x.k === 'dislike' ? 'не любит' : 'любит'}: ${x.t}`, del: () => { m.prefs[who] = (m.prefs[who] || []).filter(y => y !== x); } });
+    }
+    for (const x of m.ideas) {
+        if (x.mes !== i || x.status === 'old') continue;
+        out.push({ id: `idea:${x.id}`, g: 'Инициатива', icon: 'feather', t: `${short(x.who)}: ${x.text}`, del: () => { m.ideas = m.ideas.filter(y => y !== x); } });
+    }
+    for (const [k, arr] of Object.entries(m.traces)) for (const x of arr) {
+        if (x.mes !== i) continue;
+        out.push({ id: `trace:${k}:${x.t}`, g: 'Следы', icon: 'pin', t: `${A.locLeaf(x.loc || k)}: ${x.t}`, del: () => { m.traces[k] = (m.traces[k] || []).filter(y => y !== x); } });
+    }
+    return out;
+}

@@ -18,10 +18,10 @@ import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClic
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief } from './days.js';
 import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arcClick } from './arcs.js';
 import { initAlbum, albumHtml, albumClick, albumSetImg } from './album.js';
-import { initEmo, emoChron, emoAfterPost, emoSrc, emoStripHtml, emoClick, emoSetImg } from './emo.js';
+import { initEmo, emoChron, emoAfterPost, emoSrc, emoStripHtml, emoClick, emoSetImg, EMOS } from './emo.js';
 import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
-import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick } from './frames.js';
+import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick, FRAMES } from './frames.js';
 import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather.js';
 import { initZr } from './zr.js';
 import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
@@ -47,7 +47,20 @@ import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick } from './fix.js';
 import { initDuo, duoPrompt, duoSpeaker, paintDuo, duoSceneHtml, duoClick, duoCCHtml } from './duo.js';
 import { initCall, callPrompt, callChron, callAfterPost, paintCall, callCfgHtml } from './call.js';
-import { initEcho, echoAdd, paintEcho, echoHtml, echoClick } from './echo.js';
+import { initEcho, echoAdd, paintEcho, echoHtml, echoClick, echoRecs } from './echo.js';
+import { initRecs, addRecs, recsSheet, recsClick } from './recs.js';
+import { initGuide, guideSheet } from './guide.js';
+import { initDraft, paintDraft } from './draft.js';
+import { calRecs } from './cal.js';
+import { stanceRecs } from './stance.js';
+import { ritualRecs } from './ritual.js';
+import { stepsRecs } from './steps.js';
+import { shardsRecs } from './shards.js';
+import { trigRecs } from './triggers.js';
+import { hurtRecs } from './hurt.js';
+import { simRecs } from './sim.js';
+import { innerRecs } from './inner.js';
+import { replyRecs } from './reply.js';
 import { initCanon, canonEnsure, canonClick } from './canon.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
@@ -65,7 +78,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.39.0';
+const VERSION = '0.40.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2739,6 +2752,49 @@ function placeMenu(loc) {
         </div>`);
 }
 
+/** Что Летописец записал прямо в запись поста i — для «что записал пост» (✕ — убрать одну строку). */
+function coreRecs(i) {
+    const e = chronOf(i);
+    const m = chatArr()[i];
+    if (!e || !m || m.is_user) return [];
+    const out = [];
+    const opLine = (o) => o.op === 'drop' ? `убрала «${o.name}»`
+        : o.op === 'merge' ? `склеила ${(o.names || []).map(n => `«${n}»`).join(', ')} → «${o.into}»`
+            : o.op === 'rename' ? `«${o.name}» → «${o.to}»`
+                : `«${o.name}»${o.holder ? ` у ${o.holder}` : ''}${o.where ? ` — ${o.where}` : ''}`;
+    if (e.scene && (e.scene.mood || e.scene.intim || e.scene.bond)) out.push({ id: 'tone', g: 'Тон', icon: 'flame', t: sceneLabel(e.scene), del: () => { delete e.scene; } });
+    if (e.frame) { const f = FRAMES.find(x => x[0] === e.frame.kind); out.push({ id: 'frame', g: 'Тон', icon: f?.[2] || 'moon', t: `в чате — как ${f?.[1] || e.frame.kind}`, del: () => { delete e.frame; e.frameManual = true; } }); }
+    if (!e.undone) {
+        for (const r of e.rel || []) out.push({ id: `rel:${r.a}:${r.b}:${r.moment || ''}`, g: 'Отношения', icon: 'rings', t: `${r.a} ${r.dir ? '→' : '×'} ${r.b}: ${SCALES.filter(([f]) => r[f]).map(([f, label]) => `${label.toLowerCase()} ${r[f] > 0 ? '+' : ''}${r[f]}`).join(', ')}${r.moment ? ` — ${r.moment}` : ''}`, del: () => { e.rel = (e.rel || []).filter(x => x !== r); } });
+        for (const x of e.sec || []) out.push({ id: `sec:${x.text}`, g: 'Тайны', icon: 'lock', t: `${x.text}${x.knows?.length ? ` (знает: ${x.knows.join(', ')})` : ''}`, del: () => { e.sec = (e.sec || []).filter(y => y !== x); } });
+        (e.ops || []).forEach((o, k) => out.push({ id: `op:${k}:${o.op}:${o.name || o.into || ''}`, g: 'Вещи', icon: o.op === 'drop' ? 'trash' : 'box', t: opLine(o), del: async () => { await dropOp(i, o); } }));
+    }
+    for (const [who, em] of Object.entries(e.emo || {})) out.push({ id: `emo:${who}`, g: 'Лица', icon: 'smile', t: `${shortName(who)}: ${EMOS.find(x => x[0] === em)?.[1] || em}`, del: () => { delete e.emo[who]; try { refreshAvatars(); } catch { /* */ } } });
+    if (e.det && !e.detHidden) out.push({ id: 'det', g: 'Деталь', icon: 'camera', t: e.det.caption || 'деталь крупным планом', del: () => { e.detHidden = true; } });
+    if (e.shot && !e.shotX && !e.shotUsed) out.push({ id: 'shot', g: 'Деталь', icon: 'film', t: `просится кадр: ${e.shot.caption || ''}`, del: () => { e.shotX = true; } });
+    for (const [n, p] of Object.entries(e.pos || {})) out.push({ id: `pos:${n}`, g: 'Мизансцена', icon: 'pin', t: `${shortName(n)} — ${p.at}${p.near ? `, рядом с ${shortName(p.near)}` : ''}`, del: () => { delete e.pos[n]; } });
+    if (e.call) out.push({ id: 'call', g: 'Звонок', icon: 'phone', t: `${shortName(e.call.a)} ↔ ${shortName(e.call.b)}${e.call.video ? ', по видео' : ''}${e.call.end ? ', закончился' : ''}`, del: () => { delete e.call; } });
+    for (const x of e.slip?.list || []) if (!x.off && !x.done) out.push({ id: `slip:${x.q}`, g: 'Ляпы', icon: 'eye', t: x.why, del: () => { x.off = true; } });
+    return out;
+}
+
+/** Убрать одну правку вещей из поста i: откатить все, выкинуть эту, остальные накатить снова. */
+async function dropOp(i, op) {
+    const m = chatArr()[i];
+    const e = chronOf(i);
+    if (!m || !e) return;
+    restoreItems(m.horae_meta, e.undo);
+    e.ops = (e.ops || []).filter(o => o !== op);
+    invalidate();
+    m.horae_meta = m.horae_meta || emptyMeta();
+    const { undo } = applyItemOps(m.horae_meta, worldState().items, e.ops);
+    e.undo = undo;
+    reapplyManual(i);
+    m.horae_meta._lifeFix = msgKey(m);
+    await ctx().saveChat();
+    invalidate();
+}
+
 function chronSheet(i) {
     const e = chronOf(i);
     const m = chatArr()[i];
@@ -3678,6 +3734,7 @@ function registerSlash() {
                 }
                 if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
                 if (v === 'recap' || v === 'ранее') { showRecap({}); return ''; }
+                if (v === 'guide' || v === 'гайд' || v === 'что где') { guideSheet(); return ''; }
                 if (v === 'twist' || v.startsWith('twist ') || v.startsWith('твист')) {
                     const arg = v.split(/\s+/).slice(1).join(' ');
                     if (arg === 'off' || arg === 'нет') { clearTwist(); toast('info', 'Твист отменён', '✦ Твист'); return ''; }
@@ -3763,6 +3820,7 @@ const controlApi = {
     twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     duoHtml: () => (hasChat() && settings().enabled ? duoCCHtml() : ''),
+    guide: () => guideSheet(),
     duoCC: (act, el) => duoClick(act, el),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
 };
@@ -3875,7 +3933,12 @@ jQuery(async () => {
     initCall({ ...extApi, emoSrc: (i, w) => emoSrc(i, w) });
     painters.push((el, id) => paintDuo(el, id), (el, id) => paintCall(el, id));
     hubMods.push({ pre: 'duo-', click: duoClick, label: 'Вдвоём' });
-    initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i) });
+    initRecs({ ...extApi, openHub, invalidate });
+    initGuide({ ...extApi, openHub });
+    initDraft(extApi);
+    addRecs((i) => coreRecs(i), calRecs, stanceRecs, ritualRecs, stepsRecs, shardsRecs, trigRecs, hurtRecs, simRecs, innerRecs, replyRecs, echoRecs);
+    hubMods.push({ pre: 'rec-', click: recsClick, label: 'Что записал пост' });
+    initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i), shootPost: (i, kind, at) => shootShot(i, { kind, at }), recsSheet: (i) => recsSheet(i), guideSheet: (k) => guideSheet(k) });
     painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
     chatClicks.push((act, el) => fixClick(act, el));
     hubMods.push({ pre: 'fx-', click: fixClick, label: 'Правка' });
@@ -4065,6 +4128,7 @@ jQuery(async () => {
         // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
         try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
         try { if (settings().enabled) seeWarm(Number(id)); } catch (e) { console.warn('[Life] покажи им', e); }
+        setTimeout(() => { try { paintDraft(); } catch { /* */ } }, 120);
     });
     if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => { if (!dry && type !== 'quiet') genActive = true; });
     const endGen = () => {

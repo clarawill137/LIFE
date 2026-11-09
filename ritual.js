@@ -114,3 +114,12 @@ export function ritualClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: шутки и ритуалы из него. */
+export function ritualRecs(i) {
+    const r = M();
+    return r.list.filter(x => x.mes === i && x.src === 'post').map(x => ({
+        id: `rit:${x.id}`, g: 'Своё', icon: 'sparkles', t: `${x.t}${x.who?.length ? ` — ${x.who.map(n => A.shortName(n)).join(' и ')}` : ''}`,
+        del: () => { r.list = r.list.filter(y => y !== x); },
+    }));
+}

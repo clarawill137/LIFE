@@ -201,3 +201,14 @@ export function replyClick(act, el) {
     A.paintSoon?.();
     return true;
 }
+
+/** Что записал твой пост i: на что ждали ответа. */
+export function replyRecs(i) {
+    if (!replyOn()) return [];
+    const rec = M().list[keyOf(i)];
+    if (!rec?.items?.length) return [];
+    return rec.items.map((x, n) => ({ x, n })).filter(({ n }) => rec.state[n] !== 'off').map(({ x, n }) => ({
+        id: `rp:${n}:${x.t}`, g: 'Не пропусти', icon: 'eye', t: `${x.t}${x.to ? ` → ${A.shortName(A.canonName(x.to))}` : ''}`,
+        del: () => { rec.state[n] = 'off'; },
+    }));
+}

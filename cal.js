@@ -407,3 +407,13 @@ export function calSoon(n = 7) {
     return eventsBetween(ymd(t0), ymd(addDays(t0, n))).filter(e => e.st === 'open');
 }
 export { evLine, whenWord };
+
+/** Что записал пост i (для «что записал пост»): события календаря из него. */
+export function calRecs(i) {
+    const L = M().list;
+    return L.filter(e => e.mes === i && e.src === 'post').map(e => ({
+        id: `cal:${e.id}`, g: 'Календарь', icon: 'calendar',
+        t: `${e.t}${e.d ? ` — ${e.d}${e.time ? ` ${e.time}` : ''}` : ''}`,
+        del: () => { const k = L.indexOf(e); if (k >= 0) L.splice(k, 1); },
+    }));
+}

@@ -439,6 +439,7 @@ function renderCC() {
         <button class="cc-tile" data-cc="world">${icon('globe')}<span>Память</span></button>
         <button class="cc-tile" data-cc="morning">${icon('sunrise')}<span>Утро</span></button>
     </div>
+    <div class="cc-chips wrap cc-help"><button class="cc-chip" data-cc="guide">${icon('book')}Что где — гайд по Life и правке постов</button></div>
 
     ${api.modesHtml ? (() => { const h = api.modesHtml(ttModes()); return h ? `<div class="cc-label">Режимы</div>${h}` : ''; })() : ''}
 
@@ -522,6 +523,7 @@ async function onCCClick(ev) {
     }
     switch (act) {
         case 'close': closeCC(); break;
+        case 'guide': closeCC(); setTimeout(() => api.guide?.(), 280); break;
         case 'money': closeCC(); setTimeout(() => api.openMoney?.(), 280); break;
         case 'mode': {
             const on = api.toggleMode?.(el.dataset.v);

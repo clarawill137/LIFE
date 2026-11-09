@@ -875,3 +875,15 @@ export async function hurtClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: новые раны из него. */
+export function hurtRecs(i) {
+    const out = [];
+    for (const [who, c] of Object.entries(H().chars)) {
+        for (const w of c.list || []) {
+            if (w.mes !== i || w.src !== 'ai') continue;
+            out.push({ id: `hrt:${w.id}`, g: 'Раны', icon: 'bandage', t: `${A.shortName(who)}: ${w.t}${w.part ? ` — ${w.part}` : ''}`, del: () => { c.list = c.list.filter(y => y !== w); } });
+        }
+    }
+    return out;
+}

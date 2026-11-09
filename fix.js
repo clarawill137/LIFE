@@ -1,14 +1,14 @@
-// Фиксы вместо реролла. «✎» под ответом — режим правки поста:
-//  • тап по абзацу — жёстче / мягче / короче / по-баковски (из банка реплик) / пусть промолчит / своё — меняется только он;
-//  • «Из свайпов» — собрать пост из абзацев разных свайпов, стыки сглажены (новым свайпом, старые целы);
-//  • «Хеди — моя» — убрать всё, что модель написала за героиню, переписав через его восприятие;
-//  • «Ещё бит» — дописать один абзац в конец (по подсказке);
-//  • «Плашки» — починить сломанную разметку (незакрытые блоки, картинка без тега, кривые кавычки в инструкции SLAY), текст не трогая;
-//  • «Вернуть» — как было до последней правки.
+// Фиксы вместо реролла. «✎ править» под ответом — всё про правку поста в одном месте, с подписями:
+//  • абзац (тап по нему в тексте): жёстче / мягче / короче / голосом (из банка реплик) / пусть промолчит / своё —
+//    меняется только он; «отсюда заново» — с фразы, куда тапнула, и до конца переписать; «кадр здесь»;
+//  • весь пост: «<персона> — моя» (убрать написанное за героиню), «+ бит», «из свайпов» (новым свайпом),
+//    «плашки» (починить разметку, текст не трогая), «что записал пост», «вернуть» — как было до последней правки;
+//  • «что где» — гайд по Life.
 // Правит дешёвая модель Летописца — дешевле реролла и не трогает удачное.
 
 import { setMesText } from './mend.js';
 import { linesOf } from './voice.js';
+import { locate } from './slip.js';
 
 let A = null;
 export function initFix(api) { A = api; }
@@ -16,7 +16,7 @@ export function initFix(api) { A = api; }
 const esc = (v) => A.esc(v);
 const on = new Set();            // посты в режиме правки
 const busy = new Set();
-let pick = null;                 // { mes, line, who } — выбранный абзац (who — чья часть в посте на двоих)
+let pick = null;                 // { mes, line, who, sent } — выбранный абзац (who — чья часть в посте на двоих, sent — фраза под пальцем)
 const user = () => A.canonName(A.ctx().name1) || 'игрок';
 
 function M() {
@@ -162,6 +162,33 @@ async function beat(i, hint) {
     await apply(i, `${body}\n\n${nl}${tail}`, 'ещё бит');
 }
 
+/** Отсюда заново: до выбранной фразы (или абзаца) остаётся, дальше — переписать. */
+async function restFrom(i, line, sent, hint) {
+    const m = A.chatArr()[i];
+    const raw = String(m?.mes || '');
+    const li = raw.indexOf(line);
+    if (li < 0) throw new Error('абзац уже поменялся — тапни заново');
+    let cut = li;
+    if (sent) {
+        const words = sent.split(/\s+/).filter(Boolean);
+        const loc = words.length >= 2 ? locate(line, words.slice(0, 6).join(' ')) : null;
+        const k = loc ? line.indexOf(loc.from) : -1;
+        if (k > 0) cut = li + k;
+    }
+    const [body, tail] = splitTail(raw);
+    if (cut >= body.length) throw new Error('дальше переписывать нечего');
+    const head = raw.slice(0, cut).replace(/\s+$/, '');
+    const oldRest = body.slice(cut).trim();
+    const who = A.canonName(speakerOf(i));
+    const out = await ask(`${RULES(user())}
+Перепиши продолжение поста с указанного места: начало остаётся как есть, а дальше напиши заново — по-другому, от лица ${who}, в том же голосе, стиле и разметке, примерно той же длины. Не повторяй начало и не закрывай сцену. Ответь только новым продолжением.`,
+        `Начало поста (остаётся):\n${A.cut(head, 4000)}\n\nСтарое продолжение (заменить; удачное можно оставить):\n${A.cut(oldRest, 3500)}${hint ? `\n\nКак должно пойти дальше: ${hint}` : ''}`, 2600);
+    const rest = out.trim();
+    if (rest.length < 20) throw new Error('модель вернула слишком мало — не меняю');
+    const joiner = cut === li ? (head ? '\n\n' : '') : ' ';
+    await apply(i, `${head}${joiner}${rest}${tail}`, 'отсюда заново');
+}
+
 // ───────────── плашки: разметка ─────────────
 
 const PAIRED = ['details', 'summary', 'div', 'art', 'blockquote', 'span', 'center', 'font', 'table'];
@@ -271,43 +298,58 @@ async function merge(i) {
     mg.order = [];
 }
 
-// ───────────── в чате ─────────────
+// ───────────── в чате: одна кнопка, всё внутри, с подписями ─────────────
+
+const row = (act, id, title, sub, extra = '') => `<button class="lf-fix-a" data-act="${act}" data-mes="${id}"${extra}><b>${title}</b><small>${sub}</small></button>`;
 
 export function paintFix(el, id) {
     const m = A.chatArr()[id];
     const old = el.querySelector(':scope .lf-fix');
     if (!m || m.is_user || m.is_system || !A.settings().enabled) { old?.remove(); return; }
     const open = on.has(id);
-    const hasUndo = !!M().undo[id];
+    const u = M().undo[id];
     const sel = pick?.mes === id ? pick : null;
+    const U = esc(A.shortName(user()));
+    const owner = esc(A.shortName(A.canonName(sel?.who || speakerOf(id))));
     const html = !open
-        ? `<div class="lf-fix lf-own"><button class="lf-fix-btn" data-act="fx-open" data-mes="${id}" title="поправить пост">✎</button></div>`
+        ? `<div class="lf-fix lf-own"><button class="lf-fix-btn" data-act="fx-open" data-mes="${id}" title="Правка поста вместо реролла">✎ <span>править</span></button></div>`
         : `<div class="lf-fix lf-own open${busy.has(id) ? ' busy' : ''}">
-            <div class="lf-fix-row">
-                <span class="lf-fix-h">${busy.has(id) ? 'правлю…' : sel ? 'абзац выбран' : 'тапни абзац в тексте'}</span>
-                ${(m.swipes || []).length > 1 ? `<button data-act="fx-merge" data-mes="${id}">из свайпов</button>` : ''}
-                <button data-act="fx-mine" data-mes="${id}">${esc(A.shortName(user()))} — моя</button>
-                <button data-act="fx-beat" data-mes="${id}">+ бит</button>
-                <button data-act="fx-mark" data-mes="${id}">плашки</button>
-                ${hasUndo ? `<button data-act="fx-undo" data-mes="${id}">↩ вернуть</button>` : ''}
-                <button data-act="fx-open" data-mes="${id}">✕</button>
+            <div class="lf-fix-top"><b>✎ Правка поста</b>${busy.has(id) ? '<span class="lf-fix-wait">правлю…</span>' : ''}<button data-act="fx-guide" data-mes="${id}">что где</button><button data-act="fx-open" data-mes="${id}" title="закрыть">✕</button></div>
+            <div class="lf-fix-sec">
+                <div class="lf-fix-h">Абзац</div>
+                ${sel ? `<q>${esc(A.cut(plain(sel.sent || sel.line), 160))}</q>
+                <div class="lf-fix-row">${Object.entries(HOWS).filter(([k]) => k !== 'own').map(([k, [l]]) => `<button data-act="fx-p" data-mes="${id}" data-how="${k}">${k === 'voice' ? `голосом ${owner}` : l}</button>`).join('')}</div>
+                <div class="lf-fix-own"><input type="text" class="lf-fix-in" placeholder="своё: что поправить — или как пойти дальше"><button data-act="fx-p" data-mes="${id}" data-how="own" title="поправить абзац по-своему">✓</button></div>
+                <div class="lf-fix-grid">
+                    ${row('fx-rest', id, '⤵ Отсюда заново', sel.sent ? 'с этой фразы и до конца — переписать; подсказка — в поле' : 'с этого абзаца и до конца — переписать; подсказка — в поле')}
+                    ${A.shootPost ? row('fx-shot', id, '🎞 Кадр здесь', 'картинка этого момента прямо в посте') : ''}
+                </div>` : '<div class="lf-fix-hint">Тапни абзац в тексте — появятся правки абзаца, «отсюда заново» и кадр в этом месте.</div>'}
             </div>
-            ${sel ? `<div class="lf-fix-sel"><q>${esc(A.cut(plain(sel.line), 160))}</q>
-                <div class="lf-fix-row">${Object.entries(HOWS).filter(([k]) => k !== 'own').map(([k, [l]]) => `<button data-act="fx-p" data-mes="${id}" data-how="${k}">${k === 'voice' ? `голосом ${esc(A.shortName(A.canonName(sel.who || speakerOf(id))))}` : l}</button>`).join('')}</div>
-                <div class="lf-fix-own"><input type="text" class="lf-fix-in" placeholder="своё: что поправить в абзаце"><button data-act="fx-p" data-mes="${id}" data-how="own">✓</button></div>
-            </div>` : ''}
-            ${sel === null && open ? `<div class="lf-fix-own"><input type="text" class="lf-fix-in beat" placeholder="+ бит: что должно случиться (необязательно)"></div>` : ''}
+            <div class="lf-fix-sec">
+                <div class="lf-fix-h">Весь пост</div>
+                <input type="text" class="lf-fix-in beat" placeholder="подсказка для «+ бит» (необязательно)">
+                <div class="lf-fix-grid">
+                    ${row('fx-mine', id, `${U} — моя`, `убрать всё, что модель написала за ${U}`)}
+                    ${row('fx-beat', id, '+ бит', 'дописать абзац в конец, по подсказке или сам')}
+                    ${(m.swipes || []).length > 1 ? row('fx-merge', id, 'Из свайпов', 'собрать из абзацев разных вариантов') : ''}
+                    ${row('fx-mark', id, 'Плашки', 'починить разметку GC, текст не трогать')}
+                    ${A.recsSheet ? row('fx-recs', id, 'Что записал пост', 'что Life взяла из поста — убрать лишнее') : ''}
+                    ${u ? row('fx-undo', id, '↩ Вернуть', `как было до «${esc(u.label)}»`) : ''}
+                </div>
+            </div>
         </div>`;
     const sig = A.hash(html);
     if (old && old.dataset.sig === sig) { markParas(el, open, id); return; }
-    const typed = old?.querySelector('.lf-fix-in')?.value;
+    const typed = old?.querySelector('.lf-fix-in:not(.beat)')?.value;
+    const typedBeat = old?.querySelector('.lf-fix-in.beat')?.value;
     old?.remove();
     const host = el.querySelector('.mes_block') || el;
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     const node = tmp.firstElementChild;
     node.dataset.sig = sig;
-    if (typed && node.querySelector('.lf-fix-in')) node.querySelector('.lf-fix-in').value = typed;
+    if (typed && node.querySelector('.lf-fix-in:not(.beat)')) node.querySelector('.lf-fix-in:not(.beat)').value = typed;
+    if (typedBeat && node.querySelector('.lf-fix-in.beat')) node.querySelector('.lf-fix-in.beat').value = typedBeat;
     const anchor = host.querySelector(':scope > .mes_text');
     if (anchor) anchor.after(node); else host.append(node);
     markParas(el, open, id);
@@ -322,6 +364,28 @@ function markParas(el, open, id) {
     el.classList.toggle('lf-fixing', open);
 }
 
+/** Фраза абзаца под пальцем: от конца прошлого предложения до конца этого. */
+function sentenceAt(p, ev) {
+    let node = null;
+    let off = 0;
+    try {
+        if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(ev.clientX, ev.clientY); node = r?.startContainer; off = r?.startOffset || 0; }
+        else if (document.caretPositionFromPoint) { const r = document.caretPositionFromPoint(ev.clientX, ev.clientY); node = r?.offsetNode; off = r?.offset || 0; }
+    } catch { /* */ }
+    if (!node || node.nodeType !== 3 || !p.contains(node)) return '';
+    let pos = 0;
+    const tw = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (n === node) { pos += off; break; } pos += n.nodeValue.length; }
+    const t = p.textContent || '';
+    let a = pos;
+    while (a > 0 && !/[.!?…]/.test(t[a - 1])) a--;
+    let b = pos;
+    while (b < t.length && !/[.!?…]/.test(t[b])) b++;
+    while (b < t.length && /[.!?…»"”)]/.test(t[b])) b++;
+    const sent = t.slice(a, b).replace(/^[\s»"”)]+/, '').trim();
+    return sent.length >= 6 && sent.length < t.trim().length ? sent : '';
+}
+
 /** Тап по абзацу в режиме правки (из onChatClick, до остальных). true — тап наш. */
 export function fixTap(ev) {
     const mesEl = ev.target.closest?.('#chat .mes.lf-fixing');
@@ -334,7 +398,9 @@ export function fixTap(ev) {
     if (!line) { A.toast('info', 'Не нашла этот кусок в тексте поста — тапни по обычному абзацу', '✎', { timeOut: 2200 }); return true; }
     ev.preventDefault();
     ev.stopPropagation();
-    pick = { mes: i, line, who: p.closest?.('[data-duo]')?.dataset.duo || '' };
+    let sent = '';
+    try { sent = sentenceAt(p, ev); } catch { /* */ }
+    pick = { mes: i, line, who: p.closest?.('[data-duo]')?.dataset.duo || '', sent };
     A.paintSoon?.();
     return true;
 }
@@ -342,6 +408,7 @@ export function fixTap(ev) {
 export async function fixClick(act, el) {
     if (!act.startsWith('fx-')) return false;
     const i = Number(el.dataset.mes);
+    const box = el.closest?.('.lf-fix');
     const run = async (fn, done) => {
         if (busy.has(i)) return;
         busy.add(i);
@@ -352,16 +419,30 @@ export async function fixClick(act, el) {
     };
     switch (act) {
         case 'fx-open': if (on.has(i)) { on.delete(i); if (pick?.mes === i) pick = null; } else on.add(i); A.paintSoon?.(); return true;
+        case 'fx-guide': A.guideSheet?.('fix'); return true;
         case 'fx-p': {
             const sel = pick?.mes === i ? pick : null;
             if (!sel) return true;
-            const custom = el.parentElement?.querySelector('.lf-fix-in')?.value?.trim() || '';
+            const custom = (el.parentElement?.querySelector('.lf-fix-in') || box?.querySelector('.lf-fix-in:not(.beat)'))?.value?.trim() || '';
             if (el.dataset.how === 'own' && !custom) { A.toast('info', 'Напиши, что поправить'); return true; }
             await run(async () => { await rewriteLine(i, sel.line, el.dataset.how, custom, sel.who); pick = null; });
             return true;
         }
+        case 'fx-rest': {
+            const sel = pick?.mes === i ? pick : null;
+            if (!sel) return true;
+            const hint = box?.querySelector('.lf-fix-in:not(.beat)')?.value?.trim() || '';
+            await run(async () => { await restFrom(i, sel.line, sel.sent, hint); pick = null; }, 'Переписала дальше');
+            return true;
+        }
+        case 'fx-shot': {
+            const sel = pick?.mes === i ? pick : null;
+            try { A.shootPost?.(i, 'frame', sel ? plain(sel.sent || sel.line) : ''); } catch (e) { A.toast('warning', esc(String(e?.message || e)), '🎞 Кадр'); }
+            return true;
+        }
+        case 'fx-recs': A.recsSheet?.(i); return true;
         case 'fx-mine': await run(() => mine(i), `${A.shortName(user())} — снова твоя`); return true;
-        case 'fx-beat': { const hint = el.closest('.lf-fix')?.querySelector('.lf-fix-in.beat')?.value?.trim() || ''; await run(() => beat(i, hint), 'Дописала бит'); return true; }
+        case 'fx-beat': { const hint = box?.querySelector('.lf-fix-in.beat')?.value?.trim() || ''; await run(() => beat(i, hint), 'Дописала бит'); return true; }
         case 'fx-mark': {
             const m = A.chatArr()[i];
             const r = fixMarkup(m.mes);

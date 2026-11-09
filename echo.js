@@ -151,3 +151,12 @@ export function echoClick(act, el) {
     A.paintSoon?.();
     return true;
 }
+
+/** Что записал твой пост i: решение со ставками. */
+export function echoRecs(i) {
+    if (!echoOn()) return [];
+    return M().list.filter(x => x.mes === i && x.st !== 'off').map(x => ({
+        id: `echo:${x.id}`, g: 'Эхо решений', icon: 'target', t: `${x.what}${x.st === 'echo' ? ' (уже аукнулось)' : ''}`,
+        del: () => { x.st = 'off'; },
+    }));
+}

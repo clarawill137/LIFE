@@ -138,3 +138,18 @@ export function stanceClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: новые споры и позиции из него. */
+export function stanceRecs(i) {
+    const s = M();
+    const out = [];
+    for (const x of s.list) {
+        if (x.mes === i && x.src === 'post') { out.push({ id: `stn:${x.id}`, g: 'Споры', icon: 'flag', t: `спор: ${x.q}`, del: () => { s.list = s.list.filter(y => y !== x); } }); continue; }
+        for (const [n, p] of Object.entries(x.pos || {})) {
+            if (p.mes !== i) continue;
+            out.push({ id: `stn:${x.id}:${n}`, g: 'Споры', icon: 'flag', t: `${A.shortName(n)} — ${p.t} (${x.q})`, del: () => { if (p.prev) x.pos[n] = p.prev; else delete x.pos[n]; } });
+        }
+        if (x.closed?.mes === i) out.push({ id: `stn:${x.id}:end`, g: 'Споры', icon: 'flag', t: `закрыт спор: ${x.q}`, del: () => { delete x.closed; } });
+    }
+    return out;
+}

@@ -241,3 +241,24 @@ export function trigClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: эпизоды триггеров (✕ — эпизода не было: ступенька, если сдвинулась, — назад). */
+export function trigRecs(i) {
+    const out = [];
+    for (const [k, st] of Object.entries(M().st)) {
+        for (const e of st.eps) {
+            if (e.mes !== i) continue;
+            const [who, id] = k.split('|');
+            const tr = allPairs().find(([w, t]) => A.sameName(w, who) && t.id === id)?.[1];
+            out.push({
+                id: `trg:${k}:${e.at}`, g: 'Триггеры', icon: 'zap', t: `${A.shortName(who)}: ${tr?.t || id}${e.t ? ` — ${e.t}` : ''}${e.coped ? ' (справился)' : ''}`,
+                del: () => {
+                    st.eps = st.eps.filter(y => y !== e);
+                    if (e.stepped) { st.lvl = Math.min(3, st.lvl + e.stepped); st.steps.splice(-e.stepped); st.work += 3 * e.stepped; }
+                    st.work = Math.max(0, st.work - (e.coped ? 1 : 0.5));
+                },
+            });
+        }
+    }
+    return out;
+}

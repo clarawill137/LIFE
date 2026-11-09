@@ -194,3 +194,14 @@ export async function stepsClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: ступеньки прожитого. */
+export function stepsRecs(i) {
+    const s = M();
+    const out = [];
+    for (const L of s.list) for (const st of L.steps) {
+        if (st.src !== 'post' || st.mes !== i) continue;
+        out.push({ id: `stp:${L.theme}:${st.t}`, g: 'Прожитое', icon: 'arrowUp', t: `${L.who.map(n => A.shortName(n)).join(' и ')} — ${L.theme}: ${st.t}`, del: () => { L.steps = L.steps.filter(y => y !== st); s.list = s.list.filter(y => y.steps.length); } });
+    }
+    return out;
+}

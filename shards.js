@@ -169,3 +169,12 @@ export async function shardsClick(act, el) {
     }
     return false;
 }
+
+/** Что записал пост i: вспомненное. */
+export function shardsRecs(i) {
+    const s = M();
+    return s.list.filter(x => x.src === 'post' && x.mes === i).map(x => ({
+        id: `shd:${x.era}:${x.t}`, g: 'Память', icon: 'moon', t: `${A.shortName(x.who)} вспомнил (${x.era}): ${x.t}`,
+        del: () => { s.list = s.list.filter(y => y !== x); },
+    }));
+}

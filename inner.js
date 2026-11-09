@@ -623,3 +623,14 @@ export function innerSceneChips() {
     }
     return out;
 }
+
+/** Что записал пост i: что на уме и чего хочет сам. */
+export function innerRecs(i) {
+    const out = [];
+    for (const [who, x] of Object.entries(M())) {
+        if (!x || typeof x !== 'object') continue;
+        for (const y of x.thoughts || []) if (y.mes === i && y.src === 'ai' && y.status !== 'gone') out.push({ id: `th:${who}:${y.id}`, g: 'На уме', icon: 'brain', t: `${A.shortName(who)}: ${y.t}`, del: () => { y.status = 'gone'; } });
+        for (const y of x.wants || []) if (y.mes === i && y.src === 'ai' && y.status !== 'gone') out.push({ id: `wn:${who}:${y.id}`, g: 'Хочет сам', icon: 'star', t: `${A.shortName(who)}: ${y.t}`, del: () => { y.status = 'gone'; } });
+    }
+    return out;
+}
