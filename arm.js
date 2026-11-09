@@ -220,6 +220,9 @@ const FIG = `<svg viewBox="0 0 64 64" class="lf-arm-svg" aria-hidden="true">
     <g class="lf-arm-spark"><path d="M41 29.5 l-3.6 2.4"/><path d="M44.4 30.6 l1 4.2"/><path d="M40.2 26.2 l-4.2 -.6"/></g>
 </svg>`;
 
+/** Значок руки (для кукольного домика: протез лежит в комнате). */
+export const armFig = () => FIG;
+
 function cardHtml(who, { full = false } = {}) {
     const inf = armInfo(who);
     if (!inf) return '';

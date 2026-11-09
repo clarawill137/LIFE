@@ -159,7 +159,7 @@ function doneIdea(x, i) {
     if (m.armed?.id === x.id) { m.lastInit = { id: x.id, mes: i }; m.armed = null; }
 }
 
-function homeLoc() {
+export function homeLoc() {
     const c = simCfg();
     if (c.home) return c.home;
     const pl = Object.values(A.settings().places || {}).find(p => !String(p.name).includes('·') && (p.icon === 'home' || /квартир|дом(?![а-яёa-z0-9])|апартамент|пентхаус/i.test(p.name)));
@@ -241,7 +241,9 @@ function tracesUnder(loc) {
     if (!t) return [];
     return Object.entries(M().traces).filter(([k, arr]) => (k === t || k.startsWith(t + '·')) && arr.length);
 }
-function tracesAt(key) { return M().traces[key] || []; }
+export function tracesAt(key) { return M().traces[key] || []; }
+/** Питомцы чата (для кукольного домика). */
+export function petsList() { return M().pets.filter(p => p.on !== false); }
 function findTrace(id) {
     for (const [k, arr] of Object.entries(M().traces)) { const t = arr.find(x => x.id === id); if (t) return [k, t, arr]; }
     return [null, null, null];
@@ -439,7 +441,7 @@ function applyPets(list, i) {
     }
 }
 
-function petState(p, now = rpNow()) {
+export function petState(p, now = rpNow()) {
     const needs = pk(p).needs.map(([k, label]) => { const v = needOf(p, k, now); return { k, label, v, word: needWord(p, k, v) }; });
     const urgent = needs.map(n => urgentText(p, n.k, n.v)).filter(Boolean);
     return { needs, urgent, sleepy: sleepy(p, now) && !urgent.length };

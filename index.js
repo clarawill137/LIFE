@@ -72,6 +72,7 @@ import { initCanon, canonEnsure, canonClick } from './canon.js';
 import { initHero, heroClick, heroInput, fameEnsure } from './hero.js';
 import { makeAskJson } from './ask.js';
 import { initArm, armPrompt, armChron, armAfterPost, armSceneHtml, armNote, armRecs, armClick, armCfgHtml } from './arm.js';
+import { initDollhouse, dollhouseHtml, dhClick, dhDefault, dhHomeKey } from './dollhouse.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
@@ -88,7 +89,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.44.0';
+const VERSION = '0.45.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2022,7 +2023,18 @@ function renderMap() {
     const head = level
         ? `<div class="lf-pagehead"><button class="lf-iconbtn" data-act="map-up">${icon('left')}</button><div class="lf-grow"><span class="lf-kicker">${esc(region?.name || '')}</span><h1>${esc(level.place?.name || level.key)}</h1></div>${pillHtml(st)}</div>`
         : `<div class="lf-pagehead"><div class="lf-grow"><span class="lf-kicker">Карта</span><h1>${esc(region?.name || 'Мир')}</h1></div>${pillHtml(st)}</div>`;
+    // внутри места: дом в разрезе (кукольный домик) или план-картинка
+    const dhMode = level ? (ui.dhModes?.[level.key] || dhDefault(level.key)) : '';
+    const dhSeg = level ? seg([['cut', `${icon('home')} В разрезе`], ['plan', `${icon('map')} План`]], dhMode, 'map-dh') : '';
+    if (level && dhMode === 'cut') {
+        let house = '';
+        try { house = dollhouseHtml(level.key); } catch (e) { console.warn('[Life] домик', e); house = `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; }
+        return `${head}${dhSeg}${house}`;
+    }
+    let homeKey = '';
+    try { homeKey = dhHomeKey(); } catch { /* */ }
     const regs = !level ? `<div class="lf-chips">
+        ${homeKey ? `<button class="lf-chip" data-act="map-home" data-key="${esc(homeKey)}">${icon('home')} Дом</button>` : ''}
         <button class="lf-chip" data-act="atlas">${icon('layers')} Атлас</button>
         ${s.regions.map(r => `<button class="lf-chip${r.id === region?.id ? ' on' : ''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}${r.needsMap ? ' •' : ''}</button>`).join('')}
     </div>` : '';
@@ -2042,7 +2054,7 @@ function renderMap() {
             </div>
         </div>`;
 
-    return `${head}${regs}${mapBox}
+    return `${head}${regs}${level ? dhSeg : ''}${mapBox}
     ${selLoc ? placeCardHtml(selLoc, { inline: true }) : ''}
     ${!level && wl.length ? (() => { try { return whoisHtml(wl); } catch { return ''; } })() : ''}
     ${img ? `<div class="lf-actions">
@@ -3249,6 +3261,8 @@ async function onClick(ev) {
             break;
         }
         case 'map-up': ui.mapStack.pop(); ui.editPins = false; ui.sel = ''; render(); break;
+        case 'map-dh': { const lv = mapLevel(); if (lv) { ui.dhModes = { ...(ui.dhModes || {}), [lv.key]: el.dataset.v }; ui.editPins = false; } render(); break; }
+        case 'map-home': { const k = el.dataset.key; if (k) { ui.mapStack = [k]; ui.dhModes = { ...(ui.dhModes || {}), [k]: 'cut' }; ui.sel = ''; ui.editPins = false; ui.atlas = false; } render(); break; }
         case 'inside': ui.mapStack.push(el.dataset.key); ui.tab = 'map'; ui.editPins = false; ui.sel = ''; ui.atlas = false; closeSheet(); render(); break;
         case 'edit-pins': ui.editPins = !ui.editPins; ui.placing = null; render(); break;
         case 'placing': ui.placing = el.dataset.key; ui.placingRaw = el.dataset.loc; render(); toast('info', 'Теперь тапни точку на карте', '✦ Life', { timeOut: 1800 }); break;
@@ -4010,6 +4024,8 @@ jQuery(async () => {
     hubMods.push({ pre: 'st-', click: stageClick, label: 'Мизансцена' });
     initArm(extApi);
     hubMods.push({ pre: 'arm-', click: armClick, label: 'Рука' });
+    initDollhouse({ ...extApi, mapLevelKey: () => mapLevel()?.key || '', goRoom: (raw, who) => goTravel(raw, { who: (who || []).map(n => horaeName(n, worldState())), chapter: false }) });
+    hubMods.push({ pre: 'dh-', click: dhClick, label: 'Домик' });
     addRecs(armRecs);
     try {
         globalThis.LifeBridge.register({
