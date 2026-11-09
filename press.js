@@ -12,6 +12,7 @@ import { gazetteHtml } from './plates.js';
 import { fameLines } from './hero.js';
 import { storyYear } from './era.js';
 import { canonText } from './canon.js';
+import { heroesDigest } from './heroes.js';
 
 let A = null;
 export function initPress(api) { A = api; }
@@ -52,6 +53,7 @@ function digest(kind) {
         `Дата в мире: ${[A.weekday(st.timestamp?.story_date), st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(', ') || 'не записана'}. Где сейчас герои: ${st.scene?.location || '—'}.`,
         `Персонажи истории: ${A.castNames(st).join(', ')}.`,
         fame.length ? `Кто кем известен публике${year ? ` в ${year}` : ''} (пиши о людях только так, как их знает публика; кого не узнают — того пресса не знает в лицо; «мёртвого» для мира — оплакивают, а не видят на улице):\n${fame.map(x => `- ${x}`).join('\n')}` : '',
+        (() => { try { return heroesDigest(); } catch { return ''; } })(),
         ev ? `Свежие события:\n${ev}` : '',
         chips ? `Что менялось в последних постах:\n${chips}` : '',
         moments ? `Моменты пар:\n${moments}` : '',

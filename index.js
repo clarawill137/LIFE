@@ -73,6 +73,7 @@ import { initHero, heroClick, heroInput, fameEnsure } from './hero.js';
 import { makeAskJson } from './ask.js';
 import { initArm, armPrompt, armChron, armAfterPost, armSceneHtml, armNote, armRecs, armClick, armCfgHtml } from './arm.js';
 import { initDollhouse, dollhouseHtml, dhClick, dhDefault, dhHomeKey } from './dollhouse.js';
+import { initHeroes, heroesPrompt, heroesChron, heroesAfterPost, heroesRecs, heroesHtml, heroesClick, heroesInput, heroNote } from './heroes.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
@@ -89,7 +90,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.45.0';
+const VERSION = '0.46.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -724,6 +725,12 @@ async function drawPicture(prompt, { aspect = '4:3', max = 1600, refs = [], pref
     try { const bn = bellyNote(Array.isArray(who) ? who : namesInText(prompt)); if (bn) prompt = `${prompt}\n${bn}`; } catch (e) { console.warn('[Life] живот по сроку', e); }
     // протез: в кадре без руки, если её сняли (или разбита)
     try { const an = armNote(Array.isArray(who) ? who : namesInText(prompt)); if (an) prompt = `${prompt}\n${an}`; } catch (e) { console.warn('[Life] рука', e); }
+    // костюм героя: как выглядит и его картинка рефом, если в кадре он в костюме
+    try {
+        const hn = heroNote(Array.isArray(who) ? who : namesInText(prompt), prompt);
+        if (hn.text) prompt = `${prompt}\n${hn.text}`;
+        if (hn.refs.length) { refs = [...refs]; for (const r of hn.refs) { if (refs.length >= 4) break; const d = await refData(r); if (d) refs.push(d); } }
+    } catch (e) { console.warn('[Life] костюм', e); }
     let mod;
     try { mod = await import(WARDROBE_DRAW); } catch { throw new Error('Рисую через Гардероб, а он не найден. Можно загрузить свою картинку.'); }
     const c = ctx();
@@ -2492,6 +2499,8 @@ function renderWorld() {
         try { body += `${sec('В чате')}${callCfgHtml()}`; } catch (e) { console.warn('[Life] звонок', e); }
     } else if (tab === 'rumors') {
         body = renderPress(renderRumors());
+    } else if (tab === 'heroes') {
+        body = (() => { try { return heroesHtml(); } catch (e) { console.warn('[Life] герои', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'time') {
         body = `<section class="lf-clock">
             <span class="lf-clock-d">${esc([weekday(st.timestamp?.story_date), st.timestamp?.story_date].filter(Boolean).join(', ') || 'дата не записана')}</span>
@@ -2504,7 +2513,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -4026,6 +4035,18 @@ jQuery(async () => {
     hubMods.push({ pre: 'arm-', click: armClick, label: 'Рука' });
     initDollhouse({ ...extApi, mapLevelKey: () => mapLevel()?.key || '', goRoom: (raw, who) => goTravel(raw, { who: (who || []).map(n => horaeName(n, worldState())), chapter: false }) });
     hubMods.push({ pre: 'dh-', click: dhClick, label: 'Домик' });
+    initHeroes({ ...extApi, faceRef });
+    hubMods.push({ pre: 'hr-', click: heroesClick, label: 'Герои' });
+    hubInputs.push(heroesInput);
+    addRecs(heroesRecs);
+    try {
+        globalThis.LifeBridge.register({
+            id: 'life-heroes',
+            prompt: (type) => heroesPrompt(type),
+            chron: (i) => heroesChron(i),
+            afterPost: (i, j) => heroesAfterPost(i, j),
+        });
+    } catch (e) { console.warn('[Life] герои', e); }
     addRecs(armRecs);
     try {
         globalThis.LifeBridge.register({

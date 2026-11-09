@@ -22,6 +22,15 @@ export const STATUS = {
     hidden: 'в тени',
     civil: 'не герой',
 };
+/** Как сказать модели: «<геройское имя> — погиб(ла), так считает мир». */
+export const STATUS_SAY = {
+    active: 'действует',
+    retired: 'в отставке',
+    dead: 'погиб(ла) — так считает мир',
+    wanted: 'в розыске',
+    hidden: 'в тени — о нём не знают',
+    civil: '',
+};
 
 function cfg() {
     const s = A.settings();
@@ -46,7 +55,8 @@ function migrate(c) {
 }
 
 function keyOf(c, name) { return Object.keys(c.list).find(k => A.sameName(k, name)) || ''; }
-function heroOf(name) { const c = cfg(); const k = keyOf(c, name); return k ? c.list[k] : null; }
+/** Запись героя (периоды, псевдоним, костюм, кто знает тайну, подвиги из лора) или null. */
+export function heroOf(name) { const c = cfg(); const k = keyOf(c, name); return k ? c.list[k] : null; }
 
 /** Кто в истории: персона и участники группы. */
 export function heroRoster() {
@@ -84,7 +94,7 @@ export function fameNow(name, y = undefined) {
     let yr = y;
     if (yr === undefined) { try { yr = storyYear(); } catch { yr = null; } }
     const r = rowFor(h, yr);
-    return r ? { alias: str(h.alias), plain: str(r.plain), suit: str(r.suit), status: str(r.status), from: r.from, to: r.to } : null;
+    return r ? { alias: str(h.alias), plain: str(r.plain), suit: str(r.suit), status: str(r.status), law: str(r.law), pop: Number.isFinite(Number(r.pop)) && r.pop !== '' ? Number(r.pop) : null, from: r.from, to: r.to } : null;
 }
 
 const unknown = (t) => !t || /^(не узна|никто не узна|не известн|неизвестн|—|-)/i.test(t);
@@ -96,7 +106,7 @@ export function fameLine(name, y = undefined) {
     const bits = [];
     bits.push(`в жизни: ${f.plain || 'не узнают'}`);
     if (f.suit) bits.push(`в костюме${f.alias ? ` (${f.alias})` : ''}: ${f.suit}`);
-    if (f.status && f.status !== 'civil' && STATUS[f.status]) bits.push(`для мира — ${STATUS[f.status]}`);
+    if (f.status && STATUS_SAY[f.status]) bits.push(`${f.alias || 'для мира'} — ${STATUS_SAY[f.status]}${f.law ? ` (${f.law})` : ''}`);
     return `${A.shortName(A.canonName(name))} — ${bits.join('; ')}`;
 }
 
@@ -113,7 +123,7 @@ export function famous(name) {
 
 // ───────────── сборка из лора ─────────────
 
-const FAME_RE = /солярис|костюм|маск|супергеро|герой|геро[ия]н|мстител|публи|узна|папарацци|пресс|сми|таблоид|газет|розыск|договор|заковиан|амнист|помил|погиб|похорон|мемориал|памятник|«?мёртв|мертв|воскрес|вернул|зимн[а-яё]* солдат|белый волк|winter soldier|white wolf|железн[а-яё]* человек|вдов|слава|знаменит|светск|псевдоним|под маской|личность/i;
+const FAME_RE = /костюм|маск|супергеро|герой|геро[ия]н|мстител|публи|узна|папарацци|пресс|сми|таблоид|газет|розыск|договор|амнист|помил|погиб|похорон|мемориал|памятник|мёртв|мертв|воскрес|вернул|слава|знаменит|светск|псевдоним|прозвищ|под маской|личность|суперсил|способност|броня|доспех/i;
 
 const SYSTEM = `Ты ведёшь лор длинной ролевой (фанфик по MCU, своя AU). Нужно: как публика — люди на улице, пресса — узнаёт каждого персонажа в разные годы истории.
 Правила:
@@ -124,10 +134,13 @@ const SYSTEM = `Ты ведёшь лор длинной ролевой (фанф
 На каждого — 1–5 периодов по порядку, без дыр и наложений; у последнего "to": "".
 plain — как узнают в обычной жизни (или «не узнают» и почему), suit — как узнают в костюме или геройском образе ("" если такого нет). 5–20 слов каждое, с живой реакцией людей (косятся, просят селфи, шепчутся, крестятся, плачут).
 status: active (действует) | retired (в отставке) | dead («мёртв» для мира) | wanted (в розыске) | hidden (в тени, о нём не знают) | civil (не герой).
-Ответь только JSON: {"heroes":[{"name":"имя как в списке","alias":"геройское имя или ''","eras":[{"from":2014,"to":2023,"plain":"…","suit":"…","status":"active"}]}]}`;
+law — что с ним по закону в эти годы (договор, розыск, помилование, амнистия), 3–12 слов, или "". pop — популярность у публики 0–100 (как у других Мстителей того времени), или "" если не на виду.
+Ещё на каждого: secret — true, если в какие-то годы лицо героя под маской публике неизвестно; knows — кто из персонажей знает эту тайну (по лору); suit — как выглядит костюм / геройский образ, 12–30 слов, или ""; feats — 0–5 подвигов на виду у людей по канону и лору: год, что сделал(а) (4–10 слов), как это видели люди (8–20 слов).
+Ответь только JSON: {"heroes":[{"name":"имя как в списке","alias":"геройское имя или ''","secret":false,"knows":[],"suit":"","eras":[{"from":2014,"to":2023,"plain":"…","suit":"…","status":"active","law":"","pop":70}],"feats":[{"year":2014,"t":"…","public":"…"}]}]}`;
 
 let busy = false;
 let tried = '';
+const SCHEMA = 2;
 
 async function collectInput(names) {
     const parts = [];
@@ -146,6 +159,8 @@ function cleanEras(list) {
         from: num(r?.from) ?? '', to: num(r?.to) ?? '',
         plain: str(r?.plain).slice(0, 220), suit: str(r?.suit).slice(0, 220),
         status: STATUS[str(r?.status)] ? str(r.status) : '',
+        law: str(r?.law).slice(0, 140),
+        pop: Number.isFinite(Number(r?.pop)) && str(r?.pop) !== '' ? Math.max(0, Math.min(100, Math.round(Number(r.pop)))) : '',
     })).filter(r => r.plain || r.suit || r.status);
     rows.sort((a, b) => (num(a.from) ?? -9999) - (num(b.from) ?? -9999));
     return rows.slice(0, 6);
@@ -168,13 +183,33 @@ export async function fameCollect({ force = false } = {}) {
             const who = names.find(x => A.sameName(x, A.canonName(str(h?.name))));
             if (!who) continue;
             const eras = cleanEras(h.eras);
-            if (!eras.length) continue;
             const k = keyOf(c, who) || who;
-            if (c.list[k]?.hand && !force) continue;
-            c.list[k] = { alias: str(h.alias).slice(0, 40), eras, hand: false, at: Date.now() };
+            const extra = {
+                secret: h.secret === true || h.secret === 'true',
+                knows: (Array.isArray(h.knows) ? h.knows : []).map(x => A.canonName(str(x))).filter(Boolean).slice(0, 12),
+                suitLook: str(h.suit).slice(0, 320),
+                feats: (Array.isArray(h.feats) ? h.feats : []).map(f => ({ year: num(f?.year) ?? '', t: str(f?.t).slice(0, 120), public: str(f?.public).slice(0, 220) })).filter(f => f.t).slice(0, 6),
+            };
+            const cur = c.list[k];
+            if (cur?.hand && !force) {
+                // правлено руками — периоды не трогаю, дописываю только пустое
+                if (!cur.suitLook && extra.suitLook) cur.suitLook = extra.suitLook;
+                if (!cur.knows?.length && extra.knows.length) cur.knows = extra.knows;
+                if (!cur.feats?.length && extra.feats.length) cur.feats = extra.feats;
+                if (cur.secret === undefined) cur.secret = extra.secret;
+                continue;
+            }
+            if (!eras.length) continue;
+            c.list[k] = { ...(cur || {}), alias: str(h.alias).slice(0, 40), eras, hand: false, legacy: false, at: Date.now(), ...extra, suitImg: cur?.suitImg || '' };
+            delete c.list[k].legacy;
+            // что правила в «Героях» руками — оставить
+            if (cur?.suitHand) c.list[k].suitLook = cur.suitLook;
+            if (cur?.knowsHand) c.list[k].knows = cur.knows;
+            if (cur?.featsHand) c.list[k].feats = cur.feats;
             n++;
         }
         c.sig = tried;
+        c.schema = SCHEMA;
         c.at = Date.now();
         A.saveSettings();
         try { A.updatePrompt(); } catch { /* */ }
@@ -188,12 +223,13 @@ export async function fameEnsure() {
     const c = cfg();
     const names = heroRoster();
     if (!names.length) return;
-    const need = names.some(n => { const h = heroOf(n); return !h || (h.legacy && !h.hand); });
+    const stale = c.schema !== SCHEMA; // 0.46: из лора берутся ещё тайна, кто знает, костюм, закон, слава, подвиги
+    const need = stale || names.some(n => { const h = heroOf(n); return !h || (h.legacy && !h.hand); });
     if (!need) return;
     const { text, lore } = await collectInput(names).catch(() => ({ text: '', lore: false }));
     if (!lore) return;
     const sig = A.hash(text);
-    if (sig === tried || (sig === c.sig && !names.some(n => !heroOf(n)))) return;
+    if (sig === tried || (!stale && sig === c.sig && !names.some(n => !heroOf(n)))) return;
     tried = sig;
     try { await fameCollect(); } catch (e) { console.warn('[Life] кого как узнают', e); }
 }
@@ -215,6 +251,7 @@ function eraRow(name, r, k, now) {
         </div>
         <input type="text" data-in="hero-f" data-name="${n}" data-k="${k}" data-f="plain" value="${esc(r.plain || '')}" placeholder="в жизни: как узнают (пусто — не узнают)">
         <input type="text" data-in="hero-f" data-name="${n}" data-k="${k}" data-f="suit" value="${esc(r.suit || '')}" placeholder="в костюме / геройском образе (если есть)">
+        <input type="text" data-in="hero-f" data-name="${n}" data-k="${k}" data-f="law" value="${esc(r.law || '')}" placeholder="закон: договор, розыск, помилование (если есть)">
     </div>`;
 }
 
@@ -263,7 +300,7 @@ export function heroInput(el) {
         const r = h.eras[Number(el.dataset.k)];
         if (!r) return true;
         const k = el.dataset.f;
-        r[k] = k === 'from' || k === 'to' ? (num(el.value) ?? '') : str(el.value).slice(0, 220);
+        r[k] = k === 'from' || k === 'to' ? (num(el.value) ?? '') : str(el.value).slice(0, k === 'law' ? 140 : 220);
     }
     h.hand = true;
     delete h.legacy;
