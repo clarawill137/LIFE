@@ -30,6 +30,9 @@ import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick } from '.
 import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
 import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageClick } from './stage.js';
 import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
+import { initPush, push as pushBanner } from './push.js';
+import { initGraph, graphHtml, graphClick } from './graph.js';
+import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -42,7 +45,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.26.0';
+const VERSION = '0.27.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2163,6 +2166,7 @@ function renderRelations(who, st) {
     }
     const other = ui.pair;
     const tab = ui.relTab;
+    if (tab === 'map') return `<div class="lf-pagehead"><h1>${icon('rings', 'h')} Отношения</h1></div>${seg([['common', 'Общее'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', 'Трое'], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}${(() => { try { return graphHtml(who); } catch (e) { console.warn('[Life] карта связей', e); return ''; } })()}`;
     if (!other && tab !== 'tri') return `<div class="lf-empty small">Не с кем строить отношения.</div>`;
     const pp = pairs[pairKey(who, other)];
     const mine = pp ? relSide(pp, who) : scaleBase(), theirs = pp ? relSide(pp, other) : scaleBase();
@@ -2206,7 +2210,7 @@ function renderRelations(who, st) {
         <h2>${esc(A)} <i>×</i> ${esc(B)}</h2>
     </section>
     ${bars}` : ''}
-    ${seg([['common', 'Общее'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
+    ${seg([['common', 'Общее'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
     ${body}`;
 }
 
@@ -2327,7 +2331,7 @@ async function runAutopay() {
     if (!(await bank())) return;
     const paid = autopay();
     if (paid.length) {
-        toast('info', paid.map(p => `${esc(p.name)} ${esc(p.sum)}`).join('<br>'), '✦ Списано по счетам', { timeOut: 6000 });
+        pushBanner({ app: 'Банк', icon: 'wallet', tint: '#9fc79a', title: 'Списано по счетам', text: paid.map(p => `${p.name} ${p.sum}`).join(' · '), onTap: () => controlApi.openMoney(), ms: 7000 });
         if (ui.open) renderSoon();
     }
 }
@@ -2339,7 +2343,7 @@ function renderWorld() {
     const tab = ui.worldTab;
     let body = '';
     if (tab === 'days') {
-        body = (() => { try { return daysHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
+        body = (() => { try { return daysHtml() + recapCfgHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
     } else if (tab === 'cal') {
         body = (() => { try { return calHtml(); } catch (e) { console.warn('[Life] календарь', e); return ''; } })();
     } else if (tab === 'events') {
@@ -3614,6 +3618,7 @@ function registerSlash() {
                     return '';
                 }
                 if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
+                if (v === 'recap' || v === 'ранее') { showRecap({}); return ''; }
                 if (v === 'twist' || v.startsWith('twist ') || v.startsWith('твист')) {
                     const arg = v.split(/\s+/).slice(1).join(' ');
                     if (arg === 'off' || arg === 'нет') { clearTwist(); toast('info', 'Твист отменён', '✦ Твист'); return ''; }
@@ -3653,6 +3658,7 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
+    setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
@@ -3763,6 +3769,12 @@ jQuery(async () => {
     hubInputs.push(skipInput);
     initStage(extApi);
     initWhois({ ...extApi, peopleList });
+    initPush(extApi);
+    initGraph({ ...extApi, peopleList, npcImg, horaeRelationships });
+    initRecap({ ...extApi, daysBrief, closeHub, chapterCover });
+    hubMods.push({ pre: 'gr-', click: graphClick, label: 'Карта связей' }, { pre: 'rc-', click: recapClick, label: 'Ранее в…' });
+    hubInputs.push(recapInput);
+    setTimeout(() => { try { recapMaybe('load'); } catch (e) { console.warn('[Life] ранее в', e); } }, 3500);
     hubMods.push({ pre: 'st-', click: stageClick, label: 'Мизансцена' });
     try {
         globalThis.LifeBridge.register({
@@ -3859,6 +3871,7 @@ jQuery(async () => {
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
     if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, (id) => {
         ui.focus = 'last'; later();
+        try { recapSeen(); } catch { /* */ }
         // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
         try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
     });

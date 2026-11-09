@@ -4,6 +4,7 @@
 
 import { storyNow, zrVisits } from './zr.js';
 import { moneyView } from './money.js';
+import { push, pushDay } from './push.js';
 
 let A = null;
 export function initCal(api) { A = api; }
@@ -265,7 +266,23 @@ export function calAfterPost(i, j) {
     }
     if (c.list.length > 300) c.list.splice(0, c.list.length - 300);
     A.saveMeta();
-    if (added.length) A.toast('info', added.map(e => `${esc(dayLabel(fromYmd(e.d)))}${e.time ? ` ${e.time}` : ''} — ${esc(e.t)}`).join('<br>'), '📅 В календарь', { timeOut: 3500, escapeHtml: false });
+    if (added.length) push({ app: 'Календарь', icon: 'calendar', tint: '#e7c77a', title: added.length > 1 ? `Записано: ${added.length}` : 'Записано', text: added.map(e => `${dayLabel(fromYmd(e.d))}${e.time ? ` ${e.time}` : ''} — ${e.t}`).join(' · '), onTap: () => { A.ui.worldTab = 'cal'; A.openHub('world'); } });
+    dayCheck();
+}
+
+/** В истории наступил новый день — напоминание, что сегодня по календарю. */
+function dayCheck() {
+    const t0 = today();
+    if (!t0) return;
+    const d = ymd(t0);
+    const c = M();
+    if (c.seenDay === d) return;
+    const first = !c.seenDay;
+    c.seenDay = d;
+    A.saveMeta();
+    if (first) return;
+    const list = eventsBetween(d, d).filter(e => e.st === 'open').map(e => `${e.time ? `${e.time} ` : ''}${evLine(e)}`);
+    if (list.length) pushDay(list, `Сегодня, ${WDF[t0.getDay()]} ${t0.getDate()} ${MON[t0.getMonth()]}`);
 }
 
 /** Отметить события (перемотка): done/cancel. */

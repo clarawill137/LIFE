@@ -5,6 +5,7 @@
 // Позвать можно и самой: Life → Сцена → «Позвать в сцену» — любого из группы, кого нет рядом.
 // В его ход модель знает, как именно он входит (звонок, сообщения, приезд); дальше — как обычно.
 
+import { push } from './push.js';
 import { icon } from './icons.js';
 import { agendaKnocks, agendaEventStatus, agendaOf } from './agenda.js';
 
@@ -131,6 +132,7 @@ export function knockClick(act, el) {
 export function paintKnock() {
     let bar = document.getElementById('lf-knock');
     const list = knocks();
+    pushNew(list);
     const a = knockActive();
     const form = document.getElementById('form_sheld');
     if (!form || (!list.length && !(a && !a.used))) { bar?.remove(); return; }
@@ -164,6 +166,29 @@ export function paintKnock() {
             <button class="lf-kn-b go" data-act="kn-in" data-id="${esc(x.id)}" title="Ход переходит к нему">${icon(h.icon)}<span>Пустить</span></button>
         </div>
     </div>`;
+}
+
+/** Новый стук — ещё и баннером сверху, как входящий на айфоне (один раз на стук). */
+function pushNew(list) {
+    if (!list.length) return;
+    const k = M();
+    if (!Array.isArray(k.pushed)) k.pushed = [];
+    let n = 0;
+    for (const y of list) {
+        if (k.pushed.includes(y.id)) continue;
+        k.pushed.push(y.id);
+        n++;
+        const h = HOW[y.how] || HOW.call;
+        try {
+            push({
+                app: y.how === 'text' ? 'Сообщения' : y.how === 'come' ? 'Домофон' : 'Телефон', icon: h.icon, img: A.avatarUrl?.(y.who) || '',
+                title: short(y.who), text: `${h.want}${y.why ? ` — ${y.why}` : ''}`,
+                onTap: () => document.getElementById('lf-knock')?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
+            });
+        } catch (e) { console.warn('[Life] пуш стука', e); }
+    }
+    if (k.pushed.length > 60) k.pushed.splice(0, k.pushed.length - 60);
+    if (n) A.saveMeta();
 }
 
 /** Life → Сцена: позвать в сцену любого из группы, кого нет рядом. */
