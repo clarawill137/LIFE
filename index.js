@@ -69,6 +69,8 @@ import { simRecs } from './sim.js';
 import { innerRecs } from './inner.js';
 import { replyRecs } from './reply.js';
 import { initCanon, canonEnsure, canonClick } from './canon.js';
+import { initHero, heroClick, heroInput, fameEnsure } from './hero.js';
+import { makeAskJson } from './ask.js';
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
@@ -85,7 +87,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.42.0';
+const VERSION = '0.43.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -941,6 +943,9 @@ async function askModel(messages, maxTokens) {
     if (a.thought || b.thought) throw new Error('пустой ответ Летописца: всё ушло в размышления — прибавь токенов (Мир → ⚙)');
     throw new Error(alt !== p ? 'пустой ответ Летописца — и у запасного профиля' : 'пустой ответ Летописца дважды — похоже, фильтр модели; помогает запасной профиль (Мир → ⚙)');
 }
+
+// Летописцу — за JSON с переспросом на обрезанный/битый ответ (ask.js)
+const askJson = makeAskJson({ ask: (m, t) => askModel(m, t), parse: (t) => extractJson(t), base: () => Number(settings().chron.tokens) || 4000 });
 
 async function waitHorae(i) {
     if (!horaeOn()) return;
@@ -3799,6 +3804,7 @@ function onChatChanged() {
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
+    setTimeout(() => { try { fameEnsure(); } catch (e) { console.warn('[Life] кого как узнают', e); } }, 16000);
     setTimeout(() => { try { daysAfterPost(); } catch (e) { console.warn('[Life] дни', e); } }, 20000);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
@@ -3855,7 +3861,7 @@ const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: 
 const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
-    fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
+    fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
@@ -3943,7 +3949,11 @@ jQuery(async () => {
     initShards(extApi);
     hubMods.push({ pre: 'trg-', click: trigClick, label: 'Триггеры' }, { pre: 'shd-', click: shardsClick, label: 'Память' });
     initHabits(extApi);
+    initHero(extApi);
     initCrowd(extApi);
+    hubMods.push({ pre: 'hero-', click: heroClick, label: 'Кого как узнают' });
+    hubInputs.push(heroInput);
+    setTimeout(() => { try { fameEnsure(); } catch (e) { console.warn('[Life] кого как узнают', e); } }, 18000);
     hubMods.push({ pre: 'hab-', click: habitsClick, label: 'Привычки' }, { pre: 'crw-', click: crowdClick, label: 'Массовка' });
     initStones(extApi);
     hubMods.push({ pre: 'kmn-', click: stonesClick, label: 'Камни' });

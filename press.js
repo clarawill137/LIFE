@@ -2,10 +2,16 @@
 // Текст пишет модель (что видно со стороны: папарацци, утечки, домыслы — от драмы до абсурда),
 // вёрстка — своя на каждый вид, фото — через рисовалку с лицами. «Постер» — весь выпуск одной картинкой.
 // Выпуск можно «пустить в историю»: модель узнает, что это сейчас пишут, и кто-то в сцене может наткнуться.
+// У каждого вида своя тема (ТВ — новость большого масштаба, таблоид — личная жизнь, газета — главное событие и светская
+// хроника вторым планом) и своя короткая схема JSON — только поля его вёрстки; героев пресса знает так, как их знает
+// публика в этот год (hero.js). Ответ обрезался или не разобрался — переспрос с запасом токенов, в тосте — причина.
 
 import { icon } from './icons.js';
 import { chatStyle, styleText } from './shots.js';
 import { gazetteHtml } from './plates.js';
+import { fameLines } from './hero.js';
+import { storyYear } from './era.js';
+import { canonText } from './canon.js';
 
 let A = null;
 export function initPress(api) { A = api; }
@@ -28,59 +34,119 @@ let open = ''; // id выпуска, развёрнутого полностью
 
 // ───────────── что знают СМИ ─────────────
 
-function digest() {
+function digest(kind) {
     const st = A.worldState();
     const ev = A.horaeEvents().slice(-20).map(e => `- ${[e.timestamp?.story_date, e.event?.summary].filter(Boolean).join(': ')}`).join('\n');
     const store = A.chronStore();
     const chips = Object.entries(store).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).slice(0, 16).map(([, e]) => (e.chips || []).join('; ')).filter(Boolean).reverse().join('\n');
     const moments = Object.values(A.relationsState()).flatMap(p => (p.moments || []).slice(-2).map(x => `${A.shortName(p.a)} и ${A.shortName(p.b)}: ${x.text}`)).slice(-8).join('\n');
     const secrets = A.secretsState().slice(-6).map(x => `- ${x.text}`).join('\n');
-    const prev = list().slice(-4).map(p => `- ${p.data?.outlet || ''}: ${p.data?.headline || ''}`).join('\n');
+    const prev = list().filter(p => p.kind === kind).slice(-4).map(p => `- ${p.data?.outlet || ''}: ${p.data?.headline || ''}`).join('\n');
+    const others = list().filter(p => p.kind !== kind).slice(-3).map(p => `- ${(PRESS_KINDS[p.kind] || PRESS_KINDS.tabloid).label}, «${p.data?.outlet || ''}»: ${p.data?.headline || ''}`).join('\n');
+    let fame = [];
+    try { fame = fameLines(); } catch { /* */ }
+    let year = null;
+    try { year = storyYear(); } catch { /* */ }
+    const canon = (kind === 'tv' || kind === 'paper' || kind === 'gazette') ? canonText() : '';
     return [
         `Дата в мире: ${[A.weekday(st.timestamp?.story_date), st.timestamp?.story_date, st.timestamp?.story_time].filter(Boolean).join(', ') || 'не записана'}. Где сейчас герои: ${st.scene?.location || '—'}.`,
         `Персонажи истории: ${A.castNames(st).join(', ')}.`,
+        fame.length ? `Кто кем известен публике${year ? ` в ${year}` : ''} (пиши о людях только так, как их знает публика; кого не узнают — того пресса не знает в лицо; «мёртвого» для мира — оплакивают, а не видят на улице):\n${fame.map(x => `- ${x}`).join('\n')}` : '',
         ev ? `Свежие события:\n${ev}` : '',
         chips ? `Что менялось в последних постах:\n${chips}` : '',
         moments ? `Моменты пар:\n${moments}` : '',
         secrets ? `ТАЙНЫ — прессе неизвестны; можно только нелепый слух рядом с правдой, без точных деталей:\n${secrets}` : '',
-        prev ? `Прошлые выпуски (не повторяй заголовки):\n${prev}` : '',
+        canon ? `Что происходит в мире этой эпохи (канон; для новостей большого масштаба):\n${canon}` : '',
+        prev ? `Прошлые выпуски этого вида (не повторяй ни темы, ни заголовки):\n${prev}` : '',
+        others ? `Другие издания недавно писали (свою тему не копируй с них):\n${others}` : '',
     ].filter(Boolean).join('\n\n');
 }
 
+// поля JSON — у каждого вида только те, что берёт его вёрстка (иначе длинные виды не влезают и обрываются)
+const F = {
+    outlet: () => '"outlet":"название издания под этот мир, эпоху и город"',
+    slogan: () => '"slogan":"девиз мелким шрифтом"',
+    kicker: () => '"kicker":"2–3 слова КАПСОМ над главным («СРОЧНО», «ЭКСКЛЮЗИВ»)"',
+    headline: () => '"headline":"главный заголовок до 60 знаков"',
+    deck: () => '"deck":"подзаголовок, 1 предложение"',
+    lead: (n) => `"lead":"${n}"`,
+    bars: (n) => `"bars":["${n}"]`,
+    photos: (n) => `"photos":[${n} шт.: {"who":["точные имена персонажей в кадре"],"prompt":"English, 30-55 words: what the camera caught — who BY NAME ONLY (never describe faces, hair, eye or skin colour), where, action, clothes as in the story, light","caption":"подпись по-русски, со временем: «22:13 — выходит из студии»"}]`,
+    tweet: (replies) => `"tweet":{"author":"кто пишет","handle":"@ник","text":"пост до 200 знаков","reposts":"18,7K","quotes":"2,3K","likes":"97,6K"${replies ? ',"replies":[до 2: {"author":"","handle":"@","text":"коротко"}]' : ''}}`,
+    dossier: () => '"dossier":[1–2: {"name":"имя героя","facts":["4–5 фактов о нём «по версии редакции», один нелепый"]}]',
+    poll: () => '"poll":{"q":"вопрос опроса","options":[3–4: {"t":"вариант","p":42}]}',
+    rumor: () => '"rumor":"слух дня, 1–2 предложения"',
+    news: (n) => `"news":["${n} коротких новостей одной строкой"]`,
+    quotes: (n) => `"quotes":[${n}: {"who":"кто (прохожая, эксперт, бариста)","text":"что сказал"}]`,
+    ticker: () => '"ticker":["5–7 строк бегущей строки"]',
+    coverlines: () => '"coverlines":["4–6 анонсов на обложку"]',
+    stamp: () => '"stamp":"штамп поверх («ЭКСКЛЮЗИВ ТОЛЬКО У НАС!», «TOP SECRET»)"',
+    cast: () => '"cast":["1–2 точных имени героев — лица постера"]',
+};
+
+const KIND = {
+    tabloid: {
+        topic: 'ТЕМА — личная жизнь героев: отношения, свидания, ссоры, ревность, кто с кем, беременность и дети, наряды, папарацци. Подача — от драмы и романтики до полного абсурда («хвост застрахован на 8 000 000», «почему тогда свечи?»): смешно, живо, с фактами из истории, но глазами чужих людей.',
+        fields: [F.outlet(), F.slogan(), F.kicker(), F.headline(), F.deck(), F.lead('2–3 предложения'), F.bars('4–5 заголовков-плашек от драмы к абсурду: «СРОЧНО: …», «ИНСАЙДЕР: …»'), F.photos(3), F.tweet(true), F.dossier(), F.poll(), F.rumor(), F.news('3–4'), F.stamp()],
+        note: 'Фото — 3: главный кадр и два снимка «из засады». Проценты опроса в сумме 100.',
+        need: (j) => str(j.headline) && (arr(j.bars).length || str(j.lead)),
+    },
+    paper: {
+        topic: 'ТЕМА передовицы — самое значимое публичное событие истории за последние дни: что случилось в городе и в мире вокруг героев, официальные заявления, бизнес, политика и законы, супергеройские происшествия и их последствия. Во втором плане («Коротко», «Также в номере») — светская хроника: отношения, беременность, громкие появления — сухим газетным тоном. Факты, источники, цитаты; никакой желтизны и бытовых мелочей.',
+        fields: [F.outlet(), F.slogan(), F.kicker(), F.headline(), F.deck(), F.lead('5–7 предложений, газетный стиль'), F.photos('1–2'), F.quotes('2–3'), F.news('3–5'), F.rumor(), F.bars('3–4 заголовка других материалов номера')],
+        note: '',
+        need: (j) => str(j.headline) && str(j.lead),
+    },
+    gazette: {
+        topic: 'ТЕМА передовицы — самое значимое публичное событие истории: город, мир, герои глазами газеты того времени; три заметки — новости помельче, одна может быть светской хроникой. Язык и реалии — эпохи этой даты.',
+        fields: [F.outlet(), F.headline(), F.deck(), F.lead('5–7 предложений, газетный стиль эпохи'), F.news('ровно 3')],
+        note: '',
+        need: (j) => str(j.headline) && str(j.lead),
+    },
+    glossy: {
+        topic: 'ТЕМА обложки — звёздная жизнь героев: стиль, пара, отношения, беременность, «интервью из близкого окружения», красивая жизнь и громкие появления.',
+        fields: [F.outlet(), F.kicker(), F.headline(), F.coverlines(), F.photos(1), F.stamp(), F.lead('2–3 предложения — анонс главного материала'), F.quotes('1–2')],
+        note: 'Фото — 1: обложечная фотосессия героя или пары.',
+        need: (j) => str(j.headline),
+    },
+    tv: {
+        topic: 'ТЕМА — главная новость дня масштаба города или мира: супергеройские события и их последствия, катастрофы, угрозы, политика и законы, заявления властей и корпораций, крупные события этой эпохи по канону. Если в истории тихо — главная мировая новость этой даты, по возможности связанная с героями. НЕ сплетни про личную жизнь и не бытовые мелочи (кто что купил в магазине) — это таблоидам. Тон — срочный, новостной.',
+        fields: [F.outlet().replace('издания', 'телеканала'), F.kicker(), F.headline(), F.lead('2–3 предложения — что говорит ведущий'), F.ticker(), F.quotes('2–3 (синхроны: очевидцы, эксперты, официальные лица)'), F.bars('3–4 сюжета дальше в выпуске'), F.photos(1)],
+        note: 'Фото — 1: стоп-кадр репортажа с места события.',
+        need: (j) => str(j.headline) && (str(j.lead) || arr(j.ticker).length),
+    },
+    poster: {
+        topic: 'ТЕМА — самая громкая история о героях прямо сейчас: сенсация для коллажа.',
+        fields: [F.outlet(), F.kicker(), F.headline(), F.bars('4 громких заголовка'), F.tweet(false), F.poll(), F.rumor(), F.cast()],
+        note: '',
+        need: (j) => str(j.headline),
+    },
+};
+
 const PRESS_SYSTEM = (kind) => `Ты — редакция СМИ внутри мира ролевой истории на русском (AU по Marvel). Пишешь выпуск: ${PRESS_KINDS[kind].what}.
-Пресса знает только то, что видно со стороны: где героев видели на людях, фото папарацци, утечки, официальные заявления, соцсети. Остальное домысливает, путает и раздувает. Тайны истории — никогда точно; максимум нелепый слух.
-Подача — от драмы и романтики до полного абсурда (как в жёлтой прессе: «хвост застрахован на 8 000 000», «почему тогда свечи?»). Смешно, живо, с фактами из истории, но глазами чужих людей.
-Издание придумай сам — название под этот мир, эпоху и город (в 1940-е — газеты и радио, без интернета: тогда tweet = null). Даты — по миру истории.
-Ответь только JSON:
-{"outlet":"название","slogan":"девиз мелким шрифтом","kicker":"2–3 слова КАПСОМ над главным («ПРОПАЛА ЗВЕЗДА:», «СРОЧНО», «ЭКСКЛЮЗИВ»)","headline":"главный заголовок до 60 знаков","deck":"подзаголовок, 1 предложение","lead":"главный текст: ${kind === 'paper' || kind === 'gazette' ? '5–7 предложений, газетный стиль' : kind === 'tv' ? '2–3 предложения — что говорит ведущий' : '2–3 предложения'}",
-"bars":["4–5 заголовков-плашек от драмы к абсурду, «СРОЧНО: …», «ИНСАЙДЕР: …»"],
-"photos":[{"who":["точные имена персонажей в кадре"],"prompt":"English, 30-55 words: what the camera caught — who BY NAME ONLY (never describe faces, hair, eye or skin colour), where, action, clothes as in the story, light","caption":"подпись под фото по-русски, со временем: «22:13 — выходит из студии»"}],
-"tweet":{"author":"кто пишет","handle":"@ник","text":"пост до 200 знаков","reposts":"18,7K","quotes":"2,3K","likes":"97,6K","replies":[{"author":"","handle":"@","text":"коротко"}]},
-"dossier":[{"name":"имя героя","facts":["4–5 фактов о нём «по версии редакции», один нелепый"]}],
-"poll":{"q":"вопрос опроса","options":[{"t":"вариант","p":42}]},
-"rumor":"слух дня, 1–2 предложения",
-"news":["4–5 коротких новостей одной строкой"],
-"quotes":[{"who":"кто (прохожая, эксперт, бариста)","text":"что сказал"}],
-"ticker":["5–7 строк бегущей строки"],
-"coverlines":["4–6 анонсов на обложку"],
-"stamp":"штамп поверх («ЭКСКЛЮЗИВ ТОЛЬКО У НАС!», «TOP SECRET»)"}
-Фото: ${kind === 'glossy' ? '1 — обложечная фотосессия героя или пары' : kind === 'poster' || kind === 'gazette' ? '0' : kind === 'tabloid' ? '3 — главный кадр и два снимка «из засады»' : '1–2'}. Опрос — 3–4 варианта, проценты в сумме 100. Без пошлости.`;
+${KIND[kind].topic}
+Пресса знает только то, что видно со стороны: где героев видели на людях, фото папарацци, утечки, официальные заявления, соцсети. Остальное домысливает, путает и раздувает. Тайны истории — никогда точно; кто под маской — пресса не знает. О людях — только так, как их знает публика в этот год (список ниже).
+Издание придумай сам — под этот мир, эпоху и город (в 1940-е — газеты и радио, без интернета). Даты — по миру истории.
+Ответь только JSON, без пояснений — ровно эти поля:
+{${KIND[kind].fields.join(',\n')}}
+${KIND[kind].note} Без пошлости.`;
 
 async function generate(kind) {
-    const out = await A.askModel([{ role: 'system', content: PRESS_SYSTEM(kind) }, { role: 'user', content: digest() }], 2600);
-    const j = A.extractJson(out);
-    if (!j || !str(j.headline)) throw new Error('редакция ответила пусто');
+    const k = KIND[kind] ? kind : 'tabloid';
+    const j = await A.askJson([{ role: 'system', content: PRESS_SYSTEM(k) }, { role: 'user', content: digest(k) }], 4000, { what: 'Выпуск', check: (x) => !!KIND[k].need(x) });
     const st = A.worldState();
     const n = (v, max) => str(v).slice(0, max);
     const poll = j.poll && arr(j.poll.options).length ? { q: n(j.poll.q, 120), options: arr(j.poll.options).slice(0, 4).map(o => ({ t: n(o?.t, 60), p: Math.max(0, Math.min(100, Math.round(Number(o?.p) || 0))) })).filter(o => o.t) } : null;
     if (poll) { const sum = poll.options.reduce((a, o) => a + o.p, 0) || 1; poll.options.forEach(o => { o.p = Math.round(o.p * 100 / sum); }); }
     const tw = j.tweet && str(j.tweet.text) ? { author: n(j.tweet.author, 40), handle: n(j.tweet.handle, 30), text: n(j.tweet.text, 280), reposts: n(j.tweet.reposts, 10), quotes: n(j.tweet.quotes, 10), likes: n(j.tweet.likes, 10), replies: arr(j.tweet.replies).slice(0, 3).map(r => ({ author: n(r?.author, 30), handle: n(r?.handle, 30), text: n(r?.text, 120) })).filter(r => r.text) } : null;
+    const maxPh = k === 'tabloid' ? 3 : k === 'gazette' || k === 'poster' ? 0 : k === 'paper' ? 2 : 1;
     return {
         outlet: n(j.outlet, 50) || 'Сплетни 24/7', slogan: n(j.slogan, 80), kicker: n(j.kicker, 40), headline: n(j.headline, 90), deck: n(j.deck, 200), lead: n(j.lead, 1400),
         bars: arr(j.bars).map(x => n(x, 120)).filter(Boolean).slice(0, 5),
-        photos: arr(j.photos).filter(p => str(p?.prompt).length > 15).slice(0, kind === 'tabloid' ? 3 : kind === 'gazette' || kind === 'poster' ? 0 : 2).map(p => ({ who: arr(p.who).map(A.canonName).filter(Boolean).slice(0, 3), prompt: n(p.prompt, 600), caption: n(p.caption, 90), img: '' })),
+        photos: arr(j.photos).filter(p => str(p?.prompt).length > 15).slice(0, maxPh).map(p => ({ who: arr(p.who).map(A.canonName).filter(Boolean).slice(0, 3), prompt: n(p.prompt, 600), caption: n(p.caption, 90), img: '' })),
         tweet: tw,
         dossier: arr(j.dossier).slice(0, 2).map(d => ({ name: n(d?.name, 40), facts: arr(d?.facts).map(x => n(x, 80)).filter(Boolean).slice(0, 5) })).filter(d => d.name && d.facts.length),
+        cast: arr(j.cast).map(x => A.canonName(n(x, 40))).filter(Boolean).slice(0, 2),
         poll, rumor: n(j.rumor, 260),
         news: arr(j.news).map(x => n(x, 120)).filter(Boolean).slice(0, 5),
         quotes: arr(j.quotes).slice(0, 3).map(q => ({ who: n(q?.who, 40), text: n(q?.text, 160) })).filter(q => q.text),
@@ -114,7 +180,7 @@ async function drawPhoto(item, k) {
 
 async function drawPoster(item) {
     const d = item.data;
-    const cast = [...new Set([...(d.dossier || []).map(x => A.canonName(x.name)), ...A.castNames(A.worldState())])].filter(Boolean).slice(0, 2);
+    const cast = [...new Set([...(d.cast || []), ...(d.dossier || []).map(x => A.canonName(x.name)), ...A.castNames(A.worldState())])].filter(Boolean).slice(0, 2);
     const { refs, note } = await faces(cast);
     const lines = [
         `Create a horizontal 16:9 poster in a fake breaking news / tabloid scandal style for the outlet «${d.outlet}».`,
@@ -307,6 +373,7 @@ export function renderPress(rumors = '') {
     const kinds = Object.entries(PRESS_KINDS).map(([k, x]) => `<button class="lf-pr-kind${busy.has(k) ? ' wait' : ''}" data-act="press-make" data-k="${k}" title="${esc(x.what)}">${busy.has(k) ? '<i class="lf-det-sh"></i>' : icon(x.ic)}<b>${esc(x.label)}</b><small>${busy.has(k) ? 'вёрстка…' : esc(x.what.split(':')[0])}</small></button>`).join('');
     return `${A.sec('Свежий выпуск', 'по событиям истории')}
     <div class="lf-pr-kinds">${kinds}</div>
+    <div class="lf-hint">ТВ — новость большого масштаба, таблоид и глянец — личная жизнь, газета — главное событие и светская хроника. Героев пресса знает так, как их знает публика в этот год: <button class="lf-link" data-act="hero-fame">кто кем известен — по годам</button></div>
     ${items.length ? `${A.sec('Киоск', String(items.length))}<div class="lf-pr-stand">${items.map(cardHtml).join('')}</div>` : '<div class="lf-hint">Что о героях пишут таблоиды, газеты, глянец и ТВ — глазами чужих людей: папарацци, утечки, домыслы, от драмы до абсурда. Модель выпусков не видит, пока ты не нажмёшь «Пустить в историю».</div>'}
     ${rumors ? `${A.sec('Сарафанное радио')}${rumors}` : ''}`;
 }
