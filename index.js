@@ -4,10 +4,10 @@
 // Life режет общий чат на главы-комнаты только на экране, рисует карты районов и даёт кнопки.
 
 import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icons.js';
-import { initControl, applyTheme, openCC } from './control.js';
+import { initControl, applyTheme, openCC, refreshAvatars } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
-import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor } from './sim.js';
+import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
 import { initErrors } from './errors.js';
 import { renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml } from './agenda.js';
@@ -17,6 +17,8 @@ import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfter
 import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief } from './days.js';
 import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arcClick } from './arcs.js';
+import { initAlbum, albumHtml, albumClick, albumSetImg } from './album.js';
+import { initEmo, emoChron, emoAfterPost, emoSrc, emoStripHtml, emoClick, emoSetImg } from './emo.js';
 import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
 import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick } from './frames.js';
@@ -33,7 +35,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.22.0';
+const VERSION = '0.23.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1989,7 +1991,7 @@ function renderPerson() {
     if (ui.pTab === 'money' && !me) ui.pTab = 'life';
     const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(me ? [['money', 'Деньги']] : [])];
     const tabs = seg(tabList, ui.pTab, 'p-tab').replace('lf-seg', `lf-seg${tabList.length > 5 ? ' many' : ''}`);
-    const body = ui.pTab === 'life' ? renderLife(who) : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
+    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -2165,6 +2167,8 @@ function renderRelations(who, st) {
     } else if (tab === 'secrets') {
         body = secrets.length ? secrets.map(x => `<button class="lf-secret" data-act="jump" data-mes="${x.mes}">${icon('lock')}<span><b>Знает ${esc(x.knows.map(n => shortName(canonName(n))).join(', ') || '—')}</b>${esc(x.text)}</span></button>`).join('')
             : `<div class="lf-empty small">Тайн между ними пока нет.</div>`;
+    } else if (tab === 'album') {
+        body = (() => { try { return albumHtml(who, other, p.moments); } catch (e) { console.warn('[Life] альбом', e); return ''; } })();
     } else if (tab === 'history') {
         body = events.length ? `<div class="lf-timeline">${events.map(e => `<button class="lf-tl" data-act="jump" data-mes="${e.messageIndex}"><span class="lf-tl-dot"></span><span class="lf-tl-txt"><small>${esc(whenLabel(e.timestamp?.story_date, e.timestamp?.story_time))}</small>${esc(e.event?.summary)}</span></button>`).join('')}</div>`
             : `<div class="lf-empty small">Общих событий Horae пока не записал.</div>`;
@@ -2185,7 +2189,7 @@ function renderRelations(who, st) {
         <h2>${esc(A)} <i>×</i> ${esc(B)}</h2>
     </section>
     ${bars}` : ''}
-    ${seg([['common', 'Общее'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab')}
+    ${seg([['common', 'Общее'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
     ${body}`;
 }
 
@@ -2886,6 +2890,14 @@ async function onClick(ev) {
         chronSheet(Number(el.dataset.mes));
         return;
     }
+    if (act.startsWith('emo-')) {
+        try { await emoClick(act, el); } catch (e) { console.warn('[Life] лица', e); toast('warning', esc(String(e?.message || e)), '✦ Лица'); }
+        return;
+    }
+    if (act.startsWith('al-')) {
+        try { await albumClick(act, el); } catch (e) { console.warn('[Life] альбом', e); toast('warning', esc(String(e?.message || e)), '✦ Альбом'); }
+        return;
+    }
     if (act.startsWith('arc-')) {
         try { await arcClick(act, el); } catch (e) { console.warn('[Life] сюжетка', e); toast('warning', esc(String(e?.message || e)), '✦ Сюжетка'); }
         return;
@@ -3443,6 +3455,8 @@ async function onChange(ev) {
             else if (kind === 'pet') simSetPetImg(el.dataset.id, path);
             else if (kind === 'npc') peopleSetImg(el.dataset.id, path);
             else if (kind === 'frame') { const cm = chatMeta(); cm.frames = cm.frames || {}; cm.frames[el.dataset.start] = path; saveMeta(); }
+            else if (kind === 'album') albumSetImg(el.dataset.k, path);
+            else if (kind === 'emo') emoSetImg(el.dataset.name, el.dataset.k, path);
             saveSettings();
             closeSheet(); render(); decorate();
             toast('success', 'Картинка сохранена', '✦ Life', { timeOut: 1500 });
@@ -3644,6 +3658,7 @@ const controlApi = {
     toggleMode: (v) => toggleMode(v),
     armOnce: (v) => { const id = armOnce(v); if (id) clearTwist(); return id; },
     wxLabel: () => wxLabel(), wxLevel: () => wxLevel(), cycleWx: () => cycleWx(),
+    emoSrc: (id) => emoSrc(id),
     twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
@@ -3699,6 +3714,8 @@ jQuery(async () => {
     initFresh(extApi);
     initFrames(extApi);
     initArcs({ ...extApi, peopleList, daysBrief });
+    initAlbum({ ...extApi, faceRef });
+    initEmo({ ...extApi, faceRef, lifeKey: simLifeKey, refreshAvatars });
     initWeather(extApi);
     painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id));
     chatClicks.push((act, el) => frameClick(act, el));
@@ -3725,6 +3742,11 @@ jQuery(async () => {
             id: 'life-frames',
             chron: () => framesChron(),
             afterPost: (i, j) => framesAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-emo',
+            chron: () => emoChron(),
+            afterPost: (i, j) => emoAfterPost(i, j),
         });
         globalThis.LifeBridge.register({
             id: 'life-hurt',

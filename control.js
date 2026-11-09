@@ -178,13 +178,23 @@ function fullSrc(src) {
 }
 function upgradeAvatars(root) {
     (root || document).querySelectorAll('#chat .mes .avatar img').forEach(img => {
-        const full = fullSrc(img.getAttribute('src'));
-        if (!full) return;
-        img.dataset.lfThumb = img.getAttribute('src');
-        img.onerror = () => { if (img.dataset.lfThumb) { img.onerror = null; img.src = img.dataset.lfThumb; } };
-        img.src = full;
+        const cur = img.getAttribute('src') || '';
+        const thumb = fullSrc(cur) ? cur : (img.dataset.lfThumb || '');
+        if (!thumb) return;
+        img.dataset.lfThumb = thumb;
+        // 0.23: лицо с эмоцией поста (если у персонажа есть набор), иначе оригинал аватарки
+        const id = Number(img.closest('.mes')?.getAttribute('mesid'));
+        let emo = '';
+        try { emo = Number.isFinite(id) ? api.emoSrc?.(id) || '' : ''; } catch { /* */ }
+        let want = emo && img.dataset.lfBad !== emo ? emo : fullSrc(thumb);
+        if (img.dataset.lfBad === want) want = thumb; // битая картинка — не дёргать по кругу
+        if (cur === want) return;
+        img.onerror = () => { img.onerror = null; img.dataset.lfBad = img.getAttribute('src') || ''; img.src = img.dataset.lfThumb || ''; };
+        img.src = want;
     });
 }
+/** Пересчитать аватарки в чате (эмоция поста пришла от Летописца, набор лиц поменялся). */
+export function refreshAvatars() { const chat = document.getElementById('chat'); if (chat && avaObs) upgradeAvatars(chat); }
 function syncAvatars(on) {
     const chat = document.getElementById('chat');
     if (!on) { avaObs?.disconnect(); avaObs = null; return; }
