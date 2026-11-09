@@ -6,7 +6,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Дарья + Claude",
-    "version": "0.21.0",
+    "version": "0.22.0",
     "homePage": "https://github.com/clarawill137/LIFE",
     "auto_update": false,
     "generate_interceptor": "life_intercept"

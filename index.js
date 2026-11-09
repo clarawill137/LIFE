@@ -15,7 +15,8 @@ import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cyc
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
 import { initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
-import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick } from './days.js';
+import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief } from './days.js';
+import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arcClick } from './arcs.js';
 import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
 import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick } from './frames.js';
@@ -32,7 +33,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.21.0';
+const VERSION = '0.22.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -777,6 +778,7 @@ function updateMovePrompt(type, consume = false) {
     let modes = '';
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
     try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
+    try { const ap = settings().enabled && hasChat() ? arcOnce(type, consume) : ''; if (ap) modes = [modes, ap].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] ружьё', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
@@ -2884,6 +2886,10 @@ async function onClick(ev) {
         chronSheet(Number(el.dataset.mes));
         return;
     }
+    if (act.startsWith('arc-')) {
+        try { await arcClick(act, el); } catch (e) { console.warn('[Life] сюжетка', e); toast('warning', esc(String(e?.message || e)), '✦ Сюжетка'); }
+        return;
+    }
     if (act.startsWith('fr-')) {
         try { await freshClick(act, el); } catch (e) { console.warn('[Life] свежесть', e); toast('warning', esc(String(e?.message || e)), '✦ Свежесть'); }
         return;
@@ -3692,10 +3698,18 @@ jQuery(async () => {
     initReply(extApi);
     initFresh(extApi);
     initFrames(extApi);
+    initArcs({ ...extApi, peopleList, daysBrief });
     initWeather(extApi);
     painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id));
     chatClicks.push((act, el) => frameClick(act, el));
     try {
+        globalThis.LifeBridge.register({
+            id: 'life-arc',
+            prompt: (type) => arcPrompt(type),
+            chron: () => arcChron(),
+            afterPost: (i, j) => arcAfterPost(i, j),
+            sceneHtml: () => arcSceneHtml(),
+        });
         globalThis.LifeBridge.register({
             id: 'life-twist',
             chron: () => twistChron(),

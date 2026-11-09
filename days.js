@@ -244,6 +244,11 @@ export function daysPrompt(type) {
     return `[Последние дни — это уже было; помни, не противоречь и не пересказывай заново:\n${lines.join('\n')}]`;
 }
 
+/** Коротко для других модулей (сюжетка, идеи): последние дни без обёртки. */
+export function daysBrief() {
+    try { return daysPrompt('normal').replace(/^\[Последние дни[^\n]*\n/, '').replace(/\]$/, ''); } catch { return ''; }
+}
+
 // ───────────── вид: Мир → Дни ─────────────
 
 export function daysHtml() {

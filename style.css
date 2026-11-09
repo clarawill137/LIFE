@@ -1996,3 +1996,33 @@ body.lf-theme .mes .lf-frame button { color: var(--t-text2); border-color: var(-
 /* кусок поста — полоса слева */
 .mes.lf-fr-part .lf-fr-p { padding-left: 12px; border-left: 2px solid currentColor; border-left-color: color-mix(in srgb, currentColor 40%, transparent); }
 .mes.lf-fr-part.lf-fr-flashback .lf-fr-p { border-left-style: dashed; }
+
+/* ───────────── 0.22: сюжетка ───────────── */
+.lf-arc { padding: 14px; margin: 4px 0 10px; border-radius: 16px; border: 1px solid var(--lf-line); background: radial-gradient(120% 100% at 0% 0%, rgba(94, 31, 44, .25), transparent 60%), var(--lf-card); }
+.lf-arc header { display: flex; align-items: center; gap: 8px; }
+.lf-arc header b { flex: 1; font-family: var(--lf-serif); font-weight: 500; font-size: 19px; line-height: 1.25; }
+.lf-arc-bar { display: flex; align-items: center; margin: 14px 4px 6px; }
+.lf-arc-line { flex: 1; height: 2px; background: linear-gradient(90deg, var(--lf-line2), var(--lf-line)); }
+.lf-arc-dot { flex: none; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1.5px solid var(--lf-line2); background: var(--lf-bg, #1a1416); display: grid; place-items: center; cursor: pointer; }
+.lf-arc-dot i { width: 8px; height: 8px; border-radius: 50%; background: transparent; transition: background .3s; }
+.lf-arc-dot.done { border-color: var(--lf-rose); background: linear-gradient(180deg, var(--lf-wine2), var(--lf-wine)); }
+.lf-arc-dot.done i { background: var(--lf-text); }
+.lf-arc-dot.next { border-color: var(--lf-rose2); box-shadow: 0 0 0 4px rgba(217, 104, 123, .14); animation: lfTwPulse 2.6s ease-in-out infinite; }
+.lf-arc-dot.next i { background: var(--lf-rose2); }
+.lf-arc-beats { margin: 8px 0 4px; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.lf-arc-beats li { color: var(--lf-dim); font-size: 13.5px; line-height: 1.4; }
+.lf-arc-beats li button { border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 2px 0; cursor: pointer; }
+.lf-arc-beats li.done { color: var(--lf-dim2); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .18); }
+.lf-arc-beats li.next { color: var(--lf-text); font-family: var(--lf-serif); font-size: 15px; }
+.lf-arc-beats li i { font-style: normal; font-size: 11px; color: var(--lf-dim2); }
+.lf-arc-guns { display: flex; flex-direction: column; gap: 7px; margin: 10px 0 6px; }
+.lf-arc-gun { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 12px; border-radius: 12px; border: 1px dashed rgba(242, 200, 121, .35); background: rgba(242, 200, 121, .04); }
+.lf-arc-gun.fired { border-style: solid; opacity: .7; }
+.lf-arc-gun > div { flex: 1; min-width: 0; }
+.lf-arc-gun b { display: block; font-size: 13.5px; font-weight: 500; color: var(--lf-text); }
+.lf-arc-gun small { display: block; color: var(--lf-dim); font-size: 12px; margin-top: 2px; }
+.lf-arc-gun small.st { color: #ecd6a6; }
+.lf-arc-next { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-arc-idea { display: block; width: 100%; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--lf-line2); background: rgba(255, 255, 255, .03); color: var(--lf-text); cursor: pointer; }
+.lf-arc-idea b { display: block; font-family: var(--lf-serif); font-weight: 500; font-size: 16px; }
+.lf-arc-idea small { display: block; color: var(--lf-dim); font-size: 12.5px; margin-top: 3px; line-height: 1.4; }
