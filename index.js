@@ -27,7 +27,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.19.0';
+const VERSION = '0.19.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -569,22 +569,34 @@ async function fileToJpeg(file, max = 1600, q = 0.86) {
     return toJpeg(src, max, q);
 }
 
-async function toJpeg(dataUrl, max = 1600, q = 0.86) {
+/**
+ * Картинка → JPEG data:URL не больше max по длинной стороне. src — data:URL или адрес с этого же сайта.
+ * 0.19.1: холст и картинка обнуляются сразу после кодирования — Safari на айфоне держит память холстов,
+ * пока их не обнулишь, у вкладки общий лимит на холсты, и при череде картинок (реролл → деталь с рефами) она падала.
+ */
+async function toJpeg(src, max = 1600, q = 0.86) {
     const img = await new Promise((res, rej) => {
         const i = new Image();
         i.onload = () => res(i);
         i.onerror = () => rej(new Error('это не картинка'));
-        i.src = dataUrl;
+        i.src = src;
     });
-    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const cv = document.createElement('canvas');
-    cv.width = Math.round(img.naturalWidth * k);
-    cv.height = Math.round(img.naturalHeight * k);
-    const g = cv.getContext('2d');
-    g.fillStyle = '#111';
-    g.fillRect(0, 0, cv.width, cv.height);
-    g.drawImage(img, 0, 0, cv.width, cv.height);
-    return cv.toDataURL('image/jpeg', q);
+    try {
+        const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        cv.width = Math.max(1, Math.round(img.naturalWidth * k));
+        cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+        const g = cv.getContext('2d');
+        g.fillStyle = '#111';
+        g.fillRect(0, 0, cv.width, cv.height);
+        g.drawImage(img, 0, 0, cv.width, cv.height);
+        return cv.toDataURL('image/jpeg', q);
+    } finally {
+        cv.width = 0;
+        cv.height = 0;
+        img.onload = img.onerror = null;
+        img.removeAttribute('src');
+    }
 }
 
 async function urlToDataUrl(u) {
@@ -611,9 +623,24 @@ async function uploadImage(dataUrl, prefix = 'life') {
     return p.startsWith('/') ? p : `/${p}`;
 }
 
+// 0.19.1: рефы (лица, места) не перечитываются заново на каждом посте — раньше каждая деталь/кадр качали
+// исходник целиком (PNG карточки вместе со вшитым лорбуком), переводили в base64 и декодировали снова.
+const refCache = new Map();
 async function refData(path, max = 1024) {
     if (!path) return '';
-    try { return await toJpeg(await urlToDataUrl(path), max, 0.86); } catch { return ''; }
+    const s = String(path);
+    const key = `${hash(s)}:${s.length}|${max}`;
+    if (refCache.has(key)) { const v = refCache.get(key); refCache.delete(key); refCache.set(key, v); return v; }
+    try {
+        // свой сайт и data: — картинка грузится напрямую, без base64 всего файла; чужой адрес — как раньше, через fetch
+        const local = s.startsWith('data:') || !/^[a-z][a-z0-9+.-]*:/i.test(s) || s.startsWith(location.origin);
+        const out = await toJpeg(local ? s : await urlToDataUrl(s), max, 0.86);
+        if (max <= 1024) {
+            refCache.set(key, out);
+            while (refCache.size > 8) refCache.delete(refCache.keys().next().value);
+        }
+        return out;
+    } catch { return ''; }
 }
 
 /** Рисую через движок Гардероба: тот же SLAY/Atlas/Naistera, что у тебя настроен. refs — data:URL. */
@@ -973,7 +1000,7 @@ async function detailRefs(who) {
     const refs = [];
     const names = [];
     for (const n of (who || []).slice(0, 2)) {
-        try { const r = await faceRef(n); if (r) { refs.push(r); names.push(canonName(n)); } } catch { /* без рефа */ }
+        try { const r = await faceRef(n, 512); if (r) { refs.push(r); names.push(canonName(n)); } } catch { /* без рефа */ }
     }
     const note = refs.length
         ? `Reference images, in order: ${names.join(', ')} — the people whose hand, eye, skin or hair is in the frame. Keep their skin tone, eye colour, hair colour and texture, scars, rings and other marks exactly as in the references; draw only the small part named above, not the whole person and not a full face — the references are only for who is who, the style is below.\n`
@@ -992,13 +1019,25 @@ async function drainDetail() {
     try { while (detQueue.length) await drawDetail(detQueue.shift()); } finally { detRunning = false; }
 }
 
+/** Деталь относится к тому варианту поста, что сейчас на экране (после реролла старый вариант уже не нужен). */
+function detailCurrent(key) {
+    const i = Number(String(key).split(':')[0]);
+    const m = chatArr()[i];
+    return !!m && key === `${i}:${msgKey(m)}`;
+}
+
 async function drawDetail(key) {
     const cm = chatMeta();
     const e = chronStore()[key];
     if (!e?.det) return;
+    // 0.19.1: пока пишется ответ (реролл, свайп) — не рисовать: генерация, Летописец, SLAY и деталь с рефами
+    // одновременно — это пик памяти, на котором Safari перезагружал вкладку. И деталь к варианту, который
+    // уже свайпнули прочь, не рисовать вовсе.
     detBusy.add(key);
     paintChips();
     try {
+        await genIdle();
+        if (chatMeta() !== cm || !detailCurrent(key)) return;
         const { refs, note } = e.det.motion === 'scan' ? { refs: [], note: '' } : await detailRefs(e.det.who);
         const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det' });
         if (chatMeta() !== cm) return; // чат сменился, пока рисовала
@@ -2673,10 +2712,10 @@ async function withBusy(el, fn, label = 'Рисую…') {
     }
 }
 
-async function faceRef(name) {
+async function faceRef(name, max = 768) {
     const c = ctx();
     const n = canonName(name);
-    return refData(c.extensionSettings?.wardrobe?.faces?.[n] || avatarUrl(n, true), 768);
+    return refData(c.extensionSettings?.wardrobe?.faces?.[n] || avatarUrl(n, true), max);
 }
 
 async function drawRegionMap(region) {
@@ -3504,6 +3543,7 @@ window.addEventListener('error', (e) => {
 
 function onChatChanged() {
     ui.focus = 'last';
+    genActive = false;
     Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '', galShow: 48 });
     resetImages();
     chronQueue.length = 0;
@@ -3520,6 +3560,14 @@ function onChatChanged() {
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
     // 0.18.7: на открытии чата старые посты НЕ трогаем и не перерисовываем — после 0.18.4 Safari падал,
     // как только долистывали до конца чата (перерисованный последний пост). Огрызок чинится только у нового поста.
+}
+
+// идёт главная генерация (не quiet) — тяжёлое (картинки) ждёт её конца
+let genActive = false;
+async function genIdle(maxMs = 180000) {
+    const t0 = Date.now();
+    while (genActive && Date.now() - t0 < maxMs) await new Promise(r => setTimeout(r, 1500));
+    if (genActive) genActive = false; // события конца не было — не ждать вечно
 }
 
 function lastAiIndex() {
@@ -3645,7 +3693,9 @@ jQuery(async () => {
     if (E.CHARACTER_MESSAGE_RENDERED) eventSource.on(E.CHARACTER_MESSAGE_RENDERED, onAi);
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
     if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, () => { ui.focus = 'last'; later(); });
+    if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => { if (!dry && type !== 'quiet') genActive = true; });
     const endGen = () => {
+        genActive = false;
         const cm = chatMeta();
         if (cm.director?.once && lastAiIndex() > (cm.director.after ?? -1)) { cm.director = null; saveMeta(); }
         updateMovePrompt();

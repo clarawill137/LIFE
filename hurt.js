@@ -285,8 +285,8 @@ const FORM = [[1, 'В строю'], [3, 'Мелкие потери'], [7, 'Ог�
 function formOf(b) { return FORM.find(([lim]) => b < lim)[1]; }
 
 /** Потолок «самочувствия» для «Внутри». 100 — ран нет. */
-export function hurtCap(who) {
-    try { return hurtOn() ? Math.max(5, Math.round(100 - burden(who) * 7)) : 100; } catch { return 100; }
+export function hurtCap(who, now) {
+    try { return hurtOn() && active(who).length ? Math.max(5, Math.round(100 - burden(who, now || rpNow()) * 7)) : 100; } catch { return 100; }
 }
 export function hurtCount(who) { try { return hurtOn() ? active(who).length : 0; } catch { return 0; } }
 
@@ -295,8 +295,8 @@ function cast() {
     for (const n of A.groupMembers().map(A.canonName)) if (n && !out.some(x => A.sameName(x, n))) out.push(n);
     return out;
 }
-function presentCast() {
-    const here = (A.worldState().scene?.characters_present || []).map(A.canonName);
+function presentCast(st = A.worldState()) {
+    const here = (st.scene?.characters_present || []).map(A.canonName);
     const all = cast();
     if (!here.length) return all;
     return all.filter(n => here.some(h => A.sameName(h, n)));
@@ -317,6 +317,7 @@ function rnd(seed) {
 }
 
 const COLD_RE = /холод|мороз|снег|дожд|сыр|ветр|метел|вьюг|слякот|ливень|гроз/i;
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ───────────── заметка модели ─────────────
 
@@ -329,11 +330,13 @@ export function hurtPrompt(type) {
     const redo = (mes) => mes != null && ((type === 'swipe' && L - 1 === mes) || (type === 'regenerate' && L === mes));
     const mn = (() => { try { return moodNow(); } catch { return {}; } })();
     const fight = (() => { try { return modesOn().includes('fight'); } catch { return false; } })();
-    const cold = COLD_RE.test(String(A.worldState().scene?.atmosphere || ''));
+    const st = A.worldState();   // Horae считает состояние по всему чату — один раз на заметку
+    const atm = String(st.scene?.atmosphere || '');
+    const cold = COLD_RE.test(atm);
     const out = [];
     const bm = BEATS[cfg().beats][0];
     let anyWound = false;
-    for (const who of presentCast()) {
+    for (const who of presentCast(st)) {
         const list = active(who);
         const c = C(who);
         const me = isUser(who);
@@ -355,8 +358,8 @@ export function hurtPrompt(type) {
             // «даёт о себе знать»
             const top = fresh[0] || old[0];
             if (bm > 0 && !me && top) {
-                const trig = top.trig ? new RegExp(top.trig.split(/[,;\s]+/).filter(x => x.length > 3).map(x => x.slice(0, 5)).join('|') || '$^', 'i') : null;
-                const hot = (cold && (top.kind === 'fracture' || isOld(top) || /холод|погод/i.test(top.trig))) || (trig && (trig.test(String(A.worldState().scene?.atmosphere || '')) || (fight && /нагруз|бой|драк|напряж/i.test(top.trig))));
+                const trig = top.trig ? new RegExp(top.trig.split(/[,;\s]+/).filter(x => x.length > 3).map(x => reEsc(x.slice(0, 5))).join('|') || '$^', 'i') : null;
+                const hot = (cold && (top.kind === 'fracture' || isOld(top) || /холод|погод/i.test(top.trig))) || (trig && (trig.test(atm) || (fight && /нагруз|бой|драк|напряж/i.test(top.trig))));
                 const boost = (fight ? 2 : 1) * (mn.intimOn ? 1.5 : 1) * (hot ? 1.8 : 1) * (isOld(top) ? 0.6 : 1);
                 if (rnd(`${R}:${top.id}`) < Math.min(0.9, BEAT_SEV[isOld(top) ? 2 : top.sev] * bm * boost)) {
                     out.push(`[В этом ответе ${top.t}${top.part && !A.norm(top.t).includes(A.norm(top.part)) ? ` (${top.part})` : ''} у ${N} даёт о себе знать — покажи телом, к месту: ${top.fx.length && isOld(top) ? top.fx.join(', ') : HINT[top.kind] || HINT.other}. Коротко, без нытья.]`);
@@ -432,8 +435,7 @@ function setFlare(who, w, i, src) {
     });
 }
 
-function flareBoost(w) {
-    const atm = String(A.worldState().scene?.atmosphere || '');
+function flareBoost(w, atm) {
     const trig = w.trig || '';
     let b = 1;
     if (COLD_RE.test(atm) && (/холод|погод|сыр|дожд|мороз/i.test(trig) || w.kind === 'chronic' && !trig)) b *= 1.8;
@@ -496,10 +498,11 @@ export function hurtAfterPost(i, j, msg) {
     }
     // 3) приступ старой травмы — кубиком, по одному за раз
     if (cfg().dice && !(h.flare && h.flare.used == null)) {
+        const atm = String(A.worldState().scene?.atmosphere || '');
         const pool = [];
         for (const who of cast()) for (const w of active(who).filter(isOld)) if (FLARE[w.flare]?.[0] && (w.lastFlare == null || i - w.lastFlare > 6)) pool.push([who, w]);
         for (const [who, w] of pool.sort(() => Math.random() - 0.5)) {
-            if (Math.random() < Math.min(0.5, FLARE[w.flare][0] * flareBoost(w))) { setFlare(who, w, i, 'dice'); break; }
+            if (Math.random() < Math.min(0.5, FLARE[w.flare][0] * flareBoost(w, atm))) { setFlare(who, w, i, 'dice'); break; }
         }
     }
     // тосты

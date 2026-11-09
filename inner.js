@@ -125,7 +125,7 @@ function bodyState(who, now = rpNow()) {
     const p = prof(who);
     const metab = p.metab, fem = p.fem;
     // раны и травмы теперь ведёт hurt.js: здесь — только потолок самочувствия от них
-    const cap = hurtCap(who);
+    const cap = hurtCap(who, now);
     const needs = NEEDS.map(([k, label, ic]) => { const v = k === 'health' ? Math.min(needOf(x, k, now, metab), cap) : needOf(x, k, now, metab); return { k, label, ic, v, word: needWord(k, v, metab, fem) }; });
     const urgent = [];
     const val = (k) => needs.find(n => n.k === k).v;
