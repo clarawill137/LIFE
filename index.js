@@ -32,6 +32,8 @@ import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageCli
 import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
 import { initPush, push as pushBanner } from './push.js';
 import { initGraph, graphHtml, graphClick } from './graph.js';
+import { initBelly, bellyNote, bellyWardrobeHtml, bellyClick } from './belly.js';
+import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
@@ -45,7 +47,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.27.0';
+const VERSION = '0.28.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -662,7 +664,9 @@ async function refData(path, max = 1024) {
 }
 
 /** Рисую через движок Гардероба: тот же SLAY/Atlas/Naistera, что у тебя настроен. refs — data:URL. */
-async function drawPicture(prompt, { aspect = '4:3', max = 1600, refs = [], prefix = 'life' } = {}) {
+async function drawPicture(prompt, { aspect = '4:3', max = 1600, refs = [], prefix = 'life', who = null } = {}) {
+    // живот по сроку: у кого в кадре какой срок (who — кто в кадре; не передали — ищу имена в промпте)
+    try { const bn = bellyNote(Array.isArray(who) ? who : namesInText(prompt)); if (bn) prompt = `${prompt}\n${bn}`; } catch (e) { console.warn('[Life] живот по сроку', e); }
     let mod;
     try { mod = await import(WARDROBE_DRAW); } catch { throw new Error('Рисую через Гардероб, а он не найден. Можно загрузить свою картинку.'); }
     const c = ctx();
@@ -1067,7 +1071,7 @@ async function drawDetail(key) {
         await genIdle();
         if (chatMeta() !== cm || !detailCurrent(key)) return;
         const { refs, note } = e.det.motion === 'scan' ? { refs: [], note: '' } : await detailRefs(e.det.who);
-        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det' });
+        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det', who: e.det.motion === 'scan' ? [] : (e.det.who || []) });
         if (chatMeta() !== cm) return; // чат сменился, пока рисовала
         const e2 = chronStore()[key];
         if (e2) { e2.detImg = img; saveMeta(); }
@@ -2058,6 +2062,7 @@ function renderWardrobe(who, st) {
     ${sets.length > 1 ? `${sec('Комплекты', String(sets.length))}<div class="lf-wd2-sets">${sets.map(setThumb).join('')}</div>` : ''}
     ${pieces.length ? `${sec(set ? 'В комплекте' : 'Надето', String(pieces.length))}<div class="lf-wd2-pieces">${pieces.map(e => tile(e, set ? 'sets' : 'worn')).join('')}</div>` : ''}
     ${set && worn.length && !on ? `${sec('Сейчас надето')}<div class="lf-wd2-pieces">${worn.slice(0, 12).map(e => tile(e, 'worn')).join('')}</div>` : ''}
+    ${(() => { try { return bellyWardrobeHtml(who, set); } catch (e) { console.warn('[Life] живот по сроку', e); return ''; } })()}
     ${hasApi ? '' : '<div class="lf-hint">Обнови Гардероб (git pull) — тогда «Надеть» заработает прямо отсюда.</div>'}`;
 }
 
@@ -2818,7 +2823,7 @@ async function drawFrame(start) {
         + `\nPlace: ${locParts(ch.loc).join(', ') || 'unknown'}. ${placeDesc(ch.loc) ? cut(placeDesc(ch.loc), 200) : ''}`
         + (refs.length ? `\nThe attached images show the faces of: ${present.join(', ')} — keep their faces recognisable, same people.` : '')
         + `\nStyle: ${style()}. Wide 16:9 cinematic framing, no text.`;
-    const path = await drawPicture(prompt, { aspect: '16:9', max: 1600, refs, prefix: 'life_frame' });
+    const path = await drawPicture(prompt, { aspect: '16:9', max: 1600, refs, prefix: 'life_frame', who: present });
     const cm = chatMeta();
     cm.frames = cm.frames || {};
     cm.frames[start] = path;
@@ -3285,7 +3290,7 @@ async function onClick(ev) {
         case 'draw-pair': await withBusy(el, async () => {
             const refs = [await faceRef(ui.who), await faceRef(ui.pair)].filter(Boolean);
             const prompt = `Intimate cinematic portrait of two people together: ${canonName(ui.who)} and ${canonName(ui.pair)}.` + (refs.length ? ' The attached images are their faces, in this order — keep them recognisable.' : '') + `\nStyle: ${style()}. Horizontal, no text.`;
-            s.pairs[el.dataset.name] = await drawPicture(prompt, { aspect: '16:9', refs, prefix: 'life_pair' });
+            s.pairs[el.dataset.name] = await drawPicture(prompt, { aspect: '16:9', refs, prefix: 'life_pair', who: [ui.who, ui.pair] });
             saveSettings(); closeSheet(); render();
         }); break;
         case 'pair-edit': {
@@ -3658,6 +3663,7 @@ function onChatChanged() {
     lastBgLoc = '';
     setTimeout(updateSceneBg, 900);
     setTimeout(runAutopay, 2500);
+    setTimeout(() => { try { ambUpdate(); } catch { /* */ } }, 1500);
     setTimeout(() => { try { recapMaybe('open'); } catch (e) { console.warn('[Life] ранее в', e); } }, 1800);
     // 0.18.12: исключение — пост, где картинка карточки висит второй раз (см. art.js), перерисовывается он один
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 2500);
@@ -3697,6 +3703,7 @@ const controlApi = {
     toggleMode: (v) => toggleMode(v),
     armOnce: (v) => { const id = armOnce(v); if (id) clearTwist(); return id; },
     wxLabel: () => wxLabel(), wxLevel: () => wxLevel(), cycleWx: () => cycleWx(),
+    ambLabel: () => ambLabel(), ambLevel: () => ambLevel(), cycleAmb: () => cycleAmb(),
     emoSrc: (id) => emoSrc(id),
     twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
@@ -3772,6 +3779,11 @@ jQuery(async () => {
     initPush(extApi);
     initGraph({ ...extApi, peopleList, npcImg, horaeRelationships });
     initRecap({ ...extApi, daysBrief, closeHub, chapterCover });
+    initBelly({ ...extApi, faceRef });
+    hubMods.push({ pre: 'bl-', click: bellyClick, label: 'Живот по сроку' });
+    initAmbient({ ...extApi, musicNow: () => Music.now() });
+    hubMods.push({ pre: 'am-', click: ambClick, label: 'Звук и запах' });
+    setTimeout(() => { try { ambUpdate(); } catch (e) { console.warn('[Life] эмбиент', e); } }, 2500);
     hubMods.push({ pre: 'gr-', click: graphClick, label: 'Карта связей' }, { pre: 'rc-', click: recapClick, label: 'Ранее в…' });
     hubInputs.push(recapInput);
     setTimeout(() => { try { recapMaybe('load'); } catch (e) { console.warn('[Life] ранее в', e); } }, 3500);
@@ -3804,6 +3816,12 @@ jQuery(async () => {
             id: 'life-emo',
             chron: () => emoChron(),
             afterPost: (i, j) => emoAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-smell',
+            prompt: (type) => smellPrompt(type),
+            afterPost: () => smellAfterPost(),
+            sceneHtml: () => smellSceneHtml(),
         });
         globalThis.LifeBridge.register({
             id: 'life-stage',
@@ -3863,7 +3881,7 @@ jQuery(async () => {
         if (Number.isFinite(i)) for (const ms of [1200, 6000]) setTimeout(() => { try { if (tidyMessage(i)) later(); } catch { /* */ } }, ms);
         if (type === 'impersonate') return;
         if (!mending && Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
-        setTimeout(() => { updateSceneBg(); runAutopay(); }, 2200);
+        setTimeout(() => { updateSceneBg(); runAutopay(); try { ambUpdate(); } catch { /* */ } }, 2200);
     };
     // карточке-«артефакту» своя картинка модуля (снимок УЗИ из Зёрнышка) — до того, как SLAY начнёт рисовать другую
     if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, (id) => { try { artOnReceived(Number(id)); } catch (e) { console.warn('[Life] карточки', e); } });

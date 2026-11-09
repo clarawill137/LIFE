@@ -76,7 +76,7 @@ async function shoot(el) {
     const prompt = `Candid instant-film photo (Polaroid look): ${t}. ${A.shortName(A.canonName(a))} and ${A.shortName(A.canonName(b))} — the two people from the reference images (keep their faces exactly).${meta.scene?.location ? ` Place: ${meta.scene.location}.` : ''}${meta.timestamp?.story_time ? ` Time: ${meta.timestamp.story_time}.` : ''}
 Moment from the story (for mood, do not draw text): ${scene}
 Soft natural light, slight film grain, warm faded colours, intimate snapshot, square framing. No text, no letters, no white border.`;
-    const img = await A.drawPicture(prompt, { aspect: '1:1', max: 900, refs, prefix: 'life_pol' });
+    const img = await A.drawPicture(prompt, { aspect: '1:1', max: 900, refs, prefix: 'life_pol', who: [a, b] });
     albumSetImg(k, img);
 }
 

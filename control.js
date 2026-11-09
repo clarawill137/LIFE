@@ -472,6 +472,7 @@ function renderCC() {
         ${toggleTile('cc.ava', c.ava === 'wide' ? 'Баннер' : c.ava === 'big' ? 'Портрет' : 'Аватарки', 'user', c.ava !== 'off')}
         ${toggleTile('cc.detail', 'Детали', 'image', !!api.detail?.())}
         ${api.wxLabel ? toggleTile('cc.wx', api.wxLabel(), 'snow', api.wxLevel?.() !== 'off') : ''}
+        ${api.ambLabel ? toggleTile('cc.amb', api.ambLabel(), 'music', api.ambLevel?.() !== 'off') : ''}
         ${toggleTile('cc.read', 'Чтение', 'book', c.read)}
         ${toggleTile('cc.qrShown', 'Над вводом', 'keyboard', !c.qrHidden)}
         ${toggleTile('cc.fabs', 'Плавающие', 'pointer', !c.hideFabs)}
@@ -566,6 +567,7 @@ async function onCCClick(ev) {
             }
             else if (k === 'cc.detail') api.detail?.(!api.detail?.());
             else if (k === 'cc.wx') api.cycleWx?.();
+            else if (k === 'cc.amb') api.cycleAmb?.();
             else if (k === 'cc.bg') c.bg = c.bg === 'dim' ? 'flat' : c.bg === 'flat' ? 'off' : 'dim';
             else if (k === 'cc.scene') api.sceneBg?.(!api.sceneBg?.());
             else if (k === 'cc.ava') c.ava = c.ava === 'wide' ? 'big' : c.ava === 'big' ? 'off' : 'wide';

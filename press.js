@@ -109,7 +109,7 @@ async function drawPhoto(item, k) {
     const ph = item.data.photos[k];
     const { refs, note } = await faces(ph.who);
     const old = /19[0-5]\d/.test(item.data.date || '') ? ' 1940s period photo, black-and-white or early colour film.' : '';
-    ph.img = await A.drawPicture(`${ph.prompt}\n${note}Look: ${PHOTO_LOOK[item.kind] || PHOTO_LOOK.tabloid}.${old} No text, no captions, no watermark. No nudity.`, { aspect: item.kind === 'glossy' ? '3:4' : k ? '4:3' : '16:9', refs, prefix: 'life_press', max: 1400 });
+    ph.img = await A.drawPicture(`${ph.prompt}\n${note}Look: ${PHOTO_LOOK[item.kind] || PHOTO_LOOK.tabloid}.${old} No text, no captions, no watermark. No nudity.`, { aspect: item.kind === 'glossy' ? '3:4' : k ? '4:3' : '16:9', refs, prefix: 'life_press', max: 1400, who: ph.who || [] });
 }
 
 async function drawPoster(item) {

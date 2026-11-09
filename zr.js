@@ -29,7 +29,7 @@ const BELLY = [
     [36, 'большой тяжёлый живот, одышка, отёки к вечеру', 'big heavy pregnant belly (8 months pregnant)'],
     [99, 'очень большой опустившийся живот — вот-вот рожать', 'very large low-hanging full-term pregnant belly (9 months pregnant)'],
 ];
-export function bellyOf(w) { const b = BELLY.find(([to]) => w < to) || BELLY[BELLY.length - 1]; return { ru: b[1], en: b[2] }; }
+export function bellyOf(w) { const k = Math.max(0, BELLY.findIndex(([to]) => w < to)); const b = BELLY[k] || BELLY[BELLY.length - 1]; return { ru: b[1], en: b[2], k }; }
 
 function termAt(k, t) {
     if (!k?.conception || t == null) return null;

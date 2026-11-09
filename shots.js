@@ -416,7 +416,7 @@ export async function shoot(i, { kind = 'frame', at = '', caption = '', sug = fa
             const f = frames[k];
             const who = (Array.isArray(f.who) ? f.who : []).map(A.canonName).filter(Boolean);
             const { refs, note } = await refsFor(who, loc);
-            const img = await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 });
+            const img = await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600, who });
             const mo = String(f.motion || '').toLowerCase();
             obj.frames.push({ title: String(f.title || '').slice(0, 30), caption: String(f.caption || '').slice(0, 120), img, prompt: String(f.prompt).slice(0, 900), who, motion: MOTIONS.includes(mo) ? mo : 'drift' });
         }
@@ -458,7 +458,7 @@ async function redraw(c, { style = '', fix = '' } = {}) {
             A.repaint();
             const f = hidden[k];
             const { refs, note } = await refsFor(f.who || [], loc);
-            out.push({ ...f, img: await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: c.kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600 }) });
+            out.push({ ...f, img: await A.drawPicture(imagePrompt(f, note, sex, sid, fix), { aspect: '16:9', refs, prefix: c.kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600, who: (f.who || []).map(A.canonName) }) });
         }
         c.frames = out;
         c.style = sid;
