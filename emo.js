@@ -56,11 +56,12 @@ export function emoAfterPost(i, j) {
 }
 
 /** Картинка эмоции для аватарки поста (или ''). */
-export function emoSrc(id) {
+/** Лицо с эмоцией поста id. who — чьё (в посте на двоих, в звонке); по умолчанию — автор поста. */
+export function emoSrc(id, whoArg = '') {
     if (!emoOn()) return '';
     const m = A.chatArr()[id];
     if (!m || m.is_system) return '';
-    const who = A.canonName(m.name || '');
+    const who = A.canonName(whoArg || m.name || '');
     const set = setOf(who);
     if (!set) return '';
     const pick = (i) => { const em = A.chronOf(i)?.emo || {}; return em[who] || em[Object.keys(em).find(n => A.sameName(n, who)) || ''] || ''; };

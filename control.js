@@ -444,6 +444,8 @@ function renderCC() {
 
     ${api.twistsHtml ? (() => { const h = api.twistsHtml(); return h ? `<div class="cc-label">Твист — на следующий ответ</div>${h}` : ''; })() : ''}
 
+    ${api.duoHtml ? (() => { const h = api.duoHtml(); return h ? `<div class="cc-label">Вдвоём — следующий ответ пишут двое</div>${h}` : ''; })() : ''}
+
     ${api.moodHtml ? (() => { const h = api.moodHtml(); return h ? `<div class="cc-label">Настроение сцены</div>${h}` : ''; })() : ''}
 
     <div class="cc-label">Чат</div>
@@ -509,6 +511,11 @@ async function onCCClick(ev) {
     const act = el.dataset.cc;
     const c = cc();
     const goLife = (tab, after) => { closeCC(); setTimeout(() => { api.openHub(tab); if (after) setTimeout(after, 380); }, 280); };
+    if (act.startsWith('duo-')) {
+        try { api.duoCC?.(act, el); } catch (e) { console.warn('[Life] вдвоём', e); }
+        renderCC();
+        return;
+    }
     if (act.startsWith('tw-')) {
         try { await api.twistCC?.(act, el, { openSheet, closeSheet, rerender: renderCC }); } catch (e) { console.warn('[Life] твист', e); api.toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
         return;

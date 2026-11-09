@@ -6,6 +6,7 @@
 // Кого нет рядом, но кто хочет войти, — «стучится» (knock.js): ты пускаешь, и в его ход модель знает, как он входит.
 
 import { knockPromptFor } from './knock.js';
+import { duoPartner, duoLines, duoFollow } from './duo.js';
 
 let A = null;
 export function initCast(api) { A = api; }
@@ -21,7 +22,10 @@ export function castPrompt(type, consume = false) {
     if (!S || NARRATOR.test(S)) return '';
     const U = c.name1 || 'the player';
     const same = A.sameName;
-    const others = (A.groupMembers() || []).filter(n => !same(n, S) && !same(n, U) && !NARRATOR.test(n));
+    // пост на двоих (duo.js): второй пишет свою часть сам
+    let P = '';
+    try { P = duoPartner(S, type, consume); } catch (e) { console.warn('[Life] вдвоём', e); }
+    const others = (A.groupMembers() || []).filter(n => !same(n, S) && !same(n, U) && !NARRATOR.test(n) && !(P && same(n, P)));
     let present = [];
     try { present = (A.worldState().scene?.characters_present || []).map(A.canonName).filter(Boolean); } catch { /* без Horae */ }
     const known = present.length > 0;
@@ -30,8 +34,9 @@ export function castPrompt(type, consume = false) {
     const away = known ? others.filter(n => !isHere(n)) : [];
     const speakerAway = known && !isHere(S);
 
-    const L = [`[TURN — this reply belongs to ${S} alone. Write ${S}: their actions, words, thoughts and what they notice; the world and minor NPCs may move around them.`];
-    const only = `show them only through ${S}'s eyes — at most one short line or a reaction when the dialogue truly needs it. Never their thoughts, their speeches, or a chain of their actions; don't move their story forward for them.`;
+    const L = P ? duoLines(S, P) : [`[TURN — this reply belongs to ${S} alone. Write ${S}: their actions, words, thoughts and what they notice; the world and minor NPCs may move around them.`];
+    const only = `show them only through ${P ? `${S}'s or ${P}'s` : `${S}'s`} eyes — at most one short line or a reaction when the dialogue truly needs it. Never their thoughts, their speeches, or a chain of their actions; don't move their story forward for them.`;
+    if (!P) { try { const f = duoFollow(S, type); if (f) L.push(f); } catch { /* */ } }
     if (!known && here.length) L.push(`- ${here.join(', ')} speak and act in their own turns. If any of them is around, ${only} If they are not around, they don't appear and there are no cutaways to them.`);
     else if (here.length) L.push(`- ${here.join(', ')} ${here.length > 1 ? 'are' : 'is'} in the scene but ${here.length > 1 ? 'speak and act' : 'speaks and acts'} in their own turns: ${only}`);
     else L.push(`- Other main characters speak and act in their own turns: if one is around, ${only}`);

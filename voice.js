@@ -4,6 +4,7 @@
 // Голос общий на все чаты (свой у каждого облика эпохи), закреплённые ★ идут модели всегда, остальные — по кругу.
 
 import { lifeKey } from './sim.js';
+import { duoPartner } from './duo.js';
 
 let A = null;
 export function initVoice(api) { A = api; hookSelection(); }
@@ -52,12 +53,14 @@ function chatKey() { try { const c = A.ctx(); return String(c.chatId || c.getCur
 
 // ───────────── заметка модели ─────────────
 
-function speakers() {
+function speakers(type) {
     const c = A.ctx();
     const S = String(c.name2 || '').trim();
-    if (c.groupId) return S && !NARR.test(S) ? [S] : [];
-    if (S && !NARR.test(S)) return [S];
-    return [];
+    if (!S || NARR.test(S)) return [];
+    // пост на двоих — голос и второго
+    let P = '';
+    try { P = duoPartner(A.canonName(S), type, false); } catch { /* */ }
+    return P ? [S, P] : [S];
 }
 
 /** Закреплённые — всегда, остальные — по кругу от хода к ходу (свайп того же ответа — те же). */
@@ -78,7 +81,7 @@ export function voicePrompt(type) {
     const L = A.chatArr().length;
     const turn = Math.floor((type === 'swipe' ? L - 1 : L) / 2);
     const out = [];
-    for (const who of speakers()) {
+    for (const who of speakers(type)) {
         const arr = linesOf(who);
         if (!arr.length) continue;
         const got = pick(arr, Math.min(4, cfg().n), turn);
@@ -139,7 +142,7 @@ function checkSel() {
     if (!mesEl || !node.closest('.mes_text') || mesEl.getAttribute('is_user') === 'true' || mesEl.getAttribute('is_system') === 'true') { hide(); return; }
     if (t.length < 4 || t.length > 420) { hide(); return; }
     const mes = Number(mesEl.getAttribute('mesid'));
-    const author = A.chatArr()[mes]?.name || mesEl.getAttribute('ch_name') || '';
+    const author = node.closest('[data-duo]')?.dataset.duo || A.chatArr()[mes]?.name || mesEl.getAttribute('ch_name') || ''; // в посте на двоих — чья часть
     clearTimeout(hideT);
     sel = { t, mes, author };
     const el = pill();

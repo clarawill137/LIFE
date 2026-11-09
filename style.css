@@ -2449,6 +2449,7 @@ body.lf-era-hydra #lf-app .lf-btn.primary { background: linear-gradient(135deg, 
 .mes .lf-fix-own button { border: 1px solid rgba(185, 220, 180, .4); background: none; color: #b9dcb4; border-radius: 10px; padding: 4px 12px; cursor: pointer; }
 .mes.lf-fixing .mes_text > p.lf-fix-p, .mes.lf-fixing .mes_text > blockquote.lf-fix-p { cursor: pointer; border-radius: 6px; box-shadow: inset 2px 0 0 rgba(234, 179, 188, .35); padding-left: 6px; transition: background .2s; }
 .mes.lf-fixing .mes_text > p.lf-fix-p:active { background: rgba(234, 179, 188, .08); }
+.mes.lf-fixing .mes_text > .lf-fix-p.lf-fix-on { background: rgba(234, 179, 188, .1); box-shadow: inset 3px 0 0 #eab3bc; }
 .lf-mg { display: flex; flex-direction: column; gap: 14px; margin: 8px 0 12px; }
 .lf-mg-sw > b { display: block; font: 600 11px/1 var(--lf-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--lf-dim); margin-bottom: 6px; }
 .lf-mg-p { position: relative; display: block; width: 100%; margin-bottom: 6px; padding: 8px 10px 8px 34px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .02); color: var(--lf-text2); font: 13px/1.4 var(--lf-sans); text-align: left; cursor: pointer; }
@@ -2464,3 +2465,53 @@ body.lf-era-hydra #lf-app .lf-btn.primary { background: linear-gradient(135deg, 
 .mes .gca .lf-gca-fix { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(237, 228, 223, .18); background: rgba(255, 255, 255, .05); color: #ede4df; font: inherit; }
 .mes .gca .lf-gca-go { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
 .mes .gca .lf-gca-go button.main { background: #7b2d3d; border-color: transparent; }
+
+/* ───────────── пост на двоих ───────────── */
+.mes .mes_text > .lf-duo-h { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; padding: 0; font: 600 11.5px/1 -apple-system, 'Inter', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #eab3bc; }
+.mes .mes_text > .lf-duo-h:first-child { margin-top: 2px; }
+.mes .mes_text > .lf-duo-h .lf-ava { width: 24px; height: 24px; border-width: 1px; margin: 0; font-size: 11px; }
+.mes .mes_text > .lf-duo-h .lf-duo-line { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(234, 179, 188, .45), transparent); }
+.mes .mes_text > .lf-duo-h.lf-duo-b { color: #a9c8e8; }
+.mes .mes_text > .lf-duo-h.lf-duo-b .lf-ava { border-color: rgba(169, 200, 232, .65); }
+.mes .mes_text > .lf-duo-h.lf-duo-b .lf-duo-line { background: linear-gradient(90deg, rgba(169, 200, 232, .45), transparent); }
+.mes .mes_text > .lf-duo-p { border-left: 2px solid rgba(234, 179, 188, .26); padding-left: 10px; }
+.mes .mes_text > .lf-duo-p.lf-duo-b { border-left-color: rgba(169, 200, 232, .32); }
+.mes .lf-duo-nm { margin-left: .3em; color: #a9c8e8; font-weight: 600; white-space: nowrap; }
+body.lf-theme #chat .mes .lf-duo-nm { font-family: var(--t-serif); font-size: 1.12em; }
+body.lf-theme.lf-ava-wide #chat .mes .lf-duo-nm { font-size: 1.45em; text-shadow: 0 2px 12px var(--t-fade), 0 0 2px var(--t-fade); }
+.lf-chip .lf-ava.xs, .cc-chip .lf-ava.xs { margin-right: 0; }
+/* аватарка надвое: второй — справа, по косой */
+.mes.lf-duo .avatar { position: relative; }
+.mes .lf-duo-ava { position: absolute; inset: 0; pointer-events: none; filter: drop-shadow(-1.5px 0 0 rgba(255, 255, 255, .85)); }
+.mes .lf-duo-ava img { display: block; width: 100%; height: 100%; object-fit: cover; clip-path: polygon(62% 0, 100% 0, 100% 100%, 38% 100%); }
+body.lf-theme.lf-ava-wide #chat .mes.lf-duo .avatar > img:not(.lf-duo-img) { width: 56% !important; }
+body.lf-theme.lf-ava-wide #chat .mes .lf-duo-ava { left: 44%; filter: drop-shadow(-2px 0 0 rgba(255, 255, 255, .7)); }
+body.lf-theme.lf-ava-wide #chat .mes .lf-duo-ava img { clip-path: polygon(14% 0, 100% 0, 100% 100%, 0 100%); border-radius: 0 !important; }
+
+/* ───────────── звонок как FaceTime ───────────── */
+.mes .lf-ft { position: relative; max-width: 520px; margin: 8px 0 12px; padding: 10px; border-radius: 22px; background: linear-gradient(180deg, #1d1d20, #0d0d0f); color: #fff; font-family: -apple-system, 'SF Pro Text', 'Inter', sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); overflow: hidden; }
+.mes .lf-ft-top { display: flex; justify-content: space-between; align-items: center; padding: 2px 6px 9px; font-size: 12.5px; color: rgba(255, 255, 255, .75); }
+.mes .lf-ft-app { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #fff; }
+.mes .lf-ft-app .lf-i { width: 15px; height: 15px; color: #34c759; }
+.mes .lf-ft-t { font-variant-numeric: tabular-nums; }
+.mes .lf-ft-split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mes .lf-ft-tile { position: relative; aspect-ratio: 4 / 5; border-radius: 16px; overflow: hidden; background: #2c2c2e; }
+.mes .lf-ft-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 22%; }
+.mes .lf-ft-blur { position: absolute; inset: -24px; background-size: cover; background-position: center; filter: blur(22px) brightness(.55) saturate(1.2); }
+.mes .lf-ft-round { position: absolute; left: 50%; top: 42%; width: 46%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; object-fit: cover; box-shadow: 0 6px 20px rgba(0, 0, 0, .4); }
+.mes .lf-ft-l { position: absolute; inset: 0; display: grid; place-items: center; font: normal 600 40px/1 -apple-system, sans-serif; color: rgba(255, 255, 255, .6); }
+.mes .lf-ft-cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 2px; padding: 22px 10px 9px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .65)); }
+.mes .lf-ft-cap b { font-size: 14px; font-weight: 600; text-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+.mes .lf-ft-cap small { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: rgba(255, 255, 255, .8); }
+.mes .lf-ft-cap small .lf-i { width: 11px; height: 11px; flex: none; }
+.mes .lf-ft-ctl { display: flex; justify-content: center; gap: 18px; padding: 12px 0 2px; }
+.mes .lf-ft-ctl span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, .14); }
+.mes .lf-ft-ctl span .lf-i { width: 19px; height: 19px; }
+.mes .lf-ft-ctl span.end { background: #ff3b30; }
+.mes .lf-ft-ctl span.end .lf-i { transform: rotate(135deg); }
+.mes .lf-ft.ended .lf-ft-split { filter: grayscale(.6) brightness(.7); }
+.mes .lf-ft.ended .lf-ft-t { color: #ff6961; }
+.mes .lf-ft-pill { display: inline-flex; align-items: center; gap: 7px; margin: 6px 0 8px; padding: 5px 12px 5px 10px; border-radius: 999px; background: #34c759; color: #fff; font: 600 12.5px/1.2 -apple-system, sans-serif; }
+.mes .lf-ft-pill .lf-i { width: 14px; height: 14px; }
+.mes .lf-ft-pill b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .9; }
+.mes .lf-ft-pill.end { background: rgba(255, 59, 48, .16); border: 1px solid rgba(255, 59, 48, .35); color: #ff8a80; }

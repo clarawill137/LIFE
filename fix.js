@@ -16,7 +16,7 @@ export function initFix(api) { A = api; }
 const esc = (v) => A.esc(v);
 const on = new Set();            // посты в режиме правки
 const busy = new Set();
-let pick = null;                 // { mes, line } — выбранный абзац
+let pick = null;                 // { mes, line, who } — выбранный абзац (who — чья часть в посте на двоих)
 const user = () => A.canonName(A.ctx().name1) || 'игрок';
 
 function M() {
@@ -42,6 +42,7 @@ function rawLines(mes) {
         depth = Math.max(0, depth + opens - closes);
         const t = line.trim();
         if (!t || inBlock || /^<[^>]+>$/.test(t) || plain(t).length < 2) continue;
+        if (/^(?:\*\*|__|\*|_)?\[\[[^[\]\n]{1,40}\]\](?:\*\*|__|\*|_)?:?$/.test(t)) continue; // метка части в посте на двоих
         out.push(line);
     }
     return out;
@@ -79,7 +80,7 @@ function tappedText(p, ev) {
 
 // ───────────── модель ─────────────
 
-const RULES = (who) => `Ты редактор длинной литературной ролевой на русском. Сохраняй факты, имена, время, место, стиль и разметку поста (*курсив*, «кавычки», тире диалогов). Не пиши за ${who}: её слова, действия, мысли и ощущения — только её посты.`;
+const RULES = (who) => `Ты редактор длинной литературной ролевой на русском. Сохраняй факты, имена, время, место, стиль и разметку поста (*курсив*, «кавычки», тире диалогов; строки вида [[Имя]] — метки, чья часть в посте на двоих, — оставляй как есть). Не пиши за ${who}: её слова, действия, мысли и ощущения — только её посты.`;
 
 async function ask(system, input, tokens = 900) {
     const out = await A.askModel([{ role: 'system', content: system }, { role: 'user', content: input }], tokens);
@@ -90,23 +91,24 @@ const HOWS = {
     hard: ['жёстче', 'Сделай абзац жёстче и резче: меньше смягчений и нежности в словах, короче фразы, больше напора — но в характере говорящего.'],
     soft: ['мягче', 'Сделай абзац мягче и теплее: бережнее слова и жесты, больше заботы — без сахара и без смены смысла.'],
     short: ['короче', 'Сократи абзац примерно вдвое: оставь главное действие и лучшую реплику, убери воду и повторы.'],
-    voice: ['по-баковски', ''],
-    quiet: ['промолчит', ''],
+    voice: ['его голосом', ''],
+    quiet: ['пусть промолчит', ''],
     own: ['своё…', ''],
 };
 
 function speakerOf(i) { return A.chatArr()[i]?.name || ''; }
 
-async function rewriteLine(i, line, how, custom = '') {
+async function rewriteLine(i, line, how, custom = '', whoArg = '') {
     const m = A.chatArr()[i];
     if (!m || !String(m.mes).includes(line)) throw new Error('абзац уже поменялся — тапни заново');
-    const who = A.canonName(speakerOf(i));
+    const who = A.canonName(whoArg || speakerOf(i));
+    const sh = A.shortName(who);
     let task = HOWS[how]?.[1] || '';
     if (how === 'voice') {
         const vs = linesOf(who).slice(-6).map(x => `«${x.t}»`).join(' ');
-        task = `Перепиши реплики и интонацию так, чтобы это звучало как ${who} в его лучшие моменты${vs ? ` — вот его голос (образцы ритма и словаря, не вставляй их дословно): ${vs}` : ''}. Действия и смысл — те же.`;
+        task = `Перепиши реплики и интонацию так, чтобы это звучало как ${who}, когда попадает в себя${vs ? ` — вот голос (образцы ритма и словаря, не вставляй их дословно): ${vs}` : ''}. Действия и смысл — те же.`;
     }
-    if (how === 'quiet') task = `Пусть ${A.shortName(who)} здесь промолчит: убери его реплику(и) из абзаца, вместо слов — молчание, взгляд, жест, действие; смысл можно передать без слов.`;
+    if (how === 'quiet') task = `Пусть ${sh} здесь промолчит: убери реплики ${sh} из абзаца, вместо слов — молчание, взгляд, жест, действие; смысл можно передать без слов.`;
     if (how === 'own') task = `Что поправить: ${custom}`;
     const ctxText = A.cut(A.plainText ? A.plainText(m.mes) : plain(m.mes), 3500);
     const out = await ask(`${RULES(user())}\nПерепиши ТОЛЬКО один абзац по указанию. Длина — примерно та же, если не сказано иначе. Ответь только новым абзацем, без пояснений и кавычек вокруг.`,
@@ -291,13 +293,13 @@ export function paintFix(el, id) {
                 <button data-act="fx-open" data-mes="${id}">✕</button>
             </div>
             ${sel ? `<div class="lf-fix-sel"><q>${esc(A.cut(plain(sel.line), 160))}</q>
-                <div class="lf-fix-row">${Object.entries(HOWS).filter(([k]) => k !== 'own').map(([k, [l]]) => `<button data-act="fx-p" data-mes="${id}" data-how="${k}">${l}</button>`).join('')}</div>
+                <div class="lf-fix-row">${Object.entries(HOWS).filter(([k]) => k !== 'own').map(([k, [l]]) => `<button data-act="fx-p" data-mes="${id}" data-how="${k}">${k === 'voice' ? `голосом ${esc(A.shortName(A.canonName(sel.who || speakerOf(id))))}` : l}</button>`).join('')}</div>
                 <div class="lf-fix-own"><input type="text" class="lf-fix-in" placeholder="своё: что поправить в абзаце"><button data-act="fx-p" data-mes="${id}" data-how="own">✓</button></div>
             </div>` : ''}
             ${sel === null && open ? `<div class="lf-fix-own"><input type="text" class="lf-fix-in beat" placeholder="+ бит: что должно случиться (необязательно)"></div>` : ''}
         </div>`;
     const sig = A.hash(html);
-    if (old && old.dataset.sig === sig) { markParas(el, open); return; }
+    if (old && old.dataset.sig === sig) { markParas(el, open, id); return; }
     const typed = old?.querySelector('.lf-fix-in')?.value;
     old?.remove();
     const host = el.querySelector('.mes_block') || el;
@@ -308,11 +310,15 @@ export function paintFix(el, id) {
     if (typed && node.querySelector('.lf-fix-in')) node.querySelector('.lf-fix-in').value = typed;
     const anchor = host.querySelector(':scope > .mes_text');
     if (anchor) anchor.after(node); else host.append(node);
-    markParas(el, open);
+    markParas(el, open, id);
 }
 
-function markParas(el, open) {
-    el.querySelectorAll('.mes_text > p, .mes_text > blockquote').forEach(p => p.classList.toggle('lf-fix-p', open));
+function markParas(el, open, id) {
+    const want = open && pick?.mes === id ? toks(pick.line).slice(0, 8).join(' ') : '';
+    el.querySelectorAll('.mes_text > p:not(.lf-duo-h), .mes_text > blockquote').forEach(p => {
+        p.classList.toggle('lf-fix-p', open);
+        p.classList.toggle('lf-fix-on', !!want && toks(p.textContent).slice(0, 8).join(' ') === want);
+    });
     el.classList.toggle('lf-fixing', open);
 }
 
@@ -320,7 +326,7 @@ function markParas(el, open) {
 export function fixTap(ev) {
     const mesEl = ev.target.closest?.('#chat .mes.lf-fixing');
     if (!mesEl) return false;
-    const p = ev.target.closest('.mes_text > p, .mes_text > blockquote');
+    const p = ev.target.closest('.mes_text > p:not(.lf-duo-h), .mes_text > blockquote');
     if (!p) return false;
     const i = Number(mesEl.getAttribute('mesid'));
     const m = A.chatArr()[i];
@@ -328,7 +334,7 @@ export function fixTap(ev) {
     if (!line) { A.toast('info', 'Не нашла этот кусок в тексте поста — тапни по обычному абзацу', '✎', { timeOut: 2200 }); return true; }
     ev.preventDefault();
     ev.stopPropagation();
-    pick = { mes: i, line };
+    pick = { mes: i, line, who: p.closest?.('[data-duo]')?.dataset.duo || '' };
     A.paintSoon?.();
     return true;
 }
@@ -351,7 +357,7 @@ export async function fixClick(act, el) {
             if (!sel) return true;
             const custom = el.parentElement?.querySelector('.lf-fix-in')?.value?.trim() || '';
             if (el.dataset.how === 'own' && !custom) { A.toast('info', 'Напиши, что поправить'); return true; }
-            await run(async () => { await rewriteLine(i, sel.line, el.dataset.how, custom); pick = null; });
+            await run(async () => { await rewriteLine(i, sel.line, el.dataset.how, custom, sel.who); pick = null; });
             return true;
         }
         case 'fx-mine': await run(() => mine(i), `${A.shortName(user())} — снова твоя`); return true;

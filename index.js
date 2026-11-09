@@ -45,6 +45,8 @@ import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initStones, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick } from './fix.js';
+import { initDuo, duoPrompt, duoSpeaker, paintDuo, duoSceneHtml, duoClick, duoCCHtml } from './duo.js';
+import { initCall, callPrompt, callChron, callAfterPost, paintCall, callCfgHtml } from './call.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
@@ -60,7 +62,7 @@ import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, cha
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.37.0';
+const VERSION = '0.38.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -812,6 +814,7 @@ function updateMovePrompt(type, consume = false) {
     try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
     try { const ap = settings().enabled && hasChat() ? arcOnce(type, consume) : ''; if (ap) modes = [modes, ap].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] ружьё', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
+    try { const dp = settings().enabled && hasChat() ? duoPrompt(type, consume) : ''; if (dp) modes = [modes, dp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вдвоём', e); }
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
@@ -983,7 +986,7 @@ async function runChron(i, { force = false } = {}) {
         const ext = bridgeEach(x => x.chron?.(i), 'Летописец');
         const input = chronInput({
             cast, location: st.scene?.location, when: fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time),
-            regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: m.name, prev,
+            regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: duoSpeaker(m) || m.name, prev,
             chapterTitle: ch?.title, sim: so?.input, extra: ext.map(x => x.input).filter(Boolean),
         });
         const askDetail = !!s.detail.on;
@@ -2423,6 +2426,7 @@ function renderWorld() {
         ${ag.length ? `${sec('Планы')}<div class="lf-list">${ag.map(a => `<button class="lf-row" data-act="jump" data-mes="${a.messageIndex}">${icon('calendar')}<span>${a.date ? `<b>${esc(a.date)}</b> · ` : ''}${esc(a.text)}</span>${icon('chevR', 'dim')}</button>`).join('')}</div>` : ''}`;
         try { body += freshHtml(); } catch (e) { console.warn('[Life] свежесть', e); }
         try { body += slipCfgHtml(); } catch (e) { console.warn('[Life] ляп-фикс', e); }
+        try { body += `${sec('В чате')}${callCfgHtml()}`; } catch (e) { console.warn('[Life] звонок', e); }
     } else if (tab === 'rumors') {
         body = renderPress(renderRumors());
     } else if (tab === 'time') {
@@ -3503,7 +3507,8 @@ async function onChange(ev) {
         if (k === 'showFab' || k === 'enabled') syncFab();
         if (['enabled', 'chatMarks', 'chapterBy', 'aliases'].includes(k)) { invalidate(); decorate(); }
         if (k === 'sceneBg' || k === 'enabled') updateSceneBg();
-        if (path[0] === 'detail' || path[0] === 'shot') paintChips();
+        if (path[0] === 'detail' || path[0] === 'shot' || path[0] === 'call') paintChips();
+        if (path[0] === 'call') updateMovePrompt();
         if (path[0] === 'plates') platesSync().then(() => { updateMovePrompt(); render(); });
         if (path[0] === 'cast') updateMovePrompt();
         if (k === 'autopay' && obj[k]) runAutopay();
@@ -3747,6 +3752,8 @@ const controlApi = {
     emoSrc: (id) => emoSrc(id),
     twistsHtml: () => (hasChat() && settings().enabled ? twistsHtml({ at: 'data-cc', chip: 'cc-chip', wrap: 'cc-chips wrap' }) : ''),
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
+    duoHtml: () => (hasChat() && settings().enabled ? duoCCHtml() : ''),
+    duoCC: (act, el) => duoClick(act, el),
     rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
 };
 
@@ -3847,6 +3854,10 @@ jQuery(async () => {
     hubMods.push({ pre: 'kmn-', click: stonesClick, label: 'Камни' });
     initEra(extApi);
     initRoute(extApi);
+    initDuo({ ...extApi, namesInText, emoSrc: (i, w) => emoSrc(i, w) });
+    initCall({ ...extApi, emoSrc: (i, w) => emoSrc(i, w) });
+    painters.push((el, id) => paintDuo(el, id), (el, id) => paintCall(el, id));
+    hubMods.push({ pre: 'duo-', click: duoClick, label: 'Вдвоём' });
     initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i) });
     painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
     chatClicks.push((act, el) => fixClick(act, el));
@@ -3952,6 +3963,16 @@ jQuery(async () => {
             prompt: (type) => smellPrompt(type),
             afterPost: () => smellAfterPost(),
             sceneHtml: () => smellSceneHtml(),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-call',
+            prompt: (type) => callPrompt(type),
+            chron: (i) => callChron(i),
+            afterPost: (i, j) => callAfterPost(i, j),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-duo',
+            sceneHtml: () => duoSceneHtml(),
         });
         globalThis.LifeBridge.register({
             id: 'life-stage',
