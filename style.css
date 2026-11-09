@@ -2432,3 +2432,35 @@ body.lf-era-hydra #lf-app .lf-btn.primary { background: linear-gradient(135deg, 
 @keyframes lf-route-dash { to { stroke-dashoffset: -18; } }
 .lf-route-eta { position: absolute; transform: translate(-50%, -100%); padding: 3px 9px; border-radius: 999px; background: rgba(20, 15, 17, .82); color: #f3e8e2; font: 600 11.5px var(--lf-sans); pointer-events: none; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .lf-route-svg path { animation: none; } }
+
+/* ───────────── 0.37: фиксы вместо реролла ───────────── */
+.mes .lf-fix { margin: 6px 0 2px; font-size: 12.5px; color: #a3958f; }
+.mes .lf-fix-btn { border: 1px solid rgba(237, 228, 223, .14); background: transparent; color: #a3958f; border-radius: 8px; padding: 1px 9px; font: 13px/1.5 -apple-system, sans-serif; cursor: pointer; opacity: .55; }
+.mes .lf-fix-btn:hover { opacity: 1; }
+.mes .lf-fix.open { padding: 8px 10px; border-radius: 14px; background: rgba(30, 24, 26, .55); border: 1px solid rgba(234, 179, 188, .22); color: #ede4df; }
+.mes .lf-fix.busy { opacity: .7; }
+.mes .lf-fix-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mes .lf-fix-row button { border: 1px solid rgba(237, 228, 223, .2); background: rgba(255, 255, 255, .03); color: #ede4df; border-radius: 999px; padding: 4px 10px; font: 12.5px -apple-system, sans-serif; cursor: pointer; }
+.mes .lf-fix-h { flex: 1 1 100%; color: #eab3bc; font-size: 12px; }
+.mes .lf-fix-sel { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(237, 228, 223, .1); }
+.mes .lf-fix-sel q { display: block; margin-bottom: 6px; font: italic 13px/1.4 'Playfair Display', Georgia, serif; color: #d6cac5; quotes: '«' '»'; }
+.mes .lf-fix-own { display: flex; gap: 6px; margin-top: 6px; }
+.mes .lf-fix-in { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(237, 228, 223, .18); background: rgba(255, 255, 255, .04); color: #ede4df; font: 13px -apple-system, sans-serif; }
+.mes .lf-fix-own button { border: 1px solid rgba(185, 220, 180, .4); background: none; color: #b9dcb4; border-radius: 10px; padding: 4px 12px; cursor: pointer; }
+.mes.lf-fixing .mes_text > p.lf-fix-p, .mes.lf-fixing .mes_text > blockquote.lf-fix-p { cursor: pointer; border-radius: 6px; box-shadow: inset 2px 0 0 rgba(234, 179, 188, .35); padding-left: 6px; transition: background .2s; }
+.mes.lf-fixing .mes_text > p.lf-fix-p:active { background: rgba(234, 179, 188, .08); }
+.lf-mg { display: flex; flex-direction: column; gap: 14px; margin: 8px 0 12px; }
+.lf-mg-sw > b { display: block; font: 600 11px/1 var(--lf-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--lf-dim); margin-bottom: 6px; }
+.lf-mg-p { position: relative; display: block; width: 100%; margin-bottom: 6px; padding: 8px 10px 8px 34px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .02); color: var(--lf-text2); font: 13px/1.4 var(--lf-sans); text-align: left; cursor: pointer; }
+.lf-mg-p i { position: absolute; left: 8px; top: 8px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--lf-line2); display: grid; place-items: center; font: normal 600 11px var(--lf-sans); color: #fff; }
+.lf-mg-p.on { border-color: rgba(234, 179, 188, .5); color: var(--lf-text); }
+.lf-mg-p.on i { background: var(--lf-wine2); border-color: transparent; }
+.mes .gca .lf-gca-redo { position: absolute; top: 8px; right: 8px; z-index: 3; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(20, 15, 17, .62); color: #f3e8e2; font: 16px/1 -apple-system, sans-serif; cursor: pointer; opacity: .75; }
+.mes .gca .lf-gca-pick { position: relative; z-index: 3; margin: 8px; padding: 10px; border-radius: 12px; background: rgba(20, 15, 17, .82); color: #ede4df; font: 12.5px -apple-system, sans-serif; }
+.mes .gca .lf-gca-pick.busy { opacity: .7; }
+.mes .gca .lf-gca-st { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.mes .gca .lf-gca-st button, .mes .gca .lf-gca-go button { border: 1px solid rgba(237, 228, 223, .2); background: rgba(255, 255, 255, .04); color: #ede4df; border-radius: 999px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.mes .gca .lf-gca-st button.on { background: #7b2d3d; border-color: transparent; }
+.mes .gca .lf-gca-fix { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(237, 228, 223, .18); background: rgba(255, 255, 255, .05); color: #ede4df; font: inherit; }
+.mes .gca .lf-gca-go { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.mes .gca .lf-gca-go button.main { background: #7b2d3d; border-color: transparent; }

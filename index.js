@@ -44,6 +44,7 @@ import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
 import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initStones, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
+import { initFix, paintFix, fixTap, fixClick } from './fix.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
 import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
@@ -54,12 +55,12 @@ import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
-import { initArt, onArtClick, artOnReceived, artTidy } from './art.js';
+import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.36.0';
+const VERSION = '0.37.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1610,6 +1611,9 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
+    // режим правки поста: тап по абзацу
+    try { if (fixTap(ev)) return; } catch (e) { console.warn('[Life] правка', e); }
+    try { if (onArtPick(ev)) return; } catch (e) { console.warn('[Life] карточка', e); }
     if (onArtClick(ev)) return;
     if (onShotClick(ev)) return;
     // свои кнопки в посте (чипы «не пропусти» и т. п.)
@@ -3843,6 +3847,10 @@ jQuery(async () => {
     hubMods.push({ pre: 'kmn-', click: stonesClick, label: 'Камни' });
     initEra(extApi);
     initRoute(extApi);
+    initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i) });
+    painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
+    chatClicks.push((act, el) => fixClick(act, el));
+    hubMods.push({ pre: 'fx-', click: fixClick, label: 'Правка' });
     hubMods.push({ pre: 'era-', click: eraClick, label: 'Эпоха' }, { pre: 'rt-', click: routeClick, label: 'Дорога' });
     mindParts.push((who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who));
     hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
@@ -3978,7 +3986,7 @@ jQuery(async () => {
     initKnock(simApi);
     initTidy(simApi);
     initMend(simApi);
-    initArt({ ...simApi, icon, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });
+    initArt({ ...simApi, icon, faceRef, namesInText, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }

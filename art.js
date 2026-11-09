@@ -8,6 +8,8 @@
 //  3) новый пост с карточкой, для которой у модуля есть своя картинка (Зёрнышко — снимок УЗИ на этот срок),
 //     — сразу ставит её, до SLAY: в сцене показывают тот самый снимок, что видят боты.
 
+import { SHOT_STYLES, styleText, chatStyle } from './shots.js';
+
 let A = null;
 const busy = new Set();   // посты, где сейчас проявляем
 const healed = new Set(); // уже просили движок перерисовать (пост|пути)
@@ -252,4 +254,120 @@ export function artTidy() {
         console.info(`[Life] пост #${i}: картинке в карточке дописана инструкция — второй копии не будет`);
     }
     return k;
+}
+
+// ───────────── перерисовать фото в карточке (как у детали: стиль, что поправить, снимок модуля) ─────────────
+
+
+const pickOpen = new Set();   // `${i}:${k}` — открытые панели
+const curStyle = () => { try { return chatStyle(); } catch { return 'story'; } };
+
+/** Лица тех, кто назван в карточке (до двоих) — как у детали: чтобы на фото были они, а не похожие. */
+async function cardRefs(text) {
+    let names = [];
+    try { names = (A.namesInText?.(text) || []).slice(0, 2); } catch { /* */ }
+    const refs = [];
+    const got = [];
+    for (const n of names) {
+        try { const r = await A.faceRef?.(n, 512); if (r) { refs.push(r); got.push(A.canonName?.(n) || n); } } catch { /* без рефа */ }
+    }
+    const note = refs.length
+        ? `Reference images, in order: ${got.join(', ')} — the people in this photo. Keep their faces, hair, skin tone, scars and marks exactly as in the references; the references are only for who is who, the style is below.\n`
+        : '';
+    return { refs, note, who: names };
+}
+
+/** У каждой карточки с готовым фото — ↻; открытая панель — под фото. Зовётся из отрисовки постов. */
+export function paintArt(el, i) {
+    if (!A || !on()) return;
+    const m = A.ctx().chat?.[i];
+    if (!m || typeof m.mes !== 'string' || !/<art\b/i.test(m.mes)) return;
+    const blocks = artBlocks(m.mes);
+    el.querySelectorAll('.mes_text .gca').forEach((card, n) => {
+        const cap = norm(card.querySelector('.cap')?.textContent);
+        let k = cap ? blocks.findIndex(x => norm(x.attrs.caption) === cap) : -1;
+        if (k < 0) k = n;
+        const b = blocks[k];
+        if (!b?.img || !isPath(b.img.src)) { card.querySelector(':scope .lf-gca-redo')?.remove(); return; }
+        if (!card.querySelector(':scope .lf-gca-redo')) {
+            card.style.position = card.style.position || 'relative';
+            card.insertAdjacentHTML('beforeend', `<button type="button" class="lf-gca-redo" data-mes="${i}" data-k="${k}" title="перерисовать фото">↻</button>`);
+        }
+        const key = `${i}:${k}`;
+        const old = card.querySelector(':scope .lf-gca-pick');
+        if (!pickOpen.has(key)) { old?.remove(); return; }
+        if (old) return;
+        const o = own(i, b);
+        const cur = curStyle();
+        card.insertAdjacentHTML('beforeend', `<div class="lf-gca-pick" data-mes="${i}" data-k="${k}">
+            <div class="lf-gca-st">${SHOT_STYLES.filter(s => s[0] !== 'custom').map(([id, label]) => `<button type="button" data-gst="${id}" class="${id === cur ? 'on' : ''}">${A.esc(label)}</button>`).join('')}</div>
+            <input type="text" class="lf-gca-fix" placeholder="что поправить (необязательно)">
+            <div class="lf-gca-go">${o?.src ? `<button type="button" data-gdo="own">${A.esc(o.label || 'снимок модуля')}</button>` : ''}<button type="button" data-gdo="draw" class="main">Перерисовать</button></div>
+        </div>`);
+    });
+}
+
+/** Клик по ↻ и панели. true — клик наш. */
+export function onArtPick(ev) {
+    const t = ev.target;
+    const redo = t.closest?.('.lf-gca-redo');
+    const pickEl = t.closest?.('.lf-gca-pick');
+    if (!redo && !pickEl) return false;
+    if (t.closest('input')) { ev.stopPropagation(); return true; }
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (redo) {
+        const key = `${redo.dataset.mes}:${redo.dataset.k}`;
+        if (pickOpen.has(key)) pickOpen.delete(key); else pickOpen.add(key);
+        paintArt(redo.closest('.mes[mesid]'), Number(redo.dataset.mes));
+        return true;
+    }
+    const st = t.closest('[data-gst]');
+    if (st) { pickEl.querySelectorAll('[data-gst]').forEach(b => b.classList.toggle('on', b === st)); return true; }
+    const go = t.closest('[data-gdo]');
+    if (go) redraw(Number(pickEl.dataset.mes), Number(pickEl.dataset.k), go.dataset.gdo, pickEl);
+    return true;
+}
+
+async function redraw(i, k, how, pickEl) {
+    const c = A.ctx();
+    const chat = c.chat;
+    const m = chat?.[i];
+    if (!m || busy.has(i)) return;
+    const b = artBlocks(m.mes)[k];
+    if (!b?.img) return;
+    busy.add(i);
+    const sid = pickEl.querySelector('[data-gst].on')?.dataset.gst || curStyle();
+    const fix = pickEl.querySelector('.lf-gca-fix')?.value?.trim() || '';
+    pickEl.classList.add('busy');
+    pickEl.querySelector('.lf-gca-go').innerHTML = '<span>рисую…</span>';
+    try {
+        let src = '', what = '';
+        if (how === 'own') { const o = own(i, b); src = o?.src || ''; what = o?.prompt || ''; }
+        if (!src) {
+            const ins = parseIns(b.img.ins);
+            what = ins?.prompt || `Photo for a story scene: ${textOf(b)}`;
+            let look = '';
+            try { look = styleText(sid); } catch { /* */ }
+            // «как у истории» — и вид самой карточки (полароид, газетное фото…), если модель его задала
+            const kind = sid === 'story' && ins?.style && ins.style !== 'photo' ? `, ${String(ins.style).replace(/_/g, ' ')}` : '';
+            const { refs, note, who } = await cardRefs(`${what} ${textOf(b)}`);
+            src = await A.drawPicture(`${what}${fix ? `\nCorrection from the player (follow it exactly): ${fix}` : ''}\n${note}${look ? `Style: ${look}${kind}.` : ''}\nNo text, no letters, no watermark.`, { aspect: ins?.aspect_ratio || '4:3', prefix: 'life_art', max: 1600, refs, who });
+        }
+        if (A.ctx().chat !== chat || chat[i] !== m) return;
+        const b2 = artBlocks(m.mes)[k];
+        const old = m.mes;
+        if (!b2 || !put(m, b2, src, what)) return;
+        try { A.rekeyMessage?.(i, old); } catch { /* */ }
+        await A.ctx().saveChat();
+        pickOpen.delete(`${i}:${k}`);
+        await refresh(i, m, true);
+        A.toast('success', how === 'own' ? 'В карточке — снимок модуля.' : 'Перерисовала.', '✦ Карточка', { timeOut: 2200 });
+    } catch (e) {
+        console.warn('[Life] карточка: перерисовать', e);
+        A.toast('warning', A.esc(String(e?.message || e)), '✦ Карточка', { timeOut: 6000 });
+        if (pickEl.isConnected) { pickEl.classList.remove('busy'); pickOpen.delete(`${i}:${k}`); pickEl.remove(); }
+    } finally {
+        busy.delete(i);
+    }
 }
