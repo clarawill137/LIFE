@@ -12,7 +12,7 @@ import { initErrors } from './errors.js';
 import { peopleDedupe, peopleDropCards, peopleClaimEra, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
-import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
+import { initModes, MODES_KEY, MODES, modesOn, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
 import { hurtLevel, initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief, paintDateGuard } from './days.js';
@@ -25,7 +25,7 @@ import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, fra
 import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather.js';
 import { initZr } from './zr.js';
 import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
-import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput } from './slip.js';
+import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput, slipAuto, locate } from './slip.js';
 import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick } from './cal.js';
 import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
 import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageClick } from './stage.js';
@@ -52,7 +52,7 @@ import { eraId, inEra, addEra } from './scope.js';
 import { initCare, careHtml, careClick, careInput, statsHtml, promptHtml, backupAuto } from './care.js';
 import { splitEvent } from './hsplit.js';
 import { crossSame } from './names.js';
-import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
+import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf, oocAuto } from './ooc.js';
 import { initLang, langPrompt, langHtml, langInput, langClick } from './lang.js';
 import { initFeel, applyFeel, feelOn, toggleFeel } from './feel.js';
 import { initHand, paintHand, handHtml, handClick } from './hand.js';
@@ -88,13 +88,14 @@ import { initPlates, platesSync, platesPrompt } from './plates.js';
 import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
-import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
+import { initMend, mendWanted, mendPost, mendLast, setMesText } from './mend.js';
+import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar } from './taste.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.49.0';
+const VERSION = '0.50.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -874,7 +875,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -905,6 +906,7 @@ function updateMovePrompt(type, consume = false) {
     try { modes = settings().enabled && hasChat() ? modesPrompt(type, consume) : ''; } catch (e) { console.warn('[Life] режимы', e); }
     try { const tp = settings().enabled && hasChat() ? twistPrompt(type, consume) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] твист', e); }
     if (drama) modes = [modes, drama].filter(Boolean).join('\n');
+    try { const tp = settings().enabled && hasChat() ? tasteOnce(type) : ''; if (tp) modes = [modes, tp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вкус', e); }
     try { const ap = settings().enabled && hasChat() ? arcOnce(type, consume) : ''; if (ap) modes = [modes, ap].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] ружьё', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { const dp = settings().enabled && hasChat() ? duoPrompt(type, consume) : ''; if (dp) modes = [modes, dp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вдвоём', e); }
@@ -1110,7 +1112,8 @@ function cancelChron(i) { const t = chronTimers.get(i); if (t) { clearTimeout(t)
 function cancelChronAll() { for (const t of chronTimers.values()) clearTimeout(t); chronTimers.clear(); }
 /** Она ответила — всё, что ждало паузу (в группе это могут быть ответы нескольких персонажей), читать сейчас, по порядку. */
 function flushChron() { const ids = [...chronTimers.keys()].sort((a, b) => a - b); for (const i of ids) { cancelChron(i); queueChron(i); } return ids.length; }
-const chronPending = () => chronTimers.size > 0 || chronBusy.size > 0 || chronQueue.length > 0;
+const polishing = new Set();   // посты у редактора «Вкуса» — Летописец читает после него
+const chronPending = () => chronTimers.size > 0 || chronBusy.size > 0 || chronQueue.length > 0 || polishing.size > 0;
 /** Перед ответом модели на пост игрока: дочитать последний ответ (если ещё не) и подождать — не дольше chron.waitSec. */
 async function chronReady(type) {
     if (['quiet', 'swipe', 'regenerate', 'continue', 'impersonate'].includes(type)) return;
@@ -2620,6 +2623,8 @@ function renderWorld() {
         body = renderPress(renderRumors());
     } else if (tab === 'heroes') {
         body = (() => { try { return heroesHtml(); } catch (e) { console.warn('[Life] герои', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'taste') {
+        body = (() => { try { return tasteHtml(); } catch (e) { console.warn('[Life] вкус', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'time') {
         body = `<section class="lf-clock">
             <span class="lf-clock-d">${esc([weekday(st.timestamp?.story_date), st.timestamp?.story_date].filter(Boolean).join(', ') || 'дата не записана')}</span>
@@ -2632,7 +2637,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['taste', 'Вкус'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -3941,6 +3946,8 @@ window.addEventListener('error', (e) => {
 
 function onChatChanged() {
     cancelChronAll();
+    polishing.clear();
+    setTimeout(() => { try { paintOocBar(); } catch { /* */ } }, 800);
     ui.focus = 'last';
     genActive = false;
     Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '', galShow: 48 });
@@ -4013,7 +4020,7 @@ const controlApi = {
     feel: () => feelOn(),
     toggleFeel: () => toggleFeel(),
     duoCC: (act, el) => duoClick(act, el),
-    rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes),
+    rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); },
 };
 
 const moodApi = { chatMeta, saveMeta, chatArr, chronOf, chapters, updatePrompt: () => updateMovePrompt() };
@@ -4023,7 +4030,7 @@ const simApi = {
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, chronOf, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
-    hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
+    hasChat, rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); }, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
     skipFlare: (who, w) => stonesOwns(who, w),
     emptyMeta,
@@ -4039,7 +4046,7 @@ const mindParts = [];
 
 globalThis.LifeBridge = {
     version: VERSION,
-    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes) },
+    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon, rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },
     register(mod) {
         if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;
         bridgeMods.push(mod);
@@ -4348,6 +4355,15 @@ jQuery(async () => {
     initTidy(simApi);
     initMend(simApi);
     initArt({ ...simApi, icon, faceRef, namesInText, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });
+    // «Вкус» — после ляп-фикса и «не он»: их находки он применяет сам
+    try {
+        initTaste({ ...extApi, genActive: () => genActive, modesOn, modeList: () => MODES.map(m => [m[0], `${m[1]} ${m[2]}`]), setMesText, locate, slipAuto, oocAuto });
+        painters.push((el, id) => paintTaste(el, id));
+        chatClicks.push((act, el) => tasteClick(act, el));
+        hubMods.push({ pre: 'ts-', click: tasteClick, label: 'Вкус' });
+        globalThis.LifeBridge.register({ id: 'life-taste', prompt: (type) => tastePrompt(type), chron: (i) => tasteChron(i), afterPost: (i, j) => tasteAfterPost(i, j) });
+        setTimeout(() => { try { paintOocBar(); } catch { /* */ } }, 2500);
+    } catch (e) { console.warn('[Life] вкус', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
@@ -4365,18 +4381,30 @@ jQuery(async () => {
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
     // свайпнула — отложенное чтение того варианта не нужно; удалили пост — номера съехали, таймеры по старым номерам снять
     if (E.MESSAGE_SWIPED) eventSource.on(E.MESSAGE_SWIPED, (id) => { cancelChron(Number(id)); paintChips(); });
+    // поправила пост модели руками — «Вкус» учится на правке
+    if (E.MESSAGE_EDITED) eventSource.on(E.MESSAGE_EDITED, (id) => { try { tasteEdited(Number(id)); } catch (e) { console.warn('[Life] вкус: правка', e); } });
     if (E.MESSAGE_DELETED) eventSource.on(E.MESSAGE_DELETED, () => { cancelChronAll(); chronForget(); setTimeout(() => { try { if (shotsHeal()) paintChips(); } catch (e) { console.warn('[Life] кадры после удаления', e); } }, 600); });
     const onAi = (id, type) => {
         later();
         const i = Number(id);
         // оборванный пост (Gemini рвёт хвост) — дописать; Летописец — уже по целому посту
         const mending = Number.isFinite(i) && i === lastAiIndex() && mendWanted(i, type);
-        if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) scheduleChron(j); } });
+        // сперва редактор «Вкуса» (чинит мелочи; грубый провал — прицельный реролл), потом Летописец читает уже причёсанное
+        const read = (j) => {
+            try { tasteSnap(j); } catch { /* */ }
+            polishing.add(j);
+            polish(j, type).catch(() => null).then((r) => {
+                polishing.delete(j);
+                if (r?.rerolled) return;                                   // вариант отвергнут — читать нечего
+                if (chatArr()[chatArr().length - 1]?.is_user) queueChron(j); else scheduleChron(j);   // она уже ответила — без паузы
+            });
+        };
+        if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) read(j); } });
         // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки (кроме того, что дописываем)
         // только этот новый пост — старые не трогаем (см. onChatChanged)
         if (Number.isFinite(i)) for (const ms of [1200, 6000]) setTimeout(() => { try { if (tidyMessage(i)) later(); } catch { /* */ } }, ms);
         if (type === 'impersonate') return;
-        if (!mending && Number.isFinite(i) && i === lastAiIndex()) scheduleChron(i);
+        if (!mending && Number.isFinite(i) && i === lastAiIndex()) read(i);
         setTimeout(() => { updateSceneBg(); runAutopay(); try { ambUpdate(); } catch { /* */ } }, 2200);
     };
     // карточке-«артефакту» своя картинка модуля (снимок УЗИ из Зёрнышка) — до того, как SLAY начнёт рисовать другую
@@ -4401,6 +4429,7 @@ jQuery(async () => {
         genActive = false;
         const cm = chatMeta();
         if (cm.director?.once && lastAiIndex() > (cm.director.after ?? -1)) { cm.director = null; saveMeta(); }
+        try { tasteGenEnd(); } catch (e) { console.warn('[Life] вкус', e); }
         updateMovePrompt();
     };
     for (const ev of [E.GENERATION_ENDED, E.GENERATION_STOPPED]) if (ev) eventSource.on(ev, endGen);

@@ -196,6 +196,26 @@ async function undoOne(i, n) {
 
 const keyOf = (i) => `${i}:${A.hash(A.chatArr()[i]?.mes || '')}`;
 
+/** «Вкус»: применить готовые правки без тапа — только те, что находятся в тексте точно (без запроса к модели). */
+export async function slipAuto(i) {
+    if (!slipOn() || busy.has(i)) return 0;
+    const e = A.chronOf(i);
+    const m = A.chatArr()[i];
+    const live = (e?.slip?.list || []).map((x, n) => ({ x, n })).filter(({ x }) => !x.off && !x.done && x.q && x.fix);
+    if (!m || !live.length) return 0;
+    busy.add(i);
+    let n = 0;
+    try {
+        for (const { x, n: k } of live) {
+            const hit = locate(String(A.chatArr()[i]?.mes || ''), x.q);
+            if (!hit?.exact) continue;
+            try { if (await fixOne(i, k)) n++; } catch { /* останется чипом */ }
+        }
+    } finally { busy.delete(i); }
+    if (n) A.saveMeta();
+    return n;
+}
+
 export function paintSlip(el, id) {
     const old = el.querySelector(':scope .lf-slip');
     const rec = slipOn() ? A.chronOf(id)?.slip : null;

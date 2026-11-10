@@ -136,6 +136,28 @@ export function paintOoc(el, id) {
     if (anchor) anchor.after(node); else host.append(node);
 }
 
+/** «Вкус»: переписать реплики «не он» его голосом без тапа (до двух на пост). */
+export async function oocAuto(i) {
+    if (!oocOn()) return 0;
+    let n = 0;
+    for (let round = 0; round < 2; round++) {
+        const e = A.chronOf(i);
+        const it = e?.ooc?.list?.find(x => !x.off && !x.done);
+        if (!it) break;
+        const k = `${i}:auto`;
+        if (busy.has(k)) break;
+        busy.add(k);
+        try {
+            await A.rewriteFor(i, it.q, it.who, it.why);
+            const it2 = A.chronOf(i)?.ooc?.list?.find(x => x.q === it.q);
+            if (it2) it2.done = true; else it.done = true;
+            n++;
+        } catch (err) { it.off = true; console.warn('[Life] «не он» сам', err); } finally { busy.delete(k); }
+    }
+    if (n) A.saveMeta();
+    return n;
+}
+
 export async function oocClick(act, el) {
     if (!act.startsWith('oc-')) return false;
     const i = Number(el.dataset.mes);
