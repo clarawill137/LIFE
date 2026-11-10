@@ -6,6 +6,7 @@
 import { crossSame } from './names.js';
 import { icon } from './icons.js';
 import { agendaPeopleHtml, agendaNpcHtml } from './agenda.js';
+import { eraId, inEra, addEra } from './scope.js';
 
 let A = null;
 export function initPeople(api) { A = api; }
@@ -41,7 +42,30 @@ function CM() {
     return x;
 }
 
-export function peopleList() { return P().list; }
+/** Люди этой эпохи (ядро таймлайна; без него — все). */
+export function peopleList() { return P().list.filter(inEra); }
+
+/** Кто появился в этом чате — тот и этой эпохи: по фактам и статусам чата и (один раз на чат) по упоминаниям в тексте. */
+export function peopleClaimEra() {
+    const era = eraId();
+    if (!era) return false;
+    const cm = CM();
+    let ch = false;
+    const mg = P().merged || {};
+    const seen = new Set([...Object.keys(cm.facts || {}), ...Object.keys(cm.status || {})].map(id => mg[id] || id));
+    let text = null;
+    if (cm.eraScan !== era) {
+        text = ` ${A.norm(A.chatArr().map(m => (m?.is_system && m?.extra?.type ? '' : String(m?.mes || '').replace(/<[^>]+>/g, ' '))).join(' '))} `;
+        cm.eraScan = era;
+        A.saveMeta();
+    }
+    for (const x of P().list) {
+        if (Array.isArray(x.eras) && x.eras.includes(era)) continue;
+        const here = seen.has(x.id) || (text !== null && [x.name, ...(x.aliases || [])].map(A.norm).filter(k => k.length >= 4).some(k => text.includes(` ${k}`)));
+        if (here && addEra(x)) ch = true;
+    }
+    return ch;
+}
 /** id карточки и тех, что в неё склеены (факты в других чатах лежат под старыми id). */
 function idsOf(x) { const mg = P().merged || {}; return [x.id, ...Object.keys(mg).filter(k => mg[k] === x.id)]; }
 const factsOf = (cm, x) => idsOf(x).flatMap(id => cm.facts[id] || []);
@@ -160,7 +184,7 @@ function nearby() {
     const tail = chat.slice(-2).map(m => String(m?.mes || '')).join('\n');
     const out = [];
     for (const x of P().list) {
-        if (notNpc(x.name, x.aliases)) continue;
+        if (notNpc(x.name, x.aliases) || !inEra(x)) continue;
         const inScene = here.some(h => keysOf(x).includes(A.norm(h)) || keysOf(x).some(k => k.split(' ')[0] === A.norm(h).split(' ')[0]));
         if (inScene) out.push({ x, how: 'scene' });
         else if (mentions(x, tail)) out.push({ x, how: 'mention' });
@@ -190,7 +214,7 @@ export function peoplePrompt(type) {
 export function peopleChronOpts() {
     const p = P();
     if (!p.list.length && !p.auto) return null;
-    const names = p.list.filter(x => !notNpc(x.name, x.aliases)).map(x => x.name).slice(0, 50);
+    const names = p.list.filter(x => !notNpc(x.name, x.aliases) && inEra(x)).map(x => x.name).slice(0, 50);
     return { line: names.join(', '), auto: p.auto, tokens: 140 };
 }
 
@@ -202,6 +226,7 @@ export function peopleAfterPost(i, res) {
     for (const r of list) {
         const x = findPerson(r.name);
         if (x) {
+            if (addEra(x)) A.saveSettings();   // появился в этом чате — он и этой эпохи
             if (r.fact) {
                 const arr2 = cm.facts[x.id] || (cm.facts[x.id] = []);
                 if (!arr2.some(f => A.norm(f.t) === A.norm(r.fact))) arr2.push({ t: r.fact, mes: i });
@@ -299,7 +324,7 @@ function mergePerson(raw, src) {
         }
         return ch ? 'upd' : '';
     }
-    p.list.push({ id: A.uid(), ...r, img: '', status: 'active', inject: true, src, at: Date.now() });
+    p.list.push({ id: A.uid(), ...r, img: '', status: 'active', inject: true, src, at: Date.now(), ...(eraId() ? { eras: [eraId()] } : {}) });
     return 'add';
 }
 
@@ -325,10 +350,10 @@ export function renderPeople() {
     const p = P();
     const cm = CM();
     const near = nearbyIds();
-    const groups = [...new Set(p.list.map(x => x.group).filter(Boolean))];
+    const groups = [...new Set(p.list.filter(inEra).map(x => x.group).filter(Boolean))];
     if (ui.pGroup && !groups.includes(ui.pGroup) && ui.pGroup !== '—') ui.pGroup = '';
     if (p.list.some(x => notNpc(x.name, x.aliases))) peopleDropCards();
-    const shown = p.list.filter(x => !ui.pGroup || (ui.pGroup === '—' ? !x.group : x.group === ui.pGroup))
+    const shown = p.list.filter(inEra).filter(x => !ui.pGroup || (ui.pGroup === '—' ? !x.group : x.group === ui.pGroup))
         .sort((a, b) => (near.has(b.id) ? 1 : 0) - (near.has(a.id) ? 1 : 0) || (a.group || 'я').localeCompare(b.group || 'я') || a.name.localeCompare(b.name));
     const horae = Object.keys(A.worldState().npcs || {}).filter(n => !findPerson(n) && !notNpc(n) && !cm.fresh.some(f => A.sameName(f.name, n))).slice(0, 12);
     return `<div class="lf-pagehead"><h1>Люди</h1><span class="lf-subtitle">${icon('users')} Постоянные NPC — кто они, как звучат, что о них известно</span></div>
@@ -476,7 +501,7 @@ export async function peopleClick(act, el) {
             if (!el.dataset.id && notNpc(rec.name, rec.aliases)) { A.toast('info', `У «${esc(rec.name)}» своя карточка — он в «Персонаже», не в «Людях»`, '✦ Люди', { timeOut: 3500 }); return true; }
             const x = personById(el.dataset.id);
             if (x) Object.assign(x, rec);
-            else { const id = A.uid(); p.list.push({ id, ...rec, img: '', status: 'active', inject: true, src: 'me', at: Date.now() }); ui.npc = id; }
+            else { const id = A.uid(); p.list.push({ id, ...rec, img: '', status: 'active', inject: true, src: 'me', at: Date.now(), ...(eraId() ? { eras: [eraId()] } : {}) }); ui.npc = id; }
             A.closeSheet();
             return done();
         }
@@ -510,7 +535,7 @@ export async function peopleClick(act, el) {
             cm.fresh = cm.fresh.filter(y => y !== f);
             if (notNpc(f?.name || el.dataset.name)) { A.saveMeta(); return done(); }
             const id = A.uid();
-            p.list.push({ id, name: f?.name || el.dataset.name, aliases: [], group: '', role: f?.who || '', age: '', look: '', traits: [], voice: '', bio: f?.who || '', toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: 'chron', at: Date.now() });
+            p.list.push({ ...(eraId() ? { eras: [eraId()] } : {}), id, name: f?.name || el.dataset.name, aliases: [], group: '', role: f?.who || '', age: '', look: '', traits: [], voice: '', bio: f?.who || '', toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: 'chron', at: Date.now() });
             A.saveMeta();
             ui.npc = id;
             return done();
@@ -521,7 +546,7 @@ export async function peopleClick(act, el) {
             const h = A.worldState().npcs?.[n];
             const texts = h && typeof h === 'object' ? Object.values(h).filter(v => typeof v === 'string' && v.trim()) : typeof h === 'string' ? [h] : [];
             const id = A.uid();
-            p.list.push({ id, name: n, aliases: [], group: '', role: '', age: '', look: '', traits: [], voice: '', bio: texts.join('. ').slice(0, 700), toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: 'horae', at: Date.now() });
+            p.list.push({ ...(eraId() ? { eras: [eraId()] } : {}), id, name: n, aliases: [], group: '', role: '', age: '', look: '', traits: [], voice: '', bio: texts.join('. ').slice(0, 700), toUser: '', secret: '', brief: '', img: '', status: 'active', inject: true, src: 'horae', at: Date.now() });
             ui.npc = id;
             return done();
         }

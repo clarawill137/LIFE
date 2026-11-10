@@ -9,13 +9,13 @@ import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
 import { initErrors } from './errors.js';
-import { peopleDedupe, peopleDropCards, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
+import { peopleDedupe, peopleDropCards, peopleClaimEra, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
 import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
 import { initModes, MODES_KEY, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
 import { hurtLevel, initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
-import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief } from './days.js';
+import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief, paintDateGuard } from './days.js';
 import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arcClick } from './arcs.js';
 import { initAlbum, albumHtml, albumClick, albumSetImg } from './album.js';
 import { initEmo, emoChron, emoAfterPost, emoSrc, emoStripHtml, emoClick, emoSetImg, EMOS } from './emo.js';
@@ -47,6 +47,9 @@ import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
 import { initLore, coreRefresh } from './lore.js';
 import { initSeed, seedApply } from './seed.js';
+import { makeChronMemory } from './memory.js';
+import { eraId, inEra, addEra } from './scope.js';
+import { initCare, careHtml, careClick, careInput, statsHtml, promptHtml, backupAuto } from './care.js';
 import { splitEvent } from './hsplit.js';
 import { crossSame } from './names.js';
 import { initOoc, oocChron, oocAfterPost, paintOoc, oocClick, oocHtml, oocInput, oocEnsure, coreOf } from './ooc.js';
@@ -87,11 +90,11 @@ import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast } from './mend.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
-import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES } from './shots.js';
+import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.48.1';
+const VERSION = '0.49.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -109,7 +112,7 @@ const DEFAULTS = {
     looks: {},
     pairs: {},
     autoMaps: 'ask',
-    chron: { on: true, profile: '', backup: '', effort: 'low', tokens: 4000, timeoutSec: 120, titles: true, relations: true, secrets: true },
+    chron: { on: true, profile: '', backup: '', effort: 'low', tokens: 4000, timeoutSec: 120, titles: true, relations: true, secrets: true, delaySec: 20, waitSec: 25 },
     money: { autopay: true },
     music: { tracks: [], auto: true, vol: 0.6 },
     sceneBg: true,
@@ -122,12 +125,14 @@ const DEFAULTS = {
 };
 
 const ctx = () => SillyTavern.getContext();
+const settingsReady = new WeakSet();
 function clone(v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); }
 
 function settings() {
     const ext = ctx().extensionSettings;
     if (!ext[MODULE] || typeof ext[MODULE] !== 'object') ext[MODULE] = {};
     const s = ext[MODULE];
+    if (settingsReady.has(s)) return s;   // значения по умолчанию — один раз на объект настроек, не на каждый вызов
     for (const [k, v] of Object.entries(DEFAULTS)) if (s[k] === undefined) s[k] = clone(v);
     for (const [k, v] of Object.entries(DEFAULTS.chron)) if (s.chron[k] === undefined) s.chron[k] = v;
     // 0.12.1: под думающие модели (Аргон, Gemini Pro) — запас токенов и времени, иначе размышления съедают ответ
@@ -145,6 +150,7 @@ function settings() {
     if (!s.migr03) { s.chatMarks = 'off'; delete s.dividers; delete s.focusDefault; s.migr03 = true; }
     if (!Array.isArray(s.regions)) s.regions = [];
     if (!s.regions.length) s.regions.push({ id: uid(), name: 'Манхэттен', map: '', note: '' });
+    settingsReady.add(s);
     return s;
 }
 
@@ -373,6 +379,33 @@ function chapterOf(mesId, list = chapters()) {
 // ───────────── места и районы ─────────────
 
 function regionById(id) { return settings().regions.find(r => r.id === id) || null; }
+/** Районы и места этой эпохи (без ядра таймлайна — все). */
+const regionsNow = () => settings().regions.filter(inEra);
+const placesNow = () => Object.entries(settings().places).filter(([, p]) => inEra(p));
+/**
+ * Что появилось в этом чате — этой эпохи: места из его истории (и их комнаты), их районы, люди. Список эпох
+ * у записи только растёт; «ничьи» записи видны везде, как раньше.
+ */
+function claimEra() {
+    if (!eraId() || !hasChat()) return false;
+    const s = settings();
+    const own = new Set();
+    const add = (raw) => { const k = placeKey(raw); if (k) own.add(k); const tk = placeKey(locTop(raw)); if (tk) own.add(tk); };
+    try { for (const c of chapters()) for (const l of c.locs) add(l); } catch { /* */ }
+    try { for (const name of Object.keys(locationMemory())) add(name); } catch { /* */ }
+    let ch = false;
+    for (const [k, p] of Object.entries(s.places)) {
+        if (!own.has(k) && !own.has(k.split('·')[0])) continue;
+        if (addEra(p)) ch = true;
+        const r = p.region ? regionById(p.region) : null;
+        if (r && addEra(r)) ch = true;
+    }
+    const cr = regionById(chatMeta().region);
+    if (cr && addEra(cr)) ch = true;
+    try { if (peopleClaimEra()) ch = true; } catch (e) { console.warn('[Life] эпохи: люди', e); }
+    if (ch) saveSettings();
+    return ch;
+}
 
 function findRegion(name, create = false) {
     const s = settings();
@@ -381,6 +414,7 @@ function findRegion(name, create = false) {
     let r = s.regions.find(x => norm(x.name) === n);
     if (!r && create) {
         r = { id: uid(), name: cap(String(name).trim()), map: '', note: '', fresh: true };
+        addEra(r);
         s.regions.push(r);
         saveSettings();
     }
@@ -393,6 +427,7 @@ function getPlace(loc, create = false) {
     const s = settings();
     if (!s.places[key] && create) {
         s.places[key] = { name: locParts(loc).join(' · '), raw: loc, icon: guessPlaceIcon(norm(locLeaf(loc))), img: '', plan: '', region: '', x: null, y: null, kind: '' };
+        addEra(s.places[key]);   // новое место — этой эпохи (ядро таймлайна)
     }
     return s.places[key] || null;
 }
@@ -417,7 +452,7 @@ function placeRegion(loc) {
 function currentRegion() {
     const s = settings();
     const st = worldState();
-    return placeRegion(st.scene?.location) || regionById(chatMeta().region) || s.regions[0];
+    return placeRegion(st.scene?.location) || regionById(chatMeta().region) || regionsNow()[0] || s.regions[0];
 }
 
 function placeDesc(loc) {
@@ -437,7 +472,7 @@ function knownLocations() {
     };
     for (const ch of chapters()) for (const l of ch.locs) add(l);
     for (const name of Object.keys(locationMemory())) add(name);
-    for (const [k, p] of Object.entries(settings().places)) if (!map.has(k)) map.set(k, p.raw || p.name);
+    for (const [k, p] of placesNow()) if (!map.has(k)) map.set(k, p.raw || p.name);   // только места этой эпохи
     return map;
 }
 
@@ -838,23 +873,27 @@ function moveNote(mark) {
     return `[Новая глава${mark.title ? `: ${mark.title}` : ''}.${mark.note ? ` ${mark.note}` : ''}]`;
 }
 
+let promptParts = [];
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
     const dir = settings().enabled ? chatMeta().director : null;
     const parts = [];
-    if (p) parts.push(moveNote(p.mark));
-    if (dir?.once && dir.text) parts.push(`[Режиссёр: ${dir.text}]`);
+    const named = [];   // те же блоки с подписями — для «что уходит модели» (Мир → ⚙)
+    const add = (label, t, first = false) => { if (!t) return; if (first) { parts.unshift(t); named.unshift({ label, text: t }); } else { parts.push(t); named.push({ label, text: t }); } };
+    if (p) add('переход', moveNote(p.mark));
+    if (dir?.once && dir.text) add('режиссёр', `[Режиссёр: ${dir.text}]`);
     if (settings().enabled && hasChat()) {
-        try { const sp = simPrompt(type); if (sp) parts.push(sp); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
-        try { const rp = relPrompt(); if (rp) parts.push(rp); } catch (e) { console.warn('[Life] отношения: заметка', e); }
-        try { const pp = peoplePrompt(type); if (pp) parts.push(pp); } catch (e) { console.warn('[Life] люди: заметка', e); }
-        try { const mp = moodPrompt(type); if (mp) parts.push(mp); } catch (e) { console.warn('[Life] настроение', e); }
-        try { const pr = pressPrompt(); if (pr) parts.push(pr); } catch (e) { console.warn('[Life] СМИ', e); }
-        try { const pl = platesPrompt(); if (pl) parts.push(pl); } catch (e) { console.warn('[Life] плашки', e); }
-        parts.push(...bridgeEach(m => m.prompt?.(type), 'заметка'));
-        try { const dp = daysPrompt(type); if (dp) parts.unshift(dp); } catch (e) { console.warn('[Life] дни', e); }
-        try { const fp = freshPrompt(type); if (fp) parts.push(fp); } catch (e) { console.warn('[Life] свежесть', e); }
+        try { add('жизнь', simPrompt(type)); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
+        try { add('отношения', relPrompt()); } catch (e) { console.warn('[Life] отношения: заметка', e); }
+        try { add('люди', peoplePrompt(type)); } catch (e) { console.warn('[Life] люди: заметка', e); }
+        try { add('настроение', moodPrompt(type)); } catch (e) { console.warn('[Life] настроение', e); }
+        try { add('СМИ', pressPrompt()); } catch (e) { console.warn('[Life] СМИ', e); }
+        try { add('плашки', platesPrompt()); } catch (e) { console.warn('[Life] плашки', e); }
+        for (const m of bridgeMods) { try { add(BRIDGE_NAMES[m.id] || m.id, m.prompt?.(type)); } catch (e) { console.warn(`[Life] ${m.id}: заметка`, e); } }
+        try { add('дни', daysPrompt(type), true); } catch (e) { console.warn('[Life] дни', e); }
+        try { add('свежесть', freshPrompt(type)); } catch (e) { console.warn('[Life] свежесть', e); }
     }
     const text = parts.join('\n');
     try { c.setExtensionPrompt(PROMPT_KEY, text, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] заметка', e); }
@@ -875,6 +914,8 @@ function updateMovePrompt(type, consume = false) {
     try { applyEra(); } catch (e) { console.warn('[Life] эпоха', e); }
     try { applyFeel(); } catch (e) { console.warn('[Life] экран', e); }
     try { c.setExtensionPrompt(MODES_KEY, modes, c.extension_prompt_types?.IN_CHAT ?? 1, 0, false, c.extension_prompt_roles?.SYSTEM ?? 0); } catch (e) { console.warn('[Life] режимы', e); }
+    if (modes) named.push({ label: 'режимы и на один ответ', text: modes });
+    promptParts = named;
     return [text, modes].filter(Boolean).join('\n');
 }
 
@@ -883,6 +924,8 @@ globalThis.life_intercept = async function (_chat, _size, _abort, type) {
     try { if (type !== 'quiet' && settings().enabled) await replyReady(type); } catch (e) { console.warn('[Life] не пропусти', e); }
     // «покажи им»: дождаться, пока модель разглядит картинку из поста игрока
     try { if (type !== 'quiet' && settings().enabled) await seeReady(type); } catch (e) { console.warn('[Life] покажи им', e); }
+    // Летописец ещё читает прошлый ответ — подождать, чтобы модель видела свежее состояние (раны, рука, кто где)
+    try { await chronReady(type); } catch (e) { console.warn('[Life] Летописец: ожидание', e); }
     try { if (type !== 'quiet') updateMovePrompt(type, true); } catch (e) { console.warn('[Life] перехват', e); }
 };
 
@@ -901,36 +944,67 @@ const chronBusy = new Set();
 const chronQueue = [];
 let chronRunning = false;
 
-function msgKey(m) { return `${m?.swipe_id ?? 0}:${hash(m?.mes || '')}`; }
-function chronStore() { const cm = chatMeta(); if (!cm.chron || typeof cm.chron !== 'object') cm.chron = {}; return cm.chron; }
-function chronOf(i) { const m = chatArr()[i]; return m ? chronStore()[`${i}:${msgKey(m)}`] || null : null; }
-/** Сообщение поправили снаружи (Реплики подменили реплику) — запись Летописца переезжает на новый текст. */
-function rekeyChron(i, oldMes) {
-    const m = chatArr()[i];
-    if (!m || oldMes == null) return false;
-    const st = chronStore();
-    const oldK = `${i}:${m.swipe_id ?? 0}:${hash(oldMes)}`;
-    const newK = `${i}:${msgKey(m)}`;
-    if (oldK === newK || !st[oldK]) return false;
-    if (!st[newK]) st[newK] = st[oldK];
-    delete st[oldK];
-    saveMeta();
-    return true;
-}
+// память Летописца — memory.js
+const { msgKey, chronStore, chronOf, rekeyChron, trimChron, forget: chronForget } = makeChronMemory({ chatArr: () => chatArr(), chatMeta: () => chatMeta(), saveMeta: () => saveMeta(), hash: (t) => hash(t) });
 
-function trimChron() {
+/**
+ * Чистка рероллов: у поста i остаётся только вариант cur и становится нулевым. Зовётся ДО правки сообщения,
+ * возвращает функцию для ПОСЛЕ: запись Летописца, отметка правок Horae и кадры переезжают на новый ключ,
+ * записи выброшенных вариантов уходят.
+ */
+function rekeySwipe(i, cur) {
+    const m = chatArr()[i];
+    if (!m) return null;
     const st = chronStore();
-    const keys = Object.keys(st);
-    if (keys.length <= 500) return;
-    keys.sort((a, b) => parseInt(a) - parseInt(b)).slice(0, keys.length - 500).forEach(k => delete st[k]);
+    const oldSuf = msgKey(m);
+    const oldShot = `${i}:${m.swipe_id ?? 0}`;
+    return () => {
+        const newSuf = msgKey(m);
+        const keep = st[`${i}:${oldSuf}`];
+        for (const k of Object.keys(st)) if (parseInt(k, 10) === i && k.startsWith(`${i}:`)) delete st[k];
+        if (keep) st[`${i}:${newSuf}`] = keep;
+        if (m.horae_meta?._lifeFix === oldSuf) m.horae_meta._lifeFix = newSuf;
+        const cm = chatMeta();
+        if (Array.isArray(cm.cuts)) {
+            cm.cuts = cm.cuts.filter(c => !String(c.key || '').startsWith(`${i}:`) || c.key === oldShot);
+            for (const c of cm.cuts) if (c.key === oldShot) c.key = `${i}:0`;
+        }
+        chronForget();
+    };
 }
 
 function profiles() { return ctx().extensionSettings?.connectionManager?.profiles || []; }
 function chronProfile() { const s = settings(); return s.chron.profile || ctx().extensionSettings?.wardrobe?.watcherProfile || ''; }
 
-async function askModel(messages, maxTokens) {
+// ───────────── счётчик вызовов ─────────────
+// Сколько раз за день Life ходил к модели и сколько примерно токенов — по модулям (Мир → ⚙).
+const dayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+function callerLabel() {
+    try {
+        const files = [...String(new Error().stack || '').matchAll(/\/([a-z]+)\.js[:?]/g)].map(m => m[1]);
+        return files.find(f => f !== 'index' && f !== 'ask') || 'index';
+    } catch { return 'index'; }
+}
+function countCall(label, messages, out) {
+    try {
+        const s = settings();
+        if (!s.stats || typeof s.stats !== 'object') s.stats = {};
+        const day = dayStamp();
+        const d = s.stats[day] = s.stats[day] || {};
+        const r = d[label] = d[label] || { n: 0, i: 0, o: 0 };
+        r.n++;
+        r.i += messages.reduce((a, m) => a + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content || '').length), 0);
+        r.o += String(out || '').length;
+        const days = Object.keys(s.stats).sort();
+        for (const k of days.slice(0, Math.max(0, days.length - 7))) delete s.stats[k];
+        saveSettings();
+    } catch { /* счётчик не важнее запроса */ }
+}
+
+async function askModel(messages, maxTokens, label = '') {
     const c = ctx();
     const s = settings();
+    const who = label || callerLabel();
     if (!c.ConnectionManagerRequestService?.sendRequest) throw new Error('в таверне нет Connection Manager');
     const find = (name) => (name ? profiles().find(x => x.name === name) || profiles().find(x => x.id === name) : null);
     const p = find(chronProfile());
@@ -939,11 +1013,18 @@ async function askModel(messages, maxTokens) {
     const override = s.chron.effort ? { reasoning_effort: s.chron.effort } : {};
     const base = Number(maxTokens) || 2000;
     const once = async (prof, tokens) => {
-        const r = await Promise.race([
-            c.ConnectionManagerRequestService.sendRequest(prof.id, messages, tokens, {}, override),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('Летописец не ответил вовремя')), (Number(s.chron.timeoutSec) || 75) * 1000)),
-        ]);
-        return { text: String(typeof r === 'string' ? r : (r?.content ?? '')), thought: !!String(r?.reasoning || '').trim() };
+        // не дождались — запрос отменяется (раньше модель дописывала в пустоту, а деньги шли)
+        const ac = typeof AbortController === 'function' ? new AbortController() : null;
+        let timer = null;
+        try {
+            const r = await Promise.race([
+                c.ConnectionManagerRequestService.sendRequest(prof.id, messages, tokens, ac ? { signal: ac.signal } : {}, override),
+                new Promise((_, rej) => { timer = setTimeout(() => { try { ac?.abort(); } catch { /* */ } rej(new Error('Летописец не ответил вовремя')); }, (Number(s.chron.timeoutSec) || 75) * 1000); }),
+            ]);
+            const text = String(typeof r === 'string' ? r : (r?.content ?? ''));
+            countCall(who, messages, text + String(r?.reasoning || ''));
+            return { text, thought: !!String(r?.reasoning || '').trim() };
+        } catch (e) { countCall(who, messages, ''); throw e; } finally { clearTimeout(timer); }
     };
     let a;
     try { a = await once(p, base); } catch (e) {
@@ -965,7 +1046,8 @@ async function askModel(messages, maxTokens) {
 }
 
 // Летописцу — за JSON с переспросом на обрезанный/битый ответ (ask.js)
-const askJson = makeAskJson({ ask: (m, t) => askModel(m, t), parse: (t) => extractJson(t), base: () => Number(settings().chron.tokens) || 4000 });
+const askJsonAs = (label, messages, tokens) => makeAskJson({ ask: (m, t) => askModel(m, t, label), parse: (t) => extractJson(t), base: () => 0 })(messages, tokens, { what: label });
+const askJson = makeAskJson({ ask: (m, t, w) => askModel(m, t, w), parse: (t) => extractJson(t), base: () => Number(settings().chron.tokens) || 4000 });
 
 async function waitHorae(i) {
     if (!horaeOn()) return;
@@ -1013,6 +1095,34 @@ function queueChron(i, opts = {}) {
     if (!chronRunning) drainChron();
 }
 
+// «Ленивый» Летописец: ждёт chron.delaySec после ответа. Свайпнула за это время — тот вариант не читается вовсе
+// (раньше каждый реролл стоил полного вызова). Отправила свой пост раньше — читает сразу, генерация его подождёт.
+const chronTimers = new Map();
+function scheduleChron(i) {
+    cancelChron(i);
+    const sec = Math.max(0, Math.min(120, Number(settings().chron.delaySec ?? 20) || 0));
+    if (!sec) { setTimeout(() => queueChron(i), 700); return; }
+    if (!shouldChron(i)) return;
+    chronTimers.set(i, setTimeout(() => { chronTimers.delete(i); queueChron(i); }, sec * 1000));
+    paintChips();
+}
+function cancelChron(i) { const t = chronTimers.get(i); if (t) { clearTimeout(t); chronTimers.delete(i); } }
+function cancelChronAll() { for (const t of chronTimers.values()) clearTimeout(t); chronTimers.clear(); }
+/** Она ответила — всё, что ждало паузу (в группе это могут быть ответы нескольких персонажей), читать сейчас, по порядку. */
+function flushChron() { const ids = [...chronTimers.keys()].sort((a, b) => a - b); for (const i of ids) { cancelChron(i); queueChron(i); } return ids.length; }
+const chronPending = () => chronTimers.size > 0 || chronBusy.size > 0 || chronQueue.length > 0;
+/** Перед ответом модели на пост игрока: дочитать последний ответ (если ещё не) и подождать — не дольше chron.waitSec. */
+async function chronReady(type) {
+    if (['quiet', 'swipe', 'regenerate', 'continue', 'impersonate'].includes(type)) return;
+    const s = settings();
+    if (!s.enabled || !s.chron.on || !hasChat()) return;
+    const chat = chatArr();
+    if (!chat[chat.length - 1]?.is_user) return;   // в группе отвечают подряд — следующего не задерживать
+    flushChron();
+    const until = Date.now() + Math.max(0, Math.min(90, Number(s.chron.waitSec ?? 25) || 0)) * 1000;
+    while (chronPending() && Date.now() < until) await new Promise(r => setTimeout(r, 250));
+}
+
 async function drainChron() {
     chronRunning = true;
     try {
@@ -1052,14 +1162,13 @@ async function runChron(i, { force = false } = {}) {
         const ext = bridgeEach(x => x.chron?.(i), 'Летописец');
         const input = chronInput({
             cast, location: st.scene?.location, when: fmtWhen(st.timestamp?.story_date, st.timestamp?.story_time),
-            regions: s.regions.map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: duoSpeaker(m) || m.name, prev,
+            regions: regionsNow().map(r => r.name), items: st.items, post: cut(plainText(m.mes), 9000), speaker: duoSpeaker(m) || m.name, prev,
             chapterTitle: ch?.title, sim: so?.input, extra: ext.map(x => x.input).filter(Boolean),
         });
         const askDetail = !!s.detail.on;
         const askShot = !!s.shot.suggest;
-        const out = await askModel([{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext, shot: askShot }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (askShot ? 150 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
-        const j = extractJson(out);
-        if (!j) throw new Error('Летописец ответил не JSON');
+        // ответ оборвался или пришёл битым — один переспрос с запасом токенов (ask.js), а не потерянный пост
+        const j = await askJsonAs('Летописец', [{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext, shot: askShot }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (askShot ? 150 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
         const res = normalizeResult(j);
         if (chatArr()[i] !== m || msgKey(m) !== key.split(':').slice(1).join(':')) return; // пока думал — свайпнули
         m.horae_meta = m.horae_meta || emptyMeta();
@@ -1087,6 +1196,7 @@ async function runChron(i, { force = false } = {}) {
         if (store[key].det && !store[key].detImg && s.detail.auto) queueDetail(key);
         try { simAfterPost(i, res, m); updateMovePrompt(); } catch (e) { console.warn('[Life] Жизнь после поста', e); }
         bridgeEach(x => x.afterPost?.(i, j, m), 'после поста');
+        try { claimEra(); } catch { /* */ }
         updateMovePrompt();
     } catch (e) {
         console.warn('[Life] Летописец:', e);
@@ -1934,7 +2044,7 @@ function mapLevel() { const key = ui.mapStack[ui.mapStack.length - 1]; return ke
 
 function pinsFor(level, region) {
     const out = [];
-    for (const [key, p] of Object.entries(settings().places)) {
+    for (const [key, p] of placesNow()) {
         if (p.x == null || p.y == null) continue;
         const parts = key.split('·');
         if (level) { if (parts.length < 2 || parts.slice(0, -1).join('·') !== level.key) continue; }
@@ -1986,8 +2096,8 @@ function renderAtlas() {
     const cur = currentRegion();
     return `<div class="lf-pagehead"><div><span class="lf-kicker">Атлас</span><h1>Карты</h1></div>
         <button class="lf-iconbtn" data-act="atlas-close">${icon('x')}</button></div>
-    <div class="lf-atlas">${s.regions.map(r => {
-        const n = Object.values(s.places).filter(p => p.region === r.id).length;
+    <div class="lf-atlas">${regionsNow().map(r => {
+        const n = placesNow().filter(([, p]) => p.region === r.id).length;
         return `<button class="lf-card lf-region${r.id === cur?.id ? ' on' : ''}" data-act="region" data-id="${esc(r.id)}">
             <span class="lf-region-img"${r.map ? ` style="background-image:url('${esc(r.map)}')"` : ''}>${r.map ? '' : icon('map', 'xl')}</span>
             <span class="lf-region-t"><b>${esc(r.name)}</b><small>${n} ${plural(n, 'место', 'места', 'мест')}${r.id === cur?.id ? ' · вы здесь' : ''}${r.needsMap ? ' · нужна карта' : ''}</small></span>
@@ -2052,7 +2162,7 @@ function renderMap() {
     const regs = !level ? `<div class="lf-chips">
         ${homeKey ? `<button class="lf-chip" data-act="map-home" data-key="${esc(homeKey)}">${icon('home')} Дом</button>` : ''}
         <button class="lf-chip" data-act="atlas">${icon('layers')} Атлас</button>
-        ${s.regions.map(r => `<button class="lf-chip${r.id === region?.id ? ' on' : ''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}${r.needsMap ? ' •' : ''}</button>`).join('')}
+        ${regionsNow().map(r => `<button class="lf-chip${r.id === region?.id ? ' on' : ''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}${r.needsMap ? ' •' : ''}</button>`).join('')}
     </div>` : '';
 
     const mapBox = img ? `<div class="lf-map${ui.editPins ? ' editing' : ''}">
@@ -2245,7 +2355,7 @@ function renderGarage(who, st) {
     const st2 = worldState();
     const present = (st2.scene?.characters_present || []).map(canonName);
     const others = castNames(st2).filter(n => !sameName(n, who));
-    const dests = Object.entries(s.places).filter(([k]) => !k.includes('·')).slice(0, 40);
+    const dests = placesNow().filter(([k]) => !k.includes('·')).slice(0, 40);
     return `<div class="lf-pagehead"><h1>${icon('car', 'h')} Гараж</h1></div>
     ${cars.length > 1 ? `<div class="lf-chips">${cars.map(([n]) => `<button class="lf-chip${n === ui.car ? ' on' : ''}" data-act="car" data-v="${esc(n)}">${esc(cut(n, 22))}</button>`).join('')}</div>` : ''}
     <section class="lf-car">
@@ -2544,6 +2654,9 @@ function renderCfg() {
         <div class="lf-field"><label>Reasoning effort</label><select data-set="chron.effort">${['', 'low', 'medium', 'high'].map(v => `<option value="${v}" ${v === s.chron.effort ? 'selected' : ''}>${v || 'из профиля'}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Токенов на ответ <small>(думающим моделям — 4000–8000, иначе мысли съедят ответ)</small></label><input type="number" min="1000" max="32000" step="500" data-set="chron.tokens" value="${esc(s.chron.tokens)}"></div>
         <div class="lf-field"><label>Ждать ответа, сек</label><input type="number" min="30" max="600" step="10" data-set="chron.timeoutSec" value="${esc(s.chron.timeoutSec)}"></div>
+        <div class="lf-field"><label>Когда читать ответ <small>(с паузой — рероллы не оплачиваются: свайпнула до конца паузы — тот вариант не читается; отправила свой пост — читает сразу)</small></label>
+            <select data-set="chron.delaySec">${[[0, 'сразу'], [10, 'через 10 секунд'], [20, 'через 20 секунд'], [40, 'через 40 секунд'], [90, 'через полторы минуты']].map(([v, l]) => `<option value="${v}" ${Number(s.chron.delaySec ?? 20) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="lf-field"><label>Перед твоим ответом ждать Летописца, сек <small>(чтобы модель видела свежие раны, руку, кто где; 0 — не ждать)</small></label><input type="number" min="0" max="90" step="5" data-set="chron.waitSec" value="${esc(s.chron.waitSec ?? 25)}"></div>
         ${sw('titles', 'Придумывать названия главам', s.chron, 'chron.titles')}
         ${sw('relations', 'Вести шкалы и моменты отношений', s.chron, 'chron.relations')}
         ${sw('secrets', 'Замечать тайны', s.chron, 'chron.secrets')}
@@ -2578,7 +2691,12 @@ function renderCfg() {
             <option value="off" ${s.autoMaps === 'off' ? 'selected' : ''}>молчать</option></select></div>
         <div class="lf-field"><label>Стиль картинок <small>(по-английски)</small></label><textarea rows="3" data-set="artStyle">${esc(s.artStyle)}</textarea></div>
         <div class="lf-field"><label>Как зовут персонажей в тексте <small>(Имя карточки = прозвища; из Гардероба уже учтены)</small></label><textarea rows="3" data-set="aliases" placeholder="Bucky Barnes = Баки, Джеймс">${esc(s.aliases)}</textarea></div>
-        <div class="lf-field"><label>Что сейчас уходит модели от Life</label><pre class="lf-pre">${esc(updateMovePrompt() || '— ничего: Life молчит, пока ты не нажмёшь «Отправиться», «Новая глава» или «Режиссёр» —')}</pre></div>
+        ${sec('Обслуживание')}
+        ${(() => { try { return careHtml(); } catch (e) { console.warn('[Life] обслуживание', e); return ''; } })()}
+        ${sec('Сколько Life ходил к модели', 'по дням и модулям')}
+        ${(() => { try { return statsHtml(); } catch (e) { console.warn('[Life] счётчик', e); return ''; } })()}
+        ${sec('Что сейчас уходит модели от Life', 'по блокам')}
+        ${(() => { updateMovePrompt(); try { return promptHtml(promptParts); } catch (e) { console.warn('[Life] промпт', e); return ''; } })()}
         <div class="lf-foot">Life ${VERSION} · Horae ${esc(window.Horae?.version || 'не найден')} · <code>/life</code></div>
     </div>`;
 }
@@ -2802,7 +2920,7 @@ function placeMenu(loc) {
             <label class="lf-btn">${icon('upload')} ${p?.plan ? 'Сменить план' : 'Загрузить план'}<input type="file" accept="image/*" data-file="plan" data-key="${esc(key)}" hidden></label>
             <button class="lf-btn" data-act="draw-plan" data-key="${esc(key)}">${icon('wand')} Нарисовать план</button>
         </div>
-        ${top ? `${sec('Район')}<div class="lf-chips wrap">${s.regions.map(r => `<button class="lf-chip${p.region === r.id ? ' on' : ''}" data-act="place-region" data-id="${esc(r.id)}" data-loc="${esc(loc)}">${esc(r.name)}</button>`).join('')}</div>` : ''}
+        ${top ? `${sec('Район')}<div class="lf-chips wrap">${regionsNow().map(r => `<button class="lf-chip${p.region === r.id ? ' on' : ''}" data-act="place-region" data-id="${esc(r.id)}" data-loc="${esc(loc)}">${esc(r.name)}</button>`).join('')}</div>` : ''}
         ${sec('Значок')}
         <div class="lf-chips wrap">${PLACE_ICON_NAMES.map(ic => `<button class="lf-chip icon${placeIcon(loc) === ic ? ' on' : ''}" data-act="place-icon" data-icon="${ic}" data-loc="${esc(loc)}">${icon(ic)}</button>`).join('')}</div>
         <div class="lf-field"><label>Название на карте</label><div class="lf-inline"><input type="text" data-in="pname" value="${esc(placeName(loc))}"><button class="lf-btn" data-act="place-rename" data-loc="${esc(loc)}">OK</button></div></div>
@@ -2948,7 +3066,7 @@ async function faceRef(name, max = 768) {
 
 async function drawRegionMap(region) {
     const s = settings();
-    const places = Object.entries(s.places).filter(([k, p]) => !k.includes('·') && (p.region === region.id)).slice(0, SLOTS.length);
+    const places = placesNow().filter(([k, p]) => !k.includes('·') && (p.region === region.id)).slice(0, SLOTS.length);
     const assigned = places.map(([, p], i) => [p, SLOTS[i]]);
     const path = await drawPicture(mapPrompt(region, assigned), { aspect: '4:3', max: 2200, prefix: 'life_map' });
     region.map = path;
@@ -3077,7 +3195,7 @@ async function onClick(ev) {
         try { await twistClick(act, el, { at: 'data-act', openSheet, closeSheet, rerender: render, busy: withBusy }); } catch (e) { console.warn('[Life] твист', e); toast('warning', esc(String(e?.message || e)), '✦ Твист'); }
         return;
     }
-    if (act === 'days-n' || act === 'days-all' || act.startsWith('day-')) {
+    if (act.startsWith('days-') || act.startsWith('day-')) {
         try { await daysClick(act, el); } catch (e) { console.warn('[Life] дни', e); toast('warning', esc(String(e?.message || e)), '✦ Дни'); }
         return;
     }
@@ -3822,6 +3940,7 @@ window.addEventListener('error', (e) => {
 });
 
 function onChatChanged() {
+    cancelChronAll();
     ui.focus = 'last';
     genActive = false;
     Object.assign(ui, { mapStack: [], who: '', chShow: 30, sel: '', region: '', atlas: false, item: '', pair: '', car: '', wset: '', galShow: 48 });
@@ -3842,6 +3961,7 @@ function onChatChanged() {
     for (const ms of [1500, 6000]) setTimeout(() => { coreRefresh(true).catch(e => console.warn('[Life] ядро таймлайна', e)); }, ms);
     // посев «от Claude» (лорбук на сервере): дни, подвиги — один раз на версию
     setTimeout(() => { seedApply().catch(e => console.warn('[Life] посев', e)); }, 9000);
+    setTimeout(() => { try { if (claimEra() && ui.open) renderSoon(); } catch (e) { console.warn('[Life] эпохи', e); } }, 7000);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
     setTimeout(() => { try { fameEnsure(); } catch (e) { console.warn('[Life] кого как узнают', e); } }, 16000);
@@ -3902,7 +4022,7 @@ const simApi = {
     settings, saveSettings, chatMeta, saveMeta, ctx, esc, norm, cut, cap, plural, uid, toast, ava, avatarUrl, canonName, sameName, shortName,
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
-    lastAiIndex, chatArr, chronStore, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
+    lastAiIndex, chatArr, chronStore, chronOf, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
     hasChat, rekeyMessage: (i, oldMes) => rekeyChron(i, oldMes), scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
     skipFlare: (who, w) => stonesOwns(who, w),
@@ -3960,6 +4080,11 @@ jQuery(async () => {
     const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
     initDays(extApi);
     initSeed(extApi);
+    initCare({ ...extApi, version: VERSION, rekeySwipe: (i, cur) => rekeySwipe(i, cur) });
+    hubMods.push({ pre: 'care-', click: careClick, label: 'Обслуживание' });
+    hubInputs.push((el) => { if (el?.dataset?.in === 'care-file') { careInput(el); return true; } return false; });
+    // копия настроек Life на сервер — раз в день, тихо
+    setTimeout(() => { backupAuto().then(ok => { if (ok) console.info('[Life] копия настроек — на сервере'); }).catch(e => console.warn('[Life] копия настроек', e)); }, 30000);
     initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c) });
     initFresh(extApi);
     initFrames(extApi);
@@ -3971,7 +4096,8 @@ jQuery(async () => {
     initVoice(extApi);
     initSlip(extApi);
     painters.push((el, id) => paintReply(el, id), (el, id) => paintFrame(el, id), (el, id) => paintSlip(el, id));
-    chatClicks.push((act, el) => frameClick(act, el), (act, el) => slipClick(act, el));
+    chatClicks.push((act, el) => frameClick(act, el), (act, el) => slipClick(act, el), (act, el) => daysClick(act, el));
+    painters.push((el, id) => paintDateGuard(el, id));
     hubMods.push({ pre: 'vo-', click: voiceClick, label: 'Голос' }, { pre: 'sl-', click: slipClick, label: 'Ляп-фикс' });
     hubInputs.push(slipInput);
     initCal({ ...extApi, horaeAgenda });
@@ -4237,17 +4363,20 @@ jQuery(async () => {
     try { window.addEventListener?.('sacred-timeline:changed', () => { coreRefresh(true).catch(() => { }); }); } catch { /* */ }
     const later = () => { invalidate(); decorateSoon(450); setTimeout(() => { invalidate(); decorateSoon(); }, 1600); };
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
+    // свайпнула — отложенное чтение того варианта не нужно; удалили пост — номера съехали, таймеры по старым номерам снять
+    if (E.MESSAGE_SWIPED) eventSource.on(E.MESSAGE_SWIPED, (id) => { cancelChron(Number(id)); paintChips(); });
+    if (E.MESSAGE_DELETED) eventSource.on(E.MESSAGE_DELETED, () => { cancelChronAll(); chronForget(); setTimeout(() => { try { if (shotsHeal()) paintChips(); } catch (e) { console.warn('[Life] кадры после удаления', e); } }, 600); });
     const onAi = (id, type) => {
         later();
         const i = Number(id);
         // оборванный пост (Gemini рвёт хвост) — дописать; Летописец — уже по целому посту
         const mending = Number.isFinite(i) && i === lastAiIndex() && mendWanted(i, type);
-        if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) setTimeout(() => queueChron(j), 300); } });
+        if (mending) mendPost(i, { auto: true, after: (j) => { later(); if (j === lastAiIndex()) scheduleChron(j); } });
         // огрызок <details> в конце поста (упёрлись в лимит) — срезать, пока ExtBlocks дописывает свои блоки (кроме того, что дописываем)
         // только этот новый пост — старые не трогаем (см. onChatChanged)
         if (Number.isFinite(i)) for (const ms of [1200, 6000]) setTimeout(() => { try { if (tidyMessage(i)) later(); } catch { /* */ } }, ms);
         if (type === 'impersonate') return;
-        if (!mending && Number.isFinite(i) && i === lastAiIndex()) setTimeout(() => queueChron(i), 700);
+        if (!mending && Number.isFinite(i) && i === lastAiIndex()) scheduleChron(i);
         setTimeout(() => { updateSceneBg(); runAutopay(); try { ambUpdate(); } catch { /* */ } }, 2200);
     };
     // карточке-«артефакту» своя картинка модуля (снимок УЗИ из Зёрнышка) — до того, как SLAY начнёт рисовать другую
@@ -4256,13 +4385,18 @@ jQuery(async () => {
     else if (E.MESSAGE_RECEIVED) eventSource.on(E.MESSAGE_RECEIVED, onAi);
     if (E.MESSAGE_SENT) eventSource.on(E.MESSAGE_SENT, (id) => {
         ui.focus = 'last'; later();
+        // она ответила — последний ответ точно остаётся: Летописцу читать его сейчас, не ждать паузу
+        try { flushChron(); } catch { /* */ }
         try { recapSeen(); } catch { /* */ }
         // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
         try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
         try { if (settings().enabled) seeWarm(Number(id)); } catch (e) { console.warn('[Life] покажи им', e); }
         setTimeout(() => { try { paintDraft(); } catch { /* */ } }, 120);
     });
-    if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => { if (!dry && type !== 'quiet') genActive = true; });
+    if (E.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (type, _o, dry) => {
+        if (!dry && type !== 'quiet') genActive = true;
+        if (!dry && (type === 'swipe' || type === 'regenerate')) { try { cancelChron(lastAiIndex()); } catch { /* */ } }
+    });
     const endGen = () => {
         genActive = false;
         const cm = chatMeta();

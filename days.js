@@ -562,6 +562,61 @@ export function setDaySummary(key, text, open = []) {
     A.saveMeta();
 }
 
+// ───────────── страж дат ─────────────
+// Всё время в Life — из даты Horae. Модель ошиблась месяцем — и поехали раны, счета, срок. Поэтому прыжок даты
+// (вперёд больше трёх дней или назад — и это не сон/флешбек, не перемотка Life) сразу виден чипом под постом:
+// «так и надо» или «дата не та» — пока неверных постов один-два, а не сто.
+
+const FRAME_OFF = ['flashback', 'dream', 'vision', 'memory'];
+let jumpMemo = { sig: '', map: new Map() };
+/** Прыжки дат: Map(номер поста → { from, to, days }) — только неподтверждённые. */
+export function dateJumps() {
+    const chat = A.chatArr();
+    const last = chat[chat.length - 1];
+    const ok = M().okJump || {};
+    // пометки «флешбек/сон» Летописец ставит позже поста — их тоже в подпись (свежие 40 постов)
+    let fr = '';
+    for (let i = Math.max(0, chat.length - 40); i < chat.length; i++) { const k = chat[i] && !chat[i].is_user ? A.chronOf?.(i)?.frame?.kind : ''; if (k) fr += `${i}${k[0]}`; }
+    const sig = `${A.ctx().chatId || A.ctx().groupId}|${chat.length}|${String(last?.mes || '').length}|${A.chatMeta().ver || 0}|${Object.keys(ok).length}|${last?.horae_meta?.timestamp?.story_date || ''}|${fr}`;
+    if (jumpMemo.sig === sig) return jumpMemo.map;
+    const map = new Map();
+    let prev = null;
+    for (let i = 0; i < chat.length; i++) {
+        const m = chat[i];
+        const meta = m?.horae_meta;
+        if (!meta?.timestamp?.story_date || meta._skipHorae) continue;
+        const k = dayKey(meta.timestamp.story_date);
+        if (!keyDate(k)) continue;
+        if (m.extra?.life || m.is_user || !prev || prev === k) { prev = k; continue; }   // отметка Life (перемотка) — дата верная по определению
+        const days = Math.round((keyDate(k) - keyDate(prev)) / 864e5);
+        const fk = A.chronOf?.(i)?.frame?.kind;
+        if (days < 0 && fk && FRAME_OFF.includes(fk)) continue;                       // флешбек: «сейчас» не меняется
+        if ((days > 3 || days < 0) && ok[i] !== k) map.set(i, { from: prev, to: k, days });
+        prev = k;
+    }
+    jumpMemo = { sig, map };
+    return map;
+}
+
+export function paintDateGuard(el, id) {
+    const old = el.querySelector(':scope .lf-dguard');
+    const chat = A.chatArr();
+    const j = id >= chat.length - 80 ? dateJumps().get(id) : null;
+    if (!j) { old?.remove(); return; }
+    const html = `<div class="lf-dguard lf-slip lf-own"><span class="lf-slip-chip">⚠ <b>Дата прыгнула:</b> ${esc(dayLabel(j.from, '', true))} → ${esc(dayLabel(j.to, '', true))} (${j.days > 0 ? '+' : '−'}${Math.abs(j.days)} ${A.plural(Math.abs(j.days), 'день', 'дня', 'дней')})
+        <button data-act="day-jump-ok" data-mes="${id}">так и надо</button><button class="main" data-act="day-jump-fix" data-mes="${id}">дата не та</button></span></div>`;
+    const sig = A.hash(html);
+    if (old && old.dataset.sig === sig) return;
+    old?.remove();
+    const host = el.querySelector('.mes_block') || el;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const node = tmp.firstElementChild;
+    node.dataset.sig = sig;
+    const anchor = host.querySelector(':scope > .mes_text');
+    if (anchor) anchor.after(node); else host.append(node);
+}
+
 // ───────────── лист «Дата не та?» ─────────────
 
 function nightChips(key, chunks) {
@@ -577,15 +632,16 @@ function nightChips(key, chunks) {
     return out.join('');
 }
 
-function dateFixHtml(d, K) {
+function dateFixHtml(d, K, pick = -1, toKey = '') {
     const chunks = dayChunks(d.key);
     const one = chunks.length === 1;
+    const on = (c) => one || (pick >= c.from && pick <= c.to);
     return `<div class="lf-day-fix">
         <label>${A.icon('calendar')} Дата не та?</label>
         <small>${one ? `Horae записал ${esc(dayLabel(d.key, d.raw, true))} — посты #${chunks[0].from}–#${chunks[0].to}.` : `<b>Эта дата стоит в чате в ${chunks.length} местах</b> — это могут быть разные дни. Отметь только то место, где дата не та.`} Перепишу дату в самих постах (увидят Horae, Life и модель); остальные посты — при своей, итоги дней не трогаю.</small>
-        <div class="lf-chips wrap">${chunks.map(c => `<button class="lf-chip${one ? ' on' : ''}" data-act="day-chunk" data-k="${K}" data-from="${c.from}" data-to="${c.to}">#${c.from}–#${c.to} · ${c.n} ${A.plural(c.n, 'сообщение', 'сообщения', 'сообщений')}</button>`).join('')}</div>
-        <div class="lf-day-fix-row"><input type="date" data-in="day-date" value="${esc(d.key)}"><span class="lf-day-part" hidden></span></div>
-        <div class="lf-chips wrap lf-day-night">${nightChips(d.key, one ? chunks : [])}</div>
+        <div class="lf-chips wrap">${chunks.map(c => `<button class="lf-chip${on(c) ? ' on' : ''}" data-act="day-chunk" data-k="${K}" data-from="${c.from}" data-to="${c.to}">#${c.from}–#${c.to} · ${c.n} ${A.plural(c.n, 'сообщение', 'сообщения', 'сообщений')}</button>`).join('')}</div>
+        <div class="lf-day-fix-row"><input type="date" data-in="day-date" value="${esc(toKey || d.key)}"><span class="lf-day-part" hidden></span></div>
+        <div class="lf-chips wrap lf-day-night">${nightChips(d.key, chunks.filter(on))}</div>
         <button class="lf-btn full" data-act="day-redate" data-k="${K}">${A.icon('calendar')} Переставить дату</button>
     </div>`;
 }
@@ -672,6 +728,21 @@ export async function daysClick(act, el) {
                 ${d && kd ? dateFixHtml(d, K) : ''}`);
             return true;
         }
+        case 'day-jump-ok': {
+            const i = Number(el.dataset.mes);
+            const j = dateJumps().get(i);
+            if (j) { const m = M(); m.okJump = { ...(m.okJump || {}), [i]: j.to }; A.saveMeta(); }
+            A.paintSoon?.();
+            return true;
+        }
+        case 'day-jump-fix': {
+            const i = Number(el.dataset.mes);
+            const j = dateJumps().get(i);
+            const d = j && collectDays().find(x => x.key === j.to);
+            if (!d) return true;
+            A.openSheet(`${A.icon('calendar')} Дата прыгнула`, `<div class="lf-hint">Было ${esc(dayLabel(j.from, '', true))}, в посте #${i} стало ${esc(dayLabel(j.to, d.raw, true))}. Поставь настоящую дату — перепишу её в посте (и в следующих с той же датой рядом).</div>${dateFixHtml(d, esc(j.to), i, j.from)}`);
+            return true;
+        }
         case 'day-chunk': {
             // отметить кусок — заново посчитать полночь в отмеченных
             const box = el.closest('.lf-sheet') || document;
@@ -720,7 +791,6 @@ export async function daysClick(act, el) {
             if (!r) return true;
             A.toast('success', `Вернула дату Horae: ${r.restored} ${A.plural(r.restored, 'посту', 'постам', 'постам')}${r.kept ? ` · оставила как поправлено: ${r.kept}` : ''}${r.stamps ? ` · таймеров сдвинула: ${r.stamps}` : ''}`, '✦ Дни', { timeOut: 5000 });
             return done();
-            return true;
         }
         case 'day-save': {
             const box = el.closest('.lf-sheet') || document;

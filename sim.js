@@ -9,6 +9,7 @@ import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.
 import { knockSceneHtml } from './knock.js';
 import { loreAbout } from './inner.js';
 import { cardText, loreFor } from './lore.js';
+import { eraId, inEra } from './scope.js';
 import { hurtSection } from './hurt.js';
 import { initInner, innerChronOpts, innerAfterPost, innerPrompt, innerBrief, renderInner, renderCharacter, innerClick, innerSceneChips } from './inner.js';
 
@@ -51,9 +52,26 @@ const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // ───────────── время истории ─────────────
 
 /** «Сейчас» по Horae: миллисекунды игровой даты (если есть), номер поста и час. */
-export function rpNow() {
+/** Сон, флешбек, видение на весь пост — «сейчас» истории не меняют: время берётся с последнего обычного поста. */
+const OFF_NOW = ['flashback', 'dream', 'vision'];
+function storyStamp(mes) {
     const st = A.worldState();
+    try {
+        const off = (i) => { const f = A.chronOf?.(i)?.frame; return !!f && (f.part || 'all') === 'all' && OFF_NOW.includes(f.kind); };
+        if (mes >= 0 && off(mes)) {
+            const chat = A.chatArr();
+            for (let i = mes - 1; i >= 0 && i > mes - 80; i--) {
+                const t = chat[i]?.horae_meta?.timestamp;
+                if (t?.story_date && !chat[i].horae_meta._skipHorae && !off(i)) return t;
+            }
+        }
+    } catch { /* как раньше */ }
+    return st.timestamp || {};
+}
+
+export function rpNow() {
     const mes = A.lastAiIndex();
+    const st = { timestamp: storyStamp(mes) };
     const tm = String(st.timestamp?.story_time || '').match(/(\d{1,2})[:.](\d{2})/);
     const hour = tm ? +tm[1] : null;
     const d = A.parseDate(st.timestamp?.story_date);
@@ -212,8 +230,11 @@ function homePicker(act, attrs = '') {
 
 export function homeLoc() {
     const c = simCfg();
-    if (c.home) return c.home;
-    const pl = Object.values(A.settings().places || {}).find(p => !String(p.name).includes('·') && (p.icon === 'home' || /квартир|дом(?![а-яёa-z0-9])|апартамент|пентхаус/i.test(p.name)));
+    // дом — свой у каждой эпохи (ядро таймлайна); общий старый — только если это место есть и здесь
+    const era = eraId();
+    if (era && c.homes?.[era]) return c.homes[era];
+    if (c.home && (!era || inEra(A.settings().places?.[A.placeKey(c.home)]))) return c.home;
+    const pl = Object.values(A.settings().places || {}).filter(inEra).find(p => !String(p.name).includes('·') && (p.icon === 'home' || /квартир|дом(?![а-яёa-z0-9])|апартамент|пентхаус/i.test(p.name)));
     return pl ? (pl.raw || pl.name) : '';
 }
 
@@ -1120,7 +1141,7 @@ export async function simClick(act, el, ev) {
             if (t) for (const part of t.split(/[,;]/).map(x => x.trim()).filter(Boolean)) addPrefs([{ who: el.dataset.name, text: part, kind: el.dataset.k, hand: true }], A.lastAiIndex());
             A.saveMeta(); A.closeSheet(); A.render(); return true;
         }
-        case 'sim-home': c.home = el.dataset.loc; A.saveSettings(); A.render(); return true;
+        case 'sim-home': { const era = eraId(); if (era) c.homes = { ...(c.homes || {}), [era]: el.dataset.loc }; else c.home = el.dataset.loc; A.saveSettings(); A.render(); return true; }
         case 'sim-off-seen': { const e = m.offscreen.find(x => x.id === el.dataset.id); if (e) { e.seen = true; A.saveMeta(); A.updatePrompt(); A.render(); } return true; }
         case 'sim-sched-gen': await A.withBusy(el, async () => { await genSched(el.dataset.name); A.render(); }, 'Составляю…'); return true;
         case 'sim-sched-edit': {

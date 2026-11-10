@@ -68,7 +68,7 @@ function scan() {
     const sig = `${chat.length}|${last?.mes?.length}|${last?.swipe_id}|${ver}`;
     if (memo && memo.chat === chat && memo.sig === sig && Date.now() - memo.at < 500) return memo;
     const out = Object.fromEntries(KEYS.map(k => [k, []]));
-    for (let i = Math.max(0, chat.length - 900); i < chat.length; i++) {
+    for (let i = 0; i < chat.length; i++) {   // весь чат: кто узнал тайну 1000 постов назад — всё ещё знает
         const m = chat[i];
         if (!m || m.is_user) continue;
         const h = A.chronOf(i)?.hero;

@@ -26,14 +26,14 @@ export function makeAskJson({ ask, parse, base }) {
     return async function askJson(messages, tokens, { check = null, what = 'ответ' } = {}) {
         const n = Math.max(Number(tokens) || 0, Number(base?.()) || 0);
         const ok = (j) => !!j && (!check || !!check(j));
-        const out = await ask(messages, n);
+        const out = await ask(messages, n, what);
         let j = parse(out);
         if (ok(j)) return j;
         const first = jsonTrouble(out, j);
         console.warn(`[Life] ${what}: ${first.text} — переспрашиваю с запасом`);
         const last = messages[messages.length - 1];
         const again = [...messages.slice(0, -1), { ...last, content: `${last.content}\n\n[Прошлый ответ ${first.text}. Ответь заново: строго один JSON по схеме, без пояснений и markdown${first.cut ? '; пиши компактнее, чтобы точно уложиться' : ''}.]` }];
-        const out2 = await ask(again, Math.min(Math.round(n * 1.75), 16000));
+        const out2 = await ask(again, Math.min(Math.round(n * 1.75), 16000), what);
         j = parse(out2);
         if (ok(j)) return j;
         const second = jsonTrouble(out2, j);

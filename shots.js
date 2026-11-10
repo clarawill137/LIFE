@@ -50,6 +50,26 @@ export function shotKey(i) { const m = A.chatArr()[i]; return m ? `${i}:${m.swip
 const sigOf = (m) => A.hash(A.plainText(m?.mes || '').slice(0, 300));
 const nz = (t) => String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
 
+/** Удалили пост в середине чата — номера съехали: кадры находят свои посты по началу текста. Вернёт, сколько переехало. */
+export function shotsHeal() {
+    const chat = A.chatArr();
+    const cuts = list();
+    let map = null, n = 0;
+    for (const c of cuts) {
+        if (!c.sig) continue;
+        const m = chat[c.mes];
+        if (m && sigOf(m) === c.sig) continue;
+        if (!map) { map = new Map(); chat.forEach((x, i) => { if (x && !x.is_user) { const sg = sigOf(x); if (!map.has(sg)) map.set(sg, i); } }); }
+        const j = map.get(c.sig);
+        if (j == null) continue;
+        c.mes = j;
+        c.key = `${j}:${chat[j].swipe_id ?? 0}`;
+        n++;
+    }
+    if (n) A.saveMeta();
+    return n;
+}
+
 function paragraphs(text) {
     const t = String(text || '').trim();
     const big = t.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);

@@ -91,7 +91,7 @@ function scan() {
     const sig = `${chat.length}|${last?.mes?.length}|${last?.swipe_id}|${ver}|${M().hand.length}`;
     if (memo && memo.chat === chat && memo.sig === sig && Date.now() - memo.at < 400) return memo;
     const ev = [];
-    for (let i = Math.max(0, chat.length - 400); i < chat.length; i++) {
+    for (let i = 0; i < chat.length; i++) {   // весь чат: ключ поста теперь помнится, проход дешёвый
         const m = chat[i];
         if (!m || m.is_user) continue;
         const e = A.chronOf(i);
