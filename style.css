@@ -2958,7 +2958,8 @@ b.k-therapy { background: #b3a3d8 !important; } b.k-training { background: #7fb4
 #lf-ooc .lf-ooc-row { display: flex; gap: 5px; }
 #lf-ooc input { flex: 1; min-width: 0; background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .16); border-radius: 10px; color: inherit; padding: 5px 10px; font: inherit; }
 #lf-ooc .lf-ooc-row button, #lf-ooc .lf-ooc-quick button { border: 1px solid rgba(255, 255, 255, .14); background: transparent; color: inherit; border-radius: 999px; padding: 2px 9px; font: inherit; cursor: pointer; }
-#lf-ooc .lf-ooc-row button.on { border-color: rgba(233, 196, 138, .6); background: rgba(233, 196, 138, .14); }
+#lf-ooc .lf-ooc-row button.on, #lf-ooc .lf-ooc-quick button.on { border-color: rgba(233, 196, 138, .6); background: rgba(233, 196, 138, .14); color: #ecd6a6; }
+#lf-ooc button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 #lf-ooc .lf-ooc-quick { display: flex; flex-wrap: wrap; gap: 5px; }
 .lf-taste-page { display: grid; gap: 8px; }
 .lf-taste-page .lf-row { text-align: left; }

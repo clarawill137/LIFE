@@ -10,7 +10,7 @@ let A = null;
 export function initTaste(api) {
     A = api;
     try {
-        document.addEventListener('input', (ev) => { if (ev.target?.id === 'lf-ooc-in') oocSet(ev.target.value); }, true);
+        document.addEventListener('input', (ev) => { if (ev.target?.id === 'lf-ooc-in') { oocSet(ev.target.value); paintOocBar(true); } }, true);
         document.addEventListener('focusin', (ev) => { if (ev.target?.id === 'send_textarea') paintOocBar(); }, true);
     } catch { /* без документа (тесты) */ }
 }
@@ -371,40 +371,62 @@ export function oocSet(text, sticky) {
 }
 const OOC_QUICK = ['медленнее', 'нежнее', 'жёстче', 'больше шуток', 'больше диалога', 'короче', 'подробнее', 'больше инициативы от него'];
 
-/** Строчка над полем ввода: пожелание к следующему ответу — вместо [OOC: …] в конце поста. */
-export function paintOocBar() {
+const oocParts = (t) => String(t || '').split(/\s*,\s*/).map(s => s.trim()).filter(Boolean);
+
+/** Строчка над полем ввода: пожелание к следующему ответу — вместо [OOC: …] в конце поста.
+ *  Разметка строится один раз, дальше меняются только кусочки — иначе, пока в строке стоит курсор
+ *  (а ✎ сама его туда ставит), тапы по чипам писали пожелание, но на экране ничего не менялось.
+ *  typing — зовёт ввод в самой строке: её значение не трогаем. */
+export function paintOocBar(typing = false) {
     let form = null;
     try { form = document.getElementById('form_sheld'); } catch { return; }
     let bar = document.getElementById('lf-ooc');
     if (!form || !tasteOn() || !T().bar || !A.hasChat?.()) { bar?.remove(); return; }
     const o = oocGet();
-    if (!bar) {
+    if (!bar || !bar.querySelector('#lf-ooc-in')) {
+        bar?.remove();
         bar = document.createElement('div');
         bar.id = 'lf-ooc';
-        bar.addEventListener('pointerdown', (ev) => { if (ev.target.closest('button')) ev.preventDefault(); });
+        bar.innerHTML = `<button type="button" class="lf-ooc-pill" data-oc="open" title="Пожелание к следующему ответу (OOC)"></button>
+        <div class="lf-ooc-body"><div class="lf-ooc-row"><input id="lf-ooc-in" type="text" placeholder="медленнее, нежнее, больше шуток…" autocomplete="off" enterkeyhint="done">
+        <button type="button" data-oc="pin" title="держать, пока не сниму">📌</button><button type="button" data-oc="x" title="стереть">✕</button></div>
+        <div class="lf-ooc-quick">${OOC_QUICK.map(q => `<button type="button" data-oc="q" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`;
+        bar.addEventListener('pointerdown', (ev) => { if (ev.target.closest('button')) ev.preventDefault(); });   // клавиатура не прячется
         bar.addEventListener('click', (ev) => {
             const b = ev.target.closest('[data-oc]');
             if (!b) return;
             ev.preventDefault(); ev.stopPropagation();
             const cur = oocGet();
-            if (b.dataset.oc === 'open') { bar.classList.toggle('open'); if (bar.classList.contains('open')) bar.querySelector('input')?.focus(); return; }
+            if (b.dataset.oc === 'open') {
+                bar.classList.toggle('open');
+                // на телефоне сама клавиатура не нужна — открыла ради чипов; в строку — тапом, если писать своё
+                if (bar.classList.contains('open') && matchMedia('(pointer: fine)').matches) bar.querySelector('input')?.focus();
+                return;
+            }
             if (b.dataset.oc === 'pin') oocSet(cur.text, !cur.sticky);
             else if (b.dataset.oc === 'x') oocSet('', false);
-            else if (b.dataset.oc === 'q') oocSet([cur.text, b.dataset.v].filter(Boolean).join(', '));
+            else if (b.dataset.oc === 'q') {   // чип — переключатель: нет в пожелании — добавить, есть — убрать
+                const v = b.dataset.v;
+                const parts = oocParts(cur.text);
+                const has = parts.some(p => p.toLowerCase() === v.toLowerCase());
+                oocSet((has ? parts.filter(p => p.toLowerCase() !== v.toLowerCase()) : [...parts, v]).join(', '));
+            }
             paintOocBar();
+            const inp = bar.querySelector('#lf-ooc-in');
+            if (inp && document.activeElement === inp) { try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch { /* */ } }
         });
+        bar.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'lf-ooc-in') { ev.preventDefault(); ev.target.blur(); } });
         form.prepend(bar);
     } else if (bar.parentElement !== form) form.prepend(bar);
-    const sig = `${o.text}|${o.sticky}`;
-    if (bar.dataset.sig === sig) return;
-    const focused = document.activeElement?.id === 'lf-ooc-in';
-    bar.dataset.sig = sig;
     bar.classList.toggle('has', !!o.text);
-    if (focused) { bar.querySelector('[data-oc="pin"]')?.classList.toggle('on', !!o.sticky); return; }   // печатает — поле не трогать
-    bar.innerHTML = `<button class="lf-ooc-pill" data-oc="open" title="Пожелание к следующему ответу (OOC)">✎ ${o.text ? esc(A.cut(o.text, 40)) : 'пожелание к ответу'}${o.sticky ? ' 📌' : ''}</button>
-        <div class="lf-ooc-body"><div class="lf-ooc-row"><input id="lf-ooc-in" type="text" placeholder="медленнее, нежнее, больше шуток…" value="${esc(o.text)}" autocomplete="off">
-        <button data-oc="pin" class="${o.sticky ? 'on' : ''}" title="держать, пока не сниму">📌</button><button data-oc="x" title="стереть">✕</button></div>
-        <div class="lf-ooc-quick">${OOC_QUICK.map(q => `<button data-oc="q" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`;
+    const pill = bar.querySelector('.lf-ooc-pill');
+    const label = `✎ ${o.text ? A.cut(o.text, 40) : 'пожелание к ответу'}${o.sticky ? ' 📌' : ''}`;
+    if (pill && pill.textContent !== label) pill.textContent = label;
+    bar.querySelector('[data-oc="pin"]')?.classList.toggle('on', !!o.sticky);
+    const on = new Set(oocParts(o.text).map(p => p.toLowerCase()));
+    bar.querySelectorAll('[data-oc="q"]').forEach(b => b.classList.toggle('on', on.has(String(b.dataset.v).toLowerCase())));
+    const inp = bar.querySelector('#lf-ooc-in');
+    if (inp && !typing && inp.value !== o.text) inp.value = o.text;
 }
 
 /** Генерация кончилась: разовое (пожелание без 📌, причина реролла) — снять. */
@@ -414,7 +436,7 @@ export function tasteGenEnd() {
     let ch = false;
     if (cm.ooc?.text && !cm.ooc.sticky && A.lastAiIndex() > (cm.ooc.after ?? -1)) { cm.ooc = { text: '', sticky: false }; ch = true; }
     if (cm.why?.used) { delete cm.why; ch = true; }
-    if (ch) { A.saveMeta(); try { const b = document.getElementById('lf-ooc'); if (b) b.dataset.sig = ''; paintOocBar(); } catch { /* */ } }
+    if (ch) { A.saveMeta(); try { paintOocBar(); } catch { /* */ } }
 }
 
 // ───────────── что уходит модели ─────────────
