@@ -67,6 +67,7 @@ function cc() {
     for (const [k, v] of Object.entries(CC_DEFAULTS)) if (s.cc[k] === undefined) s.cc[k] = v;
     // 0.5: аватарки баном во всю ширину, старые «крупные/огромные» — в новый режим
     if (!s.cc.v05) { if (s.cc.ava === 'huge' || s.cc.ava === 'big') s.cc.ava = 'wide'; s.cc.v05 = 1; }
+    if (!s.cc.v51) { if (s.cc.ava === 'wide') s.cc.ava = 'cine'; s.cc.v51 = 1; }   // «Кино» — высокий баннер, имя по центру (просила); обратно — плиткой «Аватарки»
     return s.cc;
 }
 const PALETTES = [['graphite', 'Графит'], ['paper', 'Бумага'], ['moon', 'Луна']];
@@ -134,10 +135,11 @@ export function applyTheme() {
     b.classList.toggle('lf-read', on && c.read);
     const th = on && c.theme;
     for (const [k] of PALETTES) b.classList.toggle(`lf-pal-${k}`, th && c.palette === k);
-    b.classList.toggle('lf-ava-wide', th && c.ava === 'wide');
+    b.classList.toggle('lf-ava-wide', th && (c.ava === 'wide' || c.ava === 'cine'));   // «кино» — тот же баннер, только выше и с шапкой по центру
+    b.classList.toggle('lf-ava-cine', th && c.ava === 'cine');
     b.classList.toggle('lf-ava-big', th && c.ava === 'big');
     b.classList.remove('lf-ava-huge');
-    syncAvatars(th && (c.ava === 'wide' || c.ava === 'big'));
+    syncAvatars(th && (c.ava === 'wide' || c.ava === 'cine' || c.ava === 'big'));
     b.classList.toggle('lf-qr-hidden', on && c.on && c.qrHidden);
     b.classList.toggle('lf-hide-fabs', on && c.on && c.hideFabs);
     b.style.setProperty('--lf-read-fs', `${c.fs}px`);
@@ -472,7 +474,7 @@ function renderCC() {
         ${toggleTile('cc.theme', c.theme ? (PALETTES.find(p => p[0] === c.palette) || PALETTES[0])[1] : 'Тема выкл', 'palette', c.theme)}
         ${toggleTile('cc.bg', c.bg === 'flat' ? 'Без фона' : c.bg === 'dim' ? 'Фон тише' : 'Фон как есть', 'image', c.bg !== 'off')}
         ${toggleTile('cc.scene', 'Фон сцены', 'film', !!api.sceneBg?.())}
-        ${toggleTile('cc.ava', c.ava === 'wide' ? 'Баннер' : c.ava === 'big' ? 'Портрет' : 'Аватарки', 'user', c.ava !== 'off')}
+        ${toggleTile('cc.ava', c.ava === 'cine' ? 'Кино' : c.ava === 'wide' ? 'Баннер' : c.ava === 'big' ? 'Портрет' : 'Аватарки', 'user', c.ava !== 'off')}
         ${toggleTile('cc.detail', 'Детали', 'image', !!api.detail?.())}
         ${api.wxLabel ? toggleTile('cc.wx', api.wxLabel(), 'snow', api.wxLevel?.() !== 'off') : ''}
         ${api.ambLabel ? toggleTile('cc.amb', api.ambLabel(), 'music', api.ambLevel?.() !== 'off') : ''}
@@ -581,7 +583,7 @@ async function onCCClick(ev) {
             else if (k === 'cc.feel') api.toggleFeel?.();
             else if (k === 'cc.bg') c.bg = c.bg === 'dim' ? 'flat' : c.bg === 'flat' ? 'off' : 'dim';
             else if (k === 'cc.scene') api.sceneBg?.(!api.sceneBg?.());
-            else if (k === 'cc.ava') c.ava = c.ava === 'wide' ? 'big' : c.ava === 'big' ? 'off' : 'wide';
+            else if (k === 'cc.ava') c.ava = c.ava === 'cine' ? 'wide' : c.ava === 'wide' ? 'big' : c.ava === 'big' ? 'off' : 'cine';
             else if (k === 'cc.read') c.read = !c.read;
             else if (k === 'cc.qrShown') c.qrHidden = !c.qrHidden;
             else if (k === 'cc.fabs') c.hideFabs = !c.hideFabs;

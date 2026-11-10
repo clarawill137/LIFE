@@ -796,6 +796,28 @@ body.lf-theme.lf-ava-wide.lf-read #chat .mes .mesAvatarWrapper { display: block 
     body.lf-theme.lf-ava-wide #chat .mes { --lf-banner: 260px; }
     body.lf-theme.lf-ava-wide #chat .mes[is_user="true"] { --lf-banner: 160px; }
 }
+/* «Кино»: высокий баннер-портрет у всех, имя и кнопки по центру поверх затемнения, тонкая черта перед текстом */
+body.lf-theme.lf-ava-cine #chat .mes, body.lf-theme.lf-ava-cine #chat .mes[is_user="true"] { --lf-banner: min(84vw, 380px); --lf-cine-up: 84px; }
+body.lf-theme.lf-ava-cine #chat .mes .avatar img { object-position: center 16% !important; }
+body.lf-theme.lf-ava-cine #chat .mes .mesAvatarWrapper::after { height: 70%; background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--t-fade) 55%, transparent) 45%, var(--t-fade) 88%); }
+body.lf-theme.lf-ava-cine #chat .mes[is_user="true"] .mesAvatarWrapper::after { background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--t-fade-user) 55%, transparent) 45%, var(--t-fade-user) 88%); }
+body.lf-theme.lf-ava-cine #chat .mes .mes_block { margin-top: calc(-1 * var(--lf-cine-up)); overflow: visible !important; }
+body.lf-theme.lf-ava-cine #chat .mes .ch_name { display: flex; flex-direction: column !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: flex-start !important; gap: 6px; text-align: center; }
+body.lf-theme.lf-ava-cine #chat .mes .ch_name > .flex-container, body.lf-theme.lf-ava-cine #chat .mes .ch_name .alignItemsBaseline { justify-content: center !important; width: 100%; flex: none !important; }
+body.lf-theme.lf-ava-cine #chat .mes .name_text { font-size: 1.8em; line-height: 1.15; font-weight: 500; letter-spacing: .01em; max-width: 100%; white-space: normal; text-align: center; text-shadow: 0 2px 14px var(--t-fade), 0 0 3px var(--t-fade); }
+body.lf-theme.lf-ava-cine #chat .mes[is_user="true"] .name_text { text-shadow: 0 2px 14px var(--t-fade-user), 0 0 3px var(--t-fade-user); }
+body.lf-theme.lf-ava-cine #chat .mes .mes_buttons { display: flex; flex-wrap: wrap; justify-content: center; width: 100%; height: auto; float: none; gap: 12px; opacity: .8; }
+body.lf-theme.lf-ava-cine #chat .mes .mes_edit_buttons { justify-content: center; width: 100%; float: none; }
+body.lf-theme.lf-ava-cine #chat .mes .timestamp { position: absolute; top: calc(var(--lf-cine-up) - var(--lf-banner) + 10px); right: 12px; font-size: 10.5px; color: rgba(255, 255, 255, .78) !important; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); }
+body.lf-theme.lf-ava-cine #chat .mes .timestamp-icon { display: none !important; }
+body.lf-theme.lf-ava-cine #chat .mes .mesIDDisplay { background: none; padding: 0; top: 10px; left: 12px; font-size: 12px; font-weight: 700; text-shadow: 0 1px 4px rgba(0, 0, 0, .9); }
+body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_details { border: 0 !important; background: none !important; margin: 4px 0 0 !important; padding: 0 !important; }
+body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_summary, body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_header_block, body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_header { justify-content: center !important; }
+body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_header_block { flex: 1 1 100%; }
+body.lf-theme.lf-ava-cine #chat .mes .mes_reasoning_header { font-size: 12.5px; font-weight: 600; opacity: .9; background: none !important; border: 0 !important; }
+body.lf-theme.lf-ava-cine #chat .mes .mes_text { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--t-line); }
+body.lf-theme.lf-ava-cine #chat .mes .mes_text > p { text-indent: 1.3em; }
+@media (min-width: 900px) { body.lf-theme.lf-ava-cine #chat .mes, body.lf-theme.lf-ava-cine #chat .mes[is_user="true"] { --lf-banner: 380px; } }
 /* крупные портреты сбоку */
 body.lf-theme.lf-ava-big #chat { --avatar-base-width: 64px; --avatar-base-height: 96px; --avatar-base-border-radius-round: 14px; }
 body.lf-theme.lf-ava-big #chat .mes .avatar img { border: 0 !important; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--t-accent) 50%, transparent), 0 8px 20px var(--t-shadow) !important; }
