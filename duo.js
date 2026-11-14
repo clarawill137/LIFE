@@ -11,7 +11,16 @@ import { moodNow } from './mood.js';
 import { knockActive } from './knock.js';
 
 let A = null;
-export function initDuo(api) { A = api; }
+export function initDuo(api) {
+    A = api;
+    try {
+        const { eventSource, eventTypes: E } = A.ctx();
+        // новый ответ — пока никто не пишет вдвоём (перехват ниже решит заново; тихие генерации не трогаем)
+        if (E?.GENERATION_STARTED) eventSource.on(E.GENERATION_STARTED, (_t, _o, dry) => { if (!dry) live = null; });
+        if (E?.CHAT_CHANGED) eventSource.on(E.CHAT_CHANGED, () => { live = null; });
+        if (E?.CHAT_COMPLETION_PROMPT_READY) eventSource.on(E.CHAT_COMPLETION_PROMPT_READY, onPromptReady);
+    } catch (e) { console.warn('[Life] вдвоём: события', e); }
+}
 
 const esc = (v) => A.esc(v);
 const NARR = /рассказчик|narrator|мастер|game ?master|(^|[^a-z])gm([^a-z]|$)|мнемозина/i;
@@ -159,6 +168,12 @@ function autoPartner(S, t, u) {
 
 /** С кем S пишет этот ответ ('' — один). consume — генерация пошла: ручной выбор расходуется. */
 export function duoPartner(S, type, consume = false) {
+    const P = partnerFor(S, type, consume);
+    if (consume) live = P ? { S, P, at: Date.now() } : null;   // для нуджа группы (см. ниже)
+    return P;
+}
+
+function partnerFor(S, type, consume) {
     if (!A?.hasChat?.() || !duoOn() || !S || NARR.test(S) || type === 'quiet' || type === 'impersonate') return '';
     const chat = A.chatArr();
     if (type === 'continue') { // дописываем пост: если он уже на двоих — тот же второй
@@ -167,10 +182,9 @@ export function duoPartner(S, type, consume = false) {
         return n.find(x => !A.sameName(x, S)) || '';
     }
     try { const k = knockActive(); if (k && !k.used && A.sameName(k.who, S)) return ''; } catch { /* */ } // входит в сцену — один
-    const pr = present();
-    if (pr.length && !pr.some(p => A.sameName(p, S))) return ''; // сам не в сцене (звонит, едет) — пишет один
     const d = M();
     const { t, u } = turnOf(type);
+    // выбрала сама — так и будет, даже если Horae не записал его в сцену (Horae бывает отстаёт или путает)
     if (d.hand && d.hand.t === t && d.hand.u === u && !A.sameName(d.hand.p, S)) return d.hand.p; // свайп того же ответа
     if (d.armed) {
         let P = d.armed === '*' ? '' : A.canonName(d.armed);
@@ -179,22 +193,55 @@ export function duoPartner(S, type, consume = false) {
         if (consume) { d.hand = { t, u, p: P }; d.armed = ''; A.saveMeta(); }
         return P;
     }
+    const pr = present();
+    if (pr.length && !pr.some(p => A.sameName(p, S))) return ''; // сам не в сцене (звонит, едет) — пишет один
     if (cfg().mode !== 'auto') return '';
     return autoPartner(S, t, u);
+}
+
+// ───────────── нудж группы ─────────────
+// В группе таверна ставит в самый конец промпта «[Write the next reply only as {{char}}.]» — это последнее, что
+// читает модель, и она слушалась его, а не правил поста на двоих: писал один говорящий. Пока ответ пишут двое,
+// эта строка — про обоих. Ставит перехват (duoPartner с consume), сбрасывает старт следующей генерации.
+let live = null;   // { S, P, at }
+
+function nudgeLine(S, P) {
+    return `[Write the next reply as ${S} and ${P} together — one split post in two voices: a line [[${S}]], then ${S}'s part; a line [[${P}]], then ${P}'s part.]`;
+}
+
+function onPromptReady(data) {
+    try {
+        if (!live || !data || data.dryRun || !Array.isArray(data.chat)) return;
+        const c = A.ctx();
+        if (!c.groupId || Date.now() - live.at > 15 * 60e3 || !A.sameName(String(c.name2 || ''), live.S)) return;
+        let exact = '';
+        try { const tpl = String(c.chatCompletionSettings?.group_nudge_prompt || ''); exact = tpl ? String(c.substituteParams(tpl)).trim() : ''; } catch { /* */ }
+        const line = nudgeLine(live.S, live.P);
+        const swap = (s) => {
+            if (typeof s !== 'string' || !s) return s;
+            if (exact && s.includes(exact)) return s.split(exact).join(line);
+            return s.replace(/\[Write the next reply only as [^\]\n]{1,80}\]/g, line);
+        };
+        for (const m of data.chat) {
+            if (!m) continue;
+            if (typeof m.content === 'string') m.content = swap(m.content);
+            else if (Array.isArray(m.content)) for (const p of m.content) if (p && typeof p.text === 'string') p.text = swap(p.text);
+        }
+    } catch (e) { console.warn('[Life] вдвоём: нудж группы', e); }
 }
 
 /** Строки правил для модели: формат и кто за что. */
 export function duoLines(S, P) {
     return [
-        `[SPLIT POST — this reply is written by ${S} and ${P} together: two voices in one post, each in their own character, manner and rhythm — two authors, one moment.`,
+        `[SPLIT POST — this reply is written by ${S} and ${P} together: two voices in one post, each in their own character, manner and rhythm — two authors, one moment. For this one reply it overrides any instruction to write only as ${S} or to keep the camera with ${S} alone: each part is told close to its own owner.`,
         `- Format: a line [[${S}]] and then ${S}'s part; a line [[${P}]] and then ${P}'s part. Parts may alternate (${S}, ${P}, ${S}…) if the moment needs it; every part starts with its own [[Name]] line, alone on the line, written exactly like that. Blocks (author notes, plates) go after all the parts, as usual.`,
-        `- Each part belongs to its owner: their actions, words, thoughts and what they notice. Inside one part the other is seen only from outside. Don't retell the same beats twice — the parts carry the moment forward together, like a relay.`,
+        `- Each part belongs to its owner: their actions, words, thoughts and what they notice. Inside one part the other is seen only from outside. Both parts are full parts — several paragraphs each, ${P}'s too, never a cameo line. Don't retell the same beats twice — the parts carry the moment forward together, like a relay.`,
     ];
 }
 
-/** Одиночный чат: правила поста на двоих (в группе они внутри «каждый за себя»). */
+/** Одиночный чат: правила поста на двоих (в группе они внутри «каждый за себя»; если его выключили — здесь). */
 export function duoPrompt(type, consume = false) {
-    if (!A?.hasChat?.() || A.ctx().groupId) return '';
+    if (!A?.hasChat?.() || (A.ctx().groupId && A.settings().cast?.on !== false)) return '';
     const S = speakerName();
     const P = S ? duoPartner(S, type, consume) : '';
     if (!P) return '';
