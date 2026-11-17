@@ -10,7 +10,7 @@ import { icon } from './icons.js';
 import { chatStyle, styleText } from './shots.js';
 import { gazetteHtml } from './plates.js';
 import { fameLines } from './hero.js';
-import { storyYear } from './era.js';
+import { storyYear, forties, eraCommsNote } from './era.js';
 import { canonText } from './canon.js';
 import { heroesDigest } from './heroes.js';
 import { eraLookLines } from './lore.js';
@@ -140,7 +140,7 @@ async function generate(kind) {
     const k = KIND[kind] ? kind : 'tabloid';
     let looks = [];
     try { looks = await eraLookLines(A.castNames(A.worldState())); } catch { /* без ядра */ }
-    const j = await A.askJson([{ role: 'system', content: PRESS_SYSTEM(k) }, { role: 'user', content: digest(k, looks) }], 4000, { what: 'Выпуск', check: (x) => !!KIND[k].need(x) });
+    const j = await A.askJson([{ role: 'system', content: [PRESS_SYSTEM(k), eraCommsNote()].filter(Boolean).join('\n') }, { role: 'user', content: digest(k, looks) }], 4000, { what: 'Выпуск', check: (x) => !!KIND[k].need(x) });
     const st = A.worldState();
     const n = (v, max) => str(v).slice(0, max);
     const poll = j.poll && arr(j.poll.options).length ? { q: n(j.poll.q, 120), options: arr(j.poll.options).slice(0, 4).map(o => ({ t: n(o?.t, 60), p: Math.max(0, Math.min(100, Math.round(Number(o?.p) || 0))) })).filter(o => o.t) } : null;
@@ -377,7 +377,8 @@ function cardHtml(item) {
 /** Мир → СМИ. rumors — старые «Новости и слухи» (снизу, как были). */
 export function renderPress(rumors = '') {
     const items = list().slice().reverse();
-    const kinds = Object.entries(PRESS_KINDS).map(([k, x]) => `<button class="lf-pr-kind${busy.has(k) ? ' wait' : ''}" data-act="press-make" data-k="${k}" title="${esc(x.what)}">${busy.has(k) ? '<i class="lf-det-sh"></i>' : icon(x.ic)}<b>${esc(x.label)}</b><small>${busy.has(k) ? 'вёрстка…' : esc(x.what.split(':')[0])}</small></button>`).join('');
+    // в сороковых телевидения нет — ТВ не предлагаем (газеты, таблоиды, журналы были)
+    const kinds = Object.entries(PRESS_KINDS).filter(([k]) => !(k === 'tv' && forties())).map(([k, x]) => `<button class="lf-pr-kind${busy.has(k) ? ' wait' : ''}" data-act="press-make" data-k="${k}" title="${esc(x.what)}">${busy.has(k) ? '<i class="lf-det-sh"></i>' : icon(x.ic)}<b>${esc(x.label)}</b><small>${busy.has(k) ? 'вёрстка…' : esc(x.what.split(':')[0])}</small></button>`).join('');
     return `${A.sec('Свежий выпуск', 'по событиям истории')}
     <div class="lf-pr-kinds">${kinds}</div>
     <div class="lf-hint">ТВ — новость большого масштаба, таблоид и глянец — личная жизнь, газета — главное событие и светская хроника. Героев пресса знает так, как их знает публика в этот год: <button class="lf-link" data-act="hero-fame">кто кем известен — по годам</button></div>

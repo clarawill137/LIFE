@@ -3,6 +3,7 @@
 // Всё считает Летописец после поста (один запрос), а модели уходит короткая скрытая заметка.
 
 import { icon } from './icons.js';
+import { eraCommsNote } from './era.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
 import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
 import { initAgenda, agendaTick, agendaPrompt, agendaSceneHtml } from './agenda.js';
@@ -546,7 +547,7 @@ async function makeRumors() {
         tris ? `Треугольники (сплетники это чуют — можно намекнуть, но без пошлости):\n${tris}` : '',
         m.rumors?.rumors?.length ? `Прошлые слухи (не повторяй):\n${m.rumors.rumors.map(r => `- ${r.text}`).join('\n')}` : '',
     ].filter(Boolean).join('\n\n');
-    const out = await A.askModel([{ role: 'system', content: RUMORS_SYSTEM }, { role: 'user', content: input }], 1600);
+    const out = await A.askModel([{ role: 'system', content: [RUMORS_SYSTEM, eraCommsNote()].filter(Boolean).join('\n') }, { role: 'user', content: input }], 1600);
     const j = A.extractJson(out);
     const str = (v) => typeof v === 'string' ? v.trim() : '';
     const news = (Array.isArray(j?.news) ? j.news : []).filter(x => str(x?.title)).slice(0, 4).map(x => ({ title: str(x.title).slice(0, 140), text: str(x.text).slice(0, 400), about: (Array.isArray(x.about) ? x.about : []).map(str).filter(Boolean).slice(0, 4), img: '' }));

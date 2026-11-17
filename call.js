@@ -5,6 +5,7 @@
 // Модели, пока звонок идёт: они не рядом — не касаются, видят только то, что в камере (или слышат только голос).
 
 import { knockActive } from './knock.js';
+import { forties } from './era.js';
 import { quotesOf } from './voice.js';
 
 let A = null;
@@ -102,7 +103,7 @@ export function callAfterPost(i, j) {
     const a = A.canonName(str(c?.a));
     const b = A.canonName(str(c?.b));
     if (!c || typeof c !== 'object' || !a || !b || A.sameName(a, b)) { if (e.call) { delete e.call; ver++; A.saveMeta(); } return; }
-    e.call = { a, b, video: yes(c.video), aWhere: str(c.aWhere).slice(0, 40), bWhere: str(c.bWhere).slice(0, 40), end: yes(c.end) };
+    e.call = { a, b, video: yes(c.video) && !forties(), aWhere: str(c.aWhere).slice(0, 40), bWhere: str(c.bWhere).slice(0, 40), end: yes(c.end) };
     ver++;
     A.saveMeta();
 }
@@ -117,6 +118,7 @@ export function callPrompt(type) {
     const c = callNow(t);
     if (!c) return '';
     const sh = (n) => A.shortName(A.canonName(n));
+    if (forties()) return `[Идёт разговор по полевому телефону или по рации: ${sh(c.a)}${c.aWhere ? ` (${c.aWhere})` : ''} ↔ ${sh(c.b)}${c.bWhere ? ` (${c.bWhere})` : ''}. Они не рядом и друг друга не видят: только голос сквозь треск и помехи, телефонист или радист может слышать, говорят коротко и с оглядкой. Пока связь не прервали, разговор продолжается; приехать друг к другу — только дорогой.]`;
     return `[Идёт звонок${c.video ? ' по видео' : ''}: ${sh(c.a)}${c.aWhere ? ` (${c.aWhere})` : ''} ↔ ${sh(c.b)}${c.bWhere ? ` (${c.bWhere})` : ''}. Они не рядом: не касаются друг друга и ничего не передают из рук в руки; ${c.video ? 'видят только то, что попадает в камеру (лицо, плечо, кусок комнаты за спиной, свет), картинка может подвиснуть' : 'слышат только голос и фон — дыхание, паузы, шум вокруг'}. Пока никто не положил трубку, разговор продолжается; приехать друг к другу — только дорогой, без телепорта.]`;
 }
 
@@ -169,7 +171,7 @@ export function callCardHtml(i, x) {
     if (A.sameName(c.a, U)) { L = c.b; R = c.a; Lw = c.bWhere; Rw = c.aWhere; }
     const ended = c.end;
     return `<div class="lf-ft ${c.video ? 'video' : 'audio'}${ended ? ' ended' : ''}">
-        <div class="lf-ft-top"><span class="lf-ft-app">${A.icon(c.video ? 'video' : 'phone')}FaceTime${c.video ? '' : ' Audio'}</span><span class="lf-ft-t">${ended ? 'завершён · ' : ''}${fmtDur(x.dur)}</span></div>
+        <div class="lf-ft-top"><span class="lf-ft-app">${A.icon(c.video ? 'video' : 'phone')}${forties() ? 'Полевой телефон' : `FaceTime${c.video ? '' : ' Audio'}`}</span><span class="lf-ft-t">${ended ? 'завершён · ' : ''}${fmtDur(x.dur)}</span></div>
         <div class="lf-ft-split">${tile(i, L, Lw, c.video, false)}${tile(i, R, Rw, c.video, A.sameName(R, U))}</div>
         <div class="lf-ft-ctl"><span>${A.icon('mic')}</span><span>${A.icon(c.video ? 'video' : 'volume')}</span><span class="end">${A.icon('phone')}</span></div>
     </div>`;
@@ -180,7 +182,7 @@ function pillHtml(x) {
     const { c } = x;
     const other = A.sameName(c.a, U) ? c.b : A.sameName(c.b, U) ? c.a : '';
     const who = other ? A.shortName(other) : `${A.shortName(c.a)} ↔ ${A.shortName(c.b)}`;
-    return `<div class="lf-ft-pill${x.kind === 'end' ? ' end' : ''}">${A.icon(c.video ? 'video' : 'phone')}<span>${x.kind === 'end' ? 'звонок завершён' : 'в звонке'} · ${esc(who)}</span><b>${fmtDur(x.dur)}</b></div>`;
+    return `<div class="lf-ft-pill${x.kind === 'end' ? ' end' : ''}">${A.icon(c.video ? 'video' : 'phone')}<span>${x.kind === 'end' ? (forties() ? 'связь окончена' : 'звонок завершён') : (forties() ? 'на связи' : 'в звонке')} · ${esc(who)}</span><b>${fmtDur(x.dur)}</b></div>`;
 }
 
 /** Сплит-скрин в начале звонка, плашка — пока идёт. Вызывается на каждый пост. */

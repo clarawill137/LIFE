@@ -6,6 +6,7 @@
 // В его ход модель знает, как именно он входит (звонок, сообщения, приезд); дальше — как обычно.
 
 import { push } from './push.js';
+import { forties } from './era.js';
 import { icon } from './icons.js';
 import { agendaKnocks, agendaEventStatus, agendaOf } from './agenda.js';
 
@@ -181,7 +182,10 @@ function pushNew(list) {
         const h = HOW[y.how] || HOW.call;
         try {
             push({
-                app: y.how === 'text' ? 'Сообщения' : y.how === 'come' ? 'Домофон' : 'Телефон', icon: h.icon, img: A.avatarUrl?.(y.who) || '',
+                app: forties()
+                    ? (y.how === 'text' ? 'Записка' : y.how === 'come' ? 'Стук в дверь' : 'Полевой телефон')
+                    : (y.how === 'text' ? 'Сообщения' : y.how === 'come' ? 'Домофон' : 'Телефон'),
+                icon: h.icon, img: A.avatarUrl?.(y.who) || '',
                 title: short(y.who), text: `${h.want}${y.why ? ` — ${y.why}` : ''}`,
                 onTap: () => document.getElementById('lf-knock')?.scrollIntoView({ behavior: 'smooth', block: 'end' }),
             });

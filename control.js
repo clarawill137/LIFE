@@ -4,6 +4,7 @@
 // И тема «Графит и вино» на всю Таверну.
 
 import { icon, iconUrl, CANDLE } from './icons.js';
+import { forties, isPhoneButton } from './era.js';
 
 let api = null;
 
@@ -347,6 +348,7 @@ function quickButtons() {
     const out = [];
     document.querySelectorAll(QB_SEL).forEach((el, i) => {
         if (el.closest('#lf-cc')) return;
+        if (forties() && isPhoneButton(el)) return;   // смартфон персонажа в 1943-м — нет
         const label = (el.querySelector('.qr--button-label')?.textContent || el.textContent || el.title || '').replace(/\s+/g, ' ').trim()
             || (el.title || '').trim();
         const ic = faClass(el.querySelector('.qr--button-icon') || el);
@@ -414,7 +416,8 @@ function renderCC() {
     const { list: profs, selected } = profilesInfo();
     const qbs = quickButtons();
     const blocks = extBlocks();
-    const bal = api.balance?.() || '';
+    const f40 = forties();
+    const bal = f40 ? '' : api.balance?.() || '';
     const wand = wandItems();
     const fabs = c.hideFabs ? fabItems() : [];
     host.innerHTML = `
@@ -435,7 +438,7 @@ function renderCC() {
         <button class="cc-tile" data-cc="map">${icon('map')}<span>Карта</span></button>
         <button class="cc-tile" data-cc="person">${icon('users')}<span>Персонаж</span></button>
         <button class="cc-tile" data-cc="wardrobe">${icon('shirt')}<span>Гардероб</span></button>
-        <button class="cc-tile" data-cc="phone">${icon('smartphone')}<span>Телефон</span></button>
+        ${f40 ? '' : `<button class="cc-tile" data-cc="phone">${icon('smartphone')}<span>Телефон</span></button>`}
         <button class="cc-tile" data-cc="director">${icon('scene')}<span>Режиссёр</span></button>
         <button class="cc-tile" data-cc="newch">${icon('feather')}<span>Глава</span></button>
         <button class="cc-tile" data-cc="world">${icon('globe')}<span>Память</span></button>
