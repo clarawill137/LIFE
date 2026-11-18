@@ -92,10 +92,21 @@ import { initMend, mendWanted, mendPost, mendLast, setMesText } from './mend.js'
 import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar } from './taste.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
+import { initFight, fightPrompt, fightChron, fightAfterPost, fightSceneHtml, fightClick, fightRecs } from './fight.js';
+import { initDuel, duelPrompt, duelChron, duelAfterPost, duelSceneHtml, duelClick, duelRecs } from './duel.js';
+import { initBets, betsPrompt, betsChron, betsAfterPost, betsSceneHtml, betsClick, betsRecs } from './bets.js';
+import { initUnder, underPrompt, underChron, underAfterPost, paintUnder, underClick, underHtml, underRecs } from './under.js';
+import { initHeat, heatPrompt, heatChron, heatAfterPost, heatSceneHtml, heatHtml, heatClick, heatEndedAt, heatRecs } from './heat.js';
+import { initScars, scarsPrompt, scarsChron, scarsAfterPost, scarsHtml, scarsClick, scarsRecs } from './scars.js';
+import { initDiary, diaryPrompt, diaryAfterPost, diaryHtml, diaryClick } from './diary.js';
+import { initBrew, brewPrompt, brewAfterPost, brewSceneHtml, brewClick } from './brew.js';
+import { initFactions, facPrompt, facChron, facAfterPost, facHtml, facClick, facRecs } from './factions.js';
+import { initArchive, archiveHtml } from './archive.js';
+import { handOf } from './hand.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.51.2';
+const VERSION = '0.52.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -875,7 +886,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -1690,6 +1701,7 @@ const painters = [];
 const chatClicks = [];
 // модули со своими кнопками в хабе: префикс data-act → обработчик; и свои поля (change)
 const hubMods = [];
+const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac'];
 const hubInputs = [];
 
 function paintChips() {
@@ -2623,6 +2635,10 @@ function renderWorld() {
         body = renderPress(renderRumors());
     } else if (tab === 'heroes') {
         body = (() => { try { return heroesHtml(); } catch (e) { console.warn('[Life] герои', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'fac') {
+        body = (() => { try { return facHtml(); } catch (e) { console.warn('[Life] фракции', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'arch') {
+        body = (() => { try { return archiveHtml(); } catch (e) { console.warn('[Life] архив', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'taste') {
         body = (() => { try { return tasteHtml(); } catch (e) { console.warn('[Life] вкус', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'time') {
@@ -2637,7 +2653,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['taste', 'Вкус'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['taste', 'Вкус'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2687,6 +2703,17 @@ function renderCfg() {
         ${(() => { try { return agendaCfgHtml(); } catch { return ''; } })()}
         ${(() => { try { return armCfgHtml(); } catch { return ''; } })()}
         ${sw('rumorsAuto', 'Слухи сами с новым игровым днём', simCfg(), 'sim.rumorsAuto')}
+        ${sec('Трекеры сцены и нутро')}
+        ${(() => { for (const k of HUD_KEYS) { if (!s[k] || typeof s[k] !== 'object') s[k] = {}; if (s[k].on === undefined) s[k].on = true; } return ''; })()}
+        ${sw('on', 'Бой: расстановка, дистанции, адреналин и отходняк', s.fight, 'fight.on')}
+        ${sw('on', 'Словесная дуэль: кто ведёт, кто что уступил', s.duel, 'duel.on')}
+        ${sw('on', 'Пари и проспоренное', s.bets, 'bets.on')}
+        ${sw('on', 'Под словами: мысль, подтекст, «ждал — получил» (💭 под ответом)', s.under, 'under.on')}
+        ${sw('on', 'Шрамы доверия: причины сдвигов, обиды, ступени доверия', s.scars, 'scars.on')}
+        ${sw('on', 'Дневник и сны персонажей (с новым днём истории)', s.diary, 'diary.on')}
+        ${sw('on', '18+ · Ход близости, часы сцены и следы на теле', s.heat, 'heat.on')}
+        ${sw('on', 'Назревает: к чему идёт накопленное', s.brew, 'brew.on')}
+        ${sw('on', 'Фракции и репутация', s.fac, 'fac.on')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
@@ -3761,6 +3788,7 @@ async function onChange(ev) {
         if (path[0] === 'call') updateMovePrompt();
         if (path[0] === 'plates') platesSync().then(() => { updateMovePrompt(); render(); });
         if (path[0] === 'cast') updateMovePrompt();
+        if (HUD_KEYS.includes(path[0])) { updateMovePrompt(); decorateSoon(80); }
         if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
         if (el.tagName !== 'TEXTAREA') render();
@@ -4364,6 +4392,32 @@ jQuery(async () => {
         globalThis.LifeBridge.register({ id: 'life-taste', prompt: (type) => tastePrompt(type), chron: (i) => tasteChron(i), afterPost: (i, j) => tasteAfterPost(i, j) });
         setTimeout(() => { try { paintOocBar(); } catch { /* */ } }, 2500);
     } catch (e) { console.warn('[Life] вкус', e); }
+    // HUD-волна (0.52): бой, словесная дуэль, пари, под словами, близость и следы, шрамы доверия, дневник и сны, назревает, фракции, архив
+    try {
+        initFight(extApi); initDuel(extApi); initBets(extApi); initUnder(extApi); initScars(extApi); initArchive(extApi);
+        initHeat({ ...extApi, moodNow });
+        initDiary({ ...extApi, coreOf: (w) => coreOf(w), handOf: (w) => handOf(w), heatEndedAt: (i) => heatEndedAt(i) });
+        initBrew({ ...extApi, promptParts: () => promptParts });
+        initFactions({ ...extApi, peopleList, daysBrief });
+        hubMods.push({ pre: 'fgt-', click: fightClick, label: 'Бой' }, { pre: 'dl-', click: duelClick, label: 'Словесная дуэль' }, { pre: 'bet-', click: betsClick, label: 'Пари' },
+            { pre: 'und-', click: underClick, label: 'Под словами' }, { pre: 'ht-', click: heatClick, label: 'Близость' }, { pre: 'scr-', click: scarsClick, label: 'Шрамы доверия' },
+            { pre: 'dy-', click: diaryClick, label: 'Дневник' }, { pre: 'brw-', click: brewClick, label: 'Назревает' }, { pre: 'fac-', click: facClick, label: 'Фракции' });
+        painters.push((el, id) => paintUnder(el, id));
+        chatClicks.push((act, el) => underClick(act, el));
+        mindParts.push((who) => underHtml(who), (who) => scarsHtml(who), (who) => heatHtml(who), (who) => diaryHtml(who));
+        addRecs(fightRecs, duelRecs, betsRecs, underRecs, heatRecs, scarsRecs, facRecs);
+        const B = globalThis.LifeBridge;
+        B.register({ id: 'life-brew', prompt: (type) => brewPrompt(type), afterPost: (i) => brewAfterPost(i), sceneHtml: () => brewSceneHtml() });
+        B.register({ id: 'life-fight', prompt: (type) => fightPrompt(type), chron: () => fightChron(), afterPost: (i, j) => fightAfterPost(i, j), sceneHtml: () => fightSceneHtml() });
+        B.register({ id: 'life-duel', prompt: (type) => duelPrompt(type), chron: () => duelChron(), afterPost: (i, j) => duelAfterPost(i, j), sceneHtml: () => duelSceneHtml() });
+        B.register({ id: 'life-bets', prompt: (type) => betsPrompt(type), chron: () => betsChron(), afterPost: (i, j) => betsAfterPost(i, j), sceneHtml: () => betsSceneHtml() });
+        B.register({ id: 'life-under', prompt: (type) => underPrompt(type), chron: () => underChron(), afterPost: (i, j, m) => underAfterPost(i, j, m) });
+        B.register({ id: 'life-heat', prompt: (type) => heatPrompt(type), chron: (i) => heatChron(i), afterPost: (i, j) => heatAfterPost(i, j), sceneHtml: () => heatSceneHtml() });
+        B.register({ id: 'life-scars', prompt: (type) => scarsPrompt(type), chron: () => scarsChron(), afterPost: (i, j) => scarsAfterPost(i, j) });
+        // дневник — после близости: ему нужно знать, что сцена закончилась на этом посте
+        B.register({ id: 'life-diary', prompt: (type) => diaryPrompt(type), afterPost: (i) => diaryAfterPost(i) });
+        B.register({ id: 'life-fac', prompt: (type) => facPrompt(type), chron: () => facChron(), afterPost: (i, j) => facAfterPost(i, j) });
+    } catch (e) { console.warn('[Life] HUD-волна', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }

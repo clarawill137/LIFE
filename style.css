@@ -2987,3 +2987,213 @@ body.lf-no-phone .lf-push-t, body.lf-no-phone .lf-push-x { color: #2b241a; }
 body.lf-no-phone .mes .lf-ft { filter: sepia(.55) saturate(.75); }
 body.lf-no-phone .mes .lf-ft-app { font-family: 'Special Elite', 'Courier New', monospace; letter-spacing: .04em; }
 body.lf-no-phone .mes .lf-ft-app .lf-i { color: #c9a46a; }
+
+/* ═════════ HUD-волна (0.52): бой, дуэль, пари, под словами, близость, шрамы, дневник, назревает, фракции, архив ═════════ */
+
+/* бой */
+.lf-fgt { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; padding: 10px; border-radius: 16px; border: 1px solid rgba(217, 80, 106, .35); background: linear-gradient(180deg, rgba(120, 20, 38, .18), rgba(255, 255, 255, .02)); }
+.lf-fgt.st-pause { border-color: var(--lf-line2); background: rgba(255, 255, 255, .03); }
+.lf-fgt-p { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 12px; background: rgba(0, 0, 0, .18); border-left: 3px solid var(--lf-dim2); }
+.lf-fgt-p.own { border-left-color: #7fb7a4; }
+.lf-fgt-p.foe { border-left-color: #d9506a; }
+.lf-fgt-p.down { opacity: .5; }
+.lf-fgt-p.stunned { opacity: .75; }
+.lf-fgt-p .lf-ava.xs { margin: 0; width: 26px; height: 26px; flex: none; }
+.lf-fgt-n { flex: 1; min-width: 0; }
+.lf-fgt-n b { display: block; font-size: 13.5px; color: var(--lf-text); }
+.lf-fgt-n small, .lf-fgt-s small { display: block; font-size: 11.5px; color: var(--lf-dim); }
+.lf-fgt-s { flex: none; width: 96px; text-align: right; }
+.lf-fgt-adr { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .1); overflow: hidden; margin-bottom: 3px; }
+.lf-fgt-adr b { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #e9b56c, #ff3b55); }
+.lf-fgt-o { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--lf-text2); }
+.lf-fgt-o span { padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, .06); }
+.lf-fgt-ch { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--lf-dim); }
+.lf-fgt-ch i { position: relative; flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .12); }
+.lf-fgt-ch i b { position: absolute; top: -4px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--lf-rose); }
+.lf-fgt-hang { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 12.5px; color: var(--lf-text2); }
+.lf-fgt-hang span { display: inline-flex; align-items: center; gap: 6px; }
+.lf-fgt-hang .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+
+/* словесная дуэль */
+.lf-dl { margin: 6px 0 10px; padding: 12px; border-radius: 16px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); }
+.lf-dl-bar { display: flex; align-items: center; gap: 8px; }
+.lf-dl-bar .lf-ava.xs { margin: 0; width: 28px; height: 28px; flex: none; }
+.lf-dl-bar i { position: relative; flex: 1; height: 8px; border-radius: 4px; background: rgba(111, 134, 201, .45); overflow: visible; }
+.lf-dl-bar i b { display: block; height: 100%; border-radius: 4px 0 0 4px; background: var(--lf-rose); transition: width .4s var(--lf-ease); }
+.lf-dl-bar i u { position: absolute; top: -4px; width: 3px; height: 16px; margin-left: -1px; border-radius: 2px; background: var(--lf-text); }
+.lf-dl-bar.h-shout i b, .lf-dl-bar.h-quarrel i b { background: #ff3b55; }
+.lf-dl-bar.h-cold i { background: rgba(140, 160, 175, .4); }
+.lf-dl-bar.h-cold i b { background: #9fb4c4; }
+.lf-dl-lead { margin: 8px 0 4px; font-size: 12.5px; color: var(--lf-dim); text-align: center; }
+.lf-dl-lead b { color: var(--lf-text); }
+.lf-dl-list { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; font-size: 12.5px; color: var(--lf-text2); }
+.lf-dl-list b { color: var(--lf-text); }
+.lf-dl-list.mem { color: #d9c08d; font-style: italic; }
+
+/* пари */
+.lf-bets { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-bet { padding: 10px 12px; border-radius: 14px; border: 1px dashed rgba(232, 195, 122, .4); background: rgba(232, 195, 122, .05); }
+.lf-bet.done { border-style: solid; border-color: rgba(217, 104, 123, .35); background: rgba(217, 104, 123, .06); }
+.lf-bet-h { display: flex; align-items: center; gap: 6px; }
+.lf-bet-h .lf-ava.xs { margin: 0; width: 24px; height: 24px; flex: none; }
+.lf-bet-h i { font-size: 10px; color: var(--lf-dim); font-style: normal; text-transform: uppercase; }
+.lf-bet-h b { flex: 1; min-width: 0; font: 500 14px/1.3 var(--lf-serif); color: var(--lf-text); margin-left: 4px; }
+.lf-bet-f { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--lf-dim); }
+.lf-bet-stake { padding: 2px 9px; border-radius: 999px; background: rgba(232, 195, 122, .16); color: #e8c37a; margin-right: auto; }
+.lf-bet-f button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--lf-line2); background: none; color: var(--lf-text2); font-size: 12px; cursor: pointer; }
+.lf-bet-f button .lf-i { width: 12px; height: 12px; }
+
+/* под словами */
+.mes .lf-und { margin: 6px 0 2px; }
+.lf-und-b { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--lf-line2, rgba(236, 222, 216, .2)); background: rgba(185, 164, 232, .08); color: inherit; font-size: 12.5px; opacity: .8; cursor: pointer; }
+.lf-und.open .lf-und-b { opacity: 1; background: rgba(185, 164, 232, .18); }
+.lf-und-box { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.lf-und-box.in { margin: 6px 0 8px; }
+.lf-und-c { padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(185, 164, 232, .28); background: rgba(70, 55, 110, .14); font-size: 13px; line-height: 1.45; text-align: left; }
+.lf-und-w { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; font-size: 12.5px; }
+.lf-und-w .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+.lf-und-th { font-style: italic; margin-bottom: 5px; }
+.lf-und-r small, .lf-und-x small { display: block; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; opacity: .6; }
+.lf-und-r { margin-top: 5px; }
+.lf-und-r.fear { color: #e48a5a; }
+.lf-und-x { display: flex; align-items: flex-start; gap: 8px; margin-top: 6px; }
+.lf-und-x span { flex: 1; }
+.lf-und-x i { opacity: .5; font-style: normal; padding-top: 12px; }
+
+/* близость и следы */
+.lf-ht { margin: 6px 0 10px; padding: 12px; border-radius: 16px; border: 1px solid rgba(217, 104, 123, .32); background: linear-gradient(180deg, rgba(94, 31, 44, .22), rgba(255, 255, 255, .02)); }
+.lf-ht-track { display: flex; justify-content: space-between; gap: 4px; margin-bottom: 8px; }
+.lf-ht-track span { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10.5px; color: var(--lf-dim2); text-align: center; }
+.lf-ht-track span i { width: 100%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); }
+.lf-ht-track span.done i { background: var(--lf-wine3); }
+.lf-ht-track span.on { color: var(--lf-rose2); }
+.lf-ht-track span.on i { background: var(--lf-rose); box-shadow: 0 0 10px rgba(217, 104, 123, .6); }
+.lf-ht-pace { display: block; width: 100%; height: 34px; margin: 4px 0 8px; }
+.lf-ht-pace polyline { fill: none; stroke: var(--lf-rose); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lf-ht-r { display: flex; gap: 10px; padding: 4px 0; font-size: 13px; color: var(--lf-text2); }
+.lf-ht-r small { flex: none; width: 58px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--lf-dim); padding-top: 2px; }
+.lf-ht-r.miss { color: #e8c37a; }
+.lf-ht-marks { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.lf-ht-m { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); }
+.lf-ht-m.seen { border-color: rgba(217, 104, 123, .3); }
+.lf-ht-m .lf-ava.xs { margin: 0; width: 24px; height: 24px; flex: none; }
+.lf-ht-m span { flex: 1; min-width: 0; font-size: 13px; color: var(--lf-text2); }
+.lf-ht-m span b { color: var(--lf-text); }
+.lf-ht-m span small { display: block; font-size: 11.5px; color: var(--lf-dim); }
+.lf-ht-m span i { display: block; height: 3px; margin-top: 4px; border-radius: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.lf-ht-m span i u { display: block; height: 100%; background: linear-gradient(90deg, #7b2d3d, #d9687b); }
+.lf-ht-m button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-ht-m button .lf-i { width: 13px; height: 13px; }
+
+/* шрамы доверия */
+.lf-scr { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; }
+.lf-scr-c { padding: 9px 11px; border-radius: 13px; border: 1px solid rgba(217, 80, 106, .32); border-left: 3px solid #d9506a; background: rgba(94, 31, 44, .14); }
+.lf-scr-c.healed { opacity: .6; border-color: var(--lf-line); border-left-color: #7fb7a4; background: rgba(255, 255, 255, .02); }
+.lf-scr-h { display: flex; align-items: center; gap: 6px; }
+.lf-scr-h .lf-ava.xs { margin: 0; width: 22px; height: 22px; flex: none; }
+.lf-scr-h i { color: var(--lf-dim); font-style: normal; font-size: 12px; }
+.lf-scr-h b { flex: 1; min-width: 0; font: 500 13.5px/1.3 var(--lf-sans); color: var(--lf-text); margin-left: 4px; }
+.lf-scr-h button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-scr-h button .lf-i { width: 13px; height: 13px; }
+.lf-scr-c small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--lf-dim); }
+.lf-scr-log, .lf-fac-log { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; font-size: 12.5px; color: var(--lf-text2); }
+.lf-scr-log div { display: flex; gap: 8px; }
+.lf-scr-log b, .lf-fac-log b { flex: none; min-width: 30px; }
+.lf-scr-log .neg b, .lf-fac-log .neg b { color: #e4707f; }
+.lf-scr-log .pos b, .lf-fac-log .pos b { color: #7fb7a4; }
+
+/* дневник и сны */
+.lf-dy { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+.lf-dy-p { position: relative; padding: 14px 16px 12px; border-radius: 6px 14px 14px 6px; background: linear-gradient(90deg, rgba(0, 0, 0, .12), transparent 14px), #efe6d4; color: #33291f; border-left: 4px solid #b9a27c; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font-size: 14.5px; line-height: 1.55; }
+.lf-dy-p header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font: 600 11px/1 var(--lf-sans); letter-spacing: .06em; text-transform: uppercase; color: #7a6a55; }
+.lf-dy-p header span { margin-left: auto; }
+.lf-dy-p header button { width: 22px; height: 22px; display: grid; place-items: center; border: 0; background: none; color: #a08f78; cursor: pointer; }
+.lf-dy-p header button .lf-i { width: 12px; height: 12px; }
+.lf-dy-p p { margin: 0 0 8px; }
+.lf-dy-p s { opacity: .55; }
+.lf-dy-p.m-anger, .lf-dy-p.m-panic { border-left-color: #b8323f; }
+.lf-dy-p.m-sadness, .lf-dy-p.m-longing, .lf-dy-p.m-emptiness { border-left-color: #5c74a8; background-color: #e6e3dc; }
+.lf-dy-p.m-joy, .lf-dy-p.m-relief, .lf-dy-p.m-tenderness { border-left-color: #c9953e; }
+.lf-dy-p.m-guilt, .lf-dy-p.m-shame, .lf-dy-p.m-stress, .lf-dy-p.m-anxiety { border-left-color: #6d5a7e; }
+.lf-dy-p.m-desire, .lf-dy-p.m-triumph { border-left-color: #96404f; }
+.lf-dy-about summary, .lf-dy-dream summary, .lf-dy-body summary { cursor: pointer; font: 600 11px/1.6 var(--lf-sans); letter-spacing: .06em; text-transform: uppercase; color: #8a6a4a; }
+.lf-dy-about p { margin-top: 6px; }
+.lf-dy-p footer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed rgba(90, 70, 50, .3); font-size: 13.5px; }
+.lf-dy-p footer small { font: 600 10.5px/1 var(--lf-sans); letter-spacing: .06em; text-transform: uppercase; color: #8a6a4a; }
+.lf-dy-p footer.done { opacity: .5; text-decoration: line-through; }
+.lf-dy-p .lf-link { color: #8a6a4a; margin-left: auto; font-family: var(--lf-sans); }
+.lf-dy-dream { position: relative; padding: 12px 14px; border-radius: 16px; border: 1px solid rgba(185, 164, 232, .3); background: radial-gradient(120% 140% at 20% 0%, rgba(120, 100, 180, .28), rgba(40, 32, 60, .35)); color: var(--lf-text); font-size: 13.5px; line-height: 1.5; cursor: pointer; }
+.lf-dy-dream small { display: block; margin-bottom: 5px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #b9a4e8; }
+.lf-dy-dream p { margin: 0 0 6px; transition: filter .6s var(--lf-ease), opacity .6s; }
+.lf-dy-dream.f3 p { filter: blur(7px); opacity: .55; }
+.lf-dy-dream.f2 p { filter: blur(4px); opacity: .7; }
+.lf-dy-dream.f1 p { filter: blur(1.6px); opacity: .88; }
+.lf-dy-dream i { font-size: 11.5px; color: var(--lf-dim); font-style: normal; }
+.lf-dy-dream summary { color: #b9a4e8; }
+.lf-dy-body > summary { padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(217, 104, 123, .3); background: rgba(94, 31, 44, .16); color: var(--lf-rose2); }
+.lf-dy-body[open] > summary { margin-bottom: 8px; }
+
+/* назревает */
+.lf-brw { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; }
+.lf-brw-c { border-radius: 14px; border: 1px solid rgba(232, 195, 122, .3); background: rgba(232, 195, 122, .05); overflow: hidden; }
+.lf-brw-c.armed { border-color: rgba(217, 104, 123, .5); background: rgba(217, 104, 123, .08); }
+.lf-brw-c summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.lf-brw-c summary::-webkit-details-marker { display: none; }
+.lf-brw-c summary i { flex: none; padding: 2px 8px; border-radius: 999px; background: rgba(232, 195, 122, .16); color: #e8c37a; font: 600 10px/1.5 var(--lf-sans); letter-spacing: .05em; text-transform: uppercase; font-style: normal; }
+.lf-brw-c.k-body summary i { background: rgba(217, 80, 106, .18); color: #e4707f; }
+.lf-brw-c.k-people summary i { background: rgba(185, 164, 232, .18); color: #b9a4e8; }
+.lf-brw-c summary b { flex: 1; min-width: 0; font: 500 14px/1.3 var(--lf-serif); color: var(--lf-text); }
+.lf-brw-c summary small { flex: none; font-size: 11px; color: var(--lf-dim); }
+.lf-brw-c p { margin: 0; padding: 0 12px 8px; font-size: 13px; line-height: 1.45; color: var(--lf-text2); }
+.lf-brw-c .lf-actions { padding: 0 12px 10px; }
+
+/* фракции */
+.lf-fac { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-fac-c { padding: 11px 12px; border-radius: 16px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); }
+.lf-fac-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lf-fac-h b { font: 500 16px/1.25 var(--lf-serif); color: var(--lf-text); }
+.lf-fac-h button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; background: none; color: var(--lf-dim); cursor: pointer; }
+.lf-fac-h button .lf-i { width: 13px; height: 13px; }
+.lf-fac-n { display: block; margin: 2px 0 6px; font-size: 12px; color: var(--lf-dim); }
+.lf-fac-r { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.lf-fac-r .lf-ava.xs { margin: 0; width: 24px; height: 24px; flex: none; }
+.lf-fac-r > span:first-of-type { flex: 1; min-width: 0; font-size: 13px; color: var(--lf-text2); }
+.lf-fac-r b { color: var(--lf-text); }
+.lf-fac-r small { color: var(--lf-dim); }
+.lf-fac-bar { position: relative; display: block; height: 5px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, .08); }
+.lf-fac-bar::after { content: ''; position: absolute; left: 50%; top: -2px; width: 1px; height: 9px; background: var(--lf-dim2); }
+.lf-fac-bar b { position: absolute; top: 0; height: 100%; border-radius: 3px; }
+.lf-fac-bar b.pos { background: #7fb7a4; }
+.lf-fac-bar b.neg { background: #d9506a; }
+.lf-fac-pm { display: flex; gap: 4px; flex: none; }
+.lf-fac-pm button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--lf-line2); background: none; color: var(--lf-text2); font-size: 15px; cursor: pointer; }
+
+/* архив */
+.lf-ar-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.lf-ar-n { padding: 10px 8px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); text-align: center; }
+.lf-ar-n b { display: block; font: 500 22px/1.1 var(--lf-serif); color: var(--lf-text); }
+.lf-ar-n small { display: block; margin-top: 3px; font-size: 11px; color: var(--lf-dim); }
+.lf-ar-bars { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.lf-ar-b { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; font: inherit; }
+.lf-ar-b.pl { cursor: pointer; }
+.lf-ar-b .lf-ava.xs { margin: 0; width: 24px; height: 24px; flex: none; }
+.lf-ar-b > span { flex: 1; min-width: 0; font-size: 13px; }
+.lf-ar-b b { color: var(--lf-text); font-weight: 500; }
+.lf-ar-b i { display: block; height: 5px; margin-top: 3px; border-radius: 3px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.lf-ar-b i u { display: block; height: 100%; border-radius: 3px; background: var(--lf-wine3); }
+.lf-ar-b.me i u { background: #b9a4e8; }
+.lf-ar-b > small { flex: none; max-width: 46%; font-size: 11.5px; color: var(--lf-dim); text-align: right; }
+.lf-ar-lens { display: flex; align-items: flex-end; gap: 2px; height: 54px; margin: 6px 0 10px; }
+.lf-ar-lens i { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; background: var(--lf-wine3); opacity: .85; }
+.lf-ar-mood { margin: 6px 0 8px; }
+.lf-ar-mh { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; font-size: 13px; }
+.lf-ar-mh .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+.lf-ar-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; }
+.lf-ar-grid i { aspect-ratio: 1; border-radius: 4px; background: rgba(255, 255, 255, .06); }
+.lf-ar-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; font-size: 11px; color: var(--lf-dim); }
+.lf-ar-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.lf-ar-legend i { width: 9px; height: 9px; border-radius: 3px; }
+.lf-ar-pairs { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.lf-ar-pairs span { display: inline-flex; align-items: center; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); }
+.lf-ar-pairs .lf-ava.xs { margin: 0 -6px 0 0; width: 24px; height: 24px; }
+.lf-ar-pairs b { margin-left: 12px; font-size: 12.5px; color: var(--lf-text2); }
