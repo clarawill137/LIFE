@@ -103,10 +103,15 @@ import { initBrew, brewPrompt, brewAfterPost, brewSceneHtml, brewClick } from '.
 import { initFactions, facPrompt, facChron, facAfterPost, facHtml, facClick, facRecs } from './factions.js';
 import { initArchive, archiveHtml } from './archive.js';
 import { handOf } from './hand.js';
+import { initKnow, knowPrompt, knowChron, knowAfterPost, paintKnow, knowSceneHtml, knowClick, knowRecs } from './know.js';
+import { initTrace, paintTrace, traceClick } from './trace.js';
+import { initDice, dicePrompt, diceAfterPost, diceSceneHtml, diceClick } from './dice.js';
+import { initAide, aideSceneHtml, aideClick } from './aide.js';
+import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.52.0';
+const VERSION = '0.53.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -886,7 +891,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -1701,7 +1706,7 @@ const painters = [];
 const chatClicks = [];
 // модули со своими кнопками в хабе: префикс data-act → обработчик; и свои поля (change)
 const hubMods = [];
-const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac'];
+const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac', 'know', 'trace', 'aide', 'city'];
 const hubInputs = [];
 
 function paintChips() {
@@ -2637,6 +2642,8 @@ function renderWorld() {
         body = (() => { try { return heroesHtml(); } catch (e) { console.warn('[Life] герои', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'fac') {
         body = (() => { try { return facHtml(); } catch (e) { console.warn('[Life] фракции', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'city') {
+        body = (() => { try { return cityHtml(); } catch (e) { console.warn('[Life] город', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'arch') {
         body = (() => { try { return archiveHtml(); } catch (e) { console.warn('[Life] архив', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'taste') {
@@ -2653,7 +2660,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['taste', 'Вкус'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['taste', 'Вкус'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2714,6 +2721,10 @@ function renderCfg() {
         ${sw('on', '18+ · Ход близости, часы сцены и следы на теле', s.heat, 'heat.on')}
         ${sw('on', 'Назревает: к чему идёт накопленное', s.brew, 'brew.on')}
         ${sw('on', 'Фракции и репутация', s.fac, 'fac.on')}
+        ${sw('on', 'Кто что знает: чего персонаж не знает — и «⚠ не мог знать» под ответом', s.know, 'know.on')}
+        ${sw('on', '📚 под ответом: что сработало из лорбуков', s.trace, 'trace.on')}
+        ${sw('on', 'Город сегодня: афиша, службы, цены, что говорят люди', s.city, 'city.on')}
+        ${sw('on', 'Кнопка «Спросить про сюжет» в Сцене', s.aide, 'aide.on')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
@@ -4418,6 +4429,23 @@ jQuery(async () => {
         B.register({ id: 'life-diary', prompt: (type) => diaryPrompt(type), afterPost: (i) => diaryAfterPost(i) });
         B.register({ id: 'life-fac', prompt: (type) => facPrompt(type), chron: () => facChron(), afterPost: (i, j) => facAfterPost(i, j) });
     } catch (e) { console.warn('[Life] HUD-волна', e); }
+    // 0.53: кто что знает, что сработало из лорбуков, кубик близости, ассистент сюжета, город сегодня
+    try {
+        initKnow({ ...extApi, rewriteFor: (i, q, w, why) => rewriteFor(i, q, w, why) });
+        initTrace(extApi);
+        initDice({ ...extApi, moodNow });
+        initAide({ ...extApi, promptParts: () => promptParts, daysBrief });
+        initCity({ ...extApi, daysBrief });
+        hubMods.push({ pre: 'kw-', click: knowClick, label: 'Кто что знает' }, { pre: 'dc-', click: diceClick, label: 'Кубик близости' }, { pre: 'aid-', click: aideClick, label: 'Ассистент сюжета' }, { pre: 'cty-', click: cityClick, label: 'Город' });
+        painters.push((el, id) => paintKnow(el, id), (el, id) => paintTrace(el, id));
+        chatClicks.push((act, el) => knowClick(act, el), (act, el) => traceClick(act, el));
+        addRecs(knowRecs);
+        const B2 = globalThis.LifeBridge;
+        B2.register({ id: 'life-know', prompt: (type) => knowPrompt(type), chron: () => knowChron(), afterPost: (i, j, m) => knowAfterPost(i, j, m), sceneHtml: () => knowSceneHtml() });
+        B2.register({ id: 'life-dice', prompt: (type) => dicePrompt(type), afterPost: () => diceAfterPost(), sceneHtml: () => diceSceneHtml() });
+        B2.register({ id: 'life-city', prompt: (type) => cityPrompt(type), afterPost: () => cityAfterPost() });
+        B2.register({ id: 'life-aide', sceneHtml: () => aideSceneHtml() });
+    } catch (e) { console.warn('[Life] 0.53', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
