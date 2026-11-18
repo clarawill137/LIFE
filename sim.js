@@ -91,6 +91,10 @@ export function hoursSince(a, b = rpNow()) {
 
 function prefsOf(who) { return M().prefs[A.canonName(who)] || []; }
 
+/** Для соседних модулей (мост): вкусы персонажа и его короткая внутренняя сводка. */
+export function tastesOf(who) { try { return prefsOf(who).map(x => ({ t: x.t, k: x.k === 'dislike' ? 'dislike' : 'like' })); } catch { return []; } }
+export function briefOf(who) { try { return innerBrief(who) || ''; } catch { return ''; } }
+
 function addPrefs(list, i) {
     const m = M();
     for (const x of list) {

@@ -26,7 +26,7 @@ import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather
 import { initZr } from './zr.js';
 import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
 import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput, slipAuto, locate } from './slip.js';
-import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick } from './cal.js';
+import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick, eventsBetween as calBetween, today as calToday } from './cal.js';
 import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
 import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageClick } from './stage.js';
 import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
@@ -37,7 +37,7 @@ import { initStance, stancePrompt, stanceChron, stanceAfterPost, stanceSceneHtml
 import { initRitual, ritualPrompt, ritualChron, ritualAfterPost, ritualHtml, ritualClick } from './ritual.js';
 import { initSteps, stepsPrompt, stepsChron, stepsAfterPost, stepsHtml, stepsClick } from './steps.js';
 import { initSee, seeWarm, seeReady, seePrompt, paintSee, seeClick } from './see.js';
-import { initSeason, seasonPrompt, applySeason, seasonHtml, seasonClick } from './season.js';
+import { initSeason, seasonPrompt, applySeason, seasonHtml, seasonClick, seasonNow, holidays as seasonHolidays } from './season.js';
 import { initTriggers, trigPrompt, trigChron, trigAfterPost, trigHtml, trigClick } from './triggers.js';
 import { initShards, shardsPrompt, shardsChron, shardsAfterPost, shardsHtml, shardsClick } from './shards.js';
 import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
@@ -69,7 +69,7 @@ import { stepsRecs } from './steps.js';
 import { shardsRecs } from './shards.js';
 import { trigRecs } from './triggers.js';
 import { hurtRecs } from './hurt.js';
-import { simRecs } from './sim.js';
+import { simRecs, tastesOf, briefOf } from './sim.js';
 import { innerRecs } from './inner.js';
 import { replyRecs } from './reply.js';
 import { initCanon, canonEnsure, canonClick } from './canon.js';
@@ -111,7 +111,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.53.0';
+const VERSION = '0.53.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -869,7 +869,8 @@ function pendingMarker() {
 }
 
 // ───────────── мост для соседних расширений (Зёрнышко и др.) ─────────────
-// Соседнее расширение зовёт LifeBridge.register({ id, init(api), prompt(type), chron(), afterPost(i, json, msg), personRow(who), renderPerson(rest), sceneHtml() }).
+// Соседнее расширение зовёт LifeBridge.register({ id, init(api), prompt(type), chron(), afterPost(i, json, msg), personRow(who), renderPerson(rest), sceneHtml(), calEvents(from, to) }).
+// calEvents — свои события в календарь Life: [{ key, d: 'ГГГГ-ММ-ДД', title, kind, who, time }]. Модулям в api: cal (today, between), season (now, holidays), tastes(who), brief(who).
 
 const bridgeMods = [];
 function bridgeEach(fn, label = '') {
@@ -878,6 +879,13 @@ function bridgeEach(fn, label = '') {
         try { const v = fn(m); if (v) out.push(v); } catch (e) { console.warn(`[Life] ${m.id}${label ? `: ${label}` : ''}`, e); }
     }
     return out;
+}
+let bridgeCalBusy = false;
+/** События соседних модулей для календаря (cal.js). Модуль не должен звать отсюда api.cal.between — на этот случай стоит замок. */
+function bridgeEvents(from, to) {
+    if (bridgeCalBusy) return [];
+    bridgeCalBusy = true;
+    try { return bridgeEach(m => m.calEvents?.(from, to), 'календарь').flat().filter(Boolean); } finally { bridgeCalBusy = false; }
 }
 const bridgeOf = (who) => bridgeMods.find(m => String(who || '').startsWith(`${m.id}:`)) || null;
 
@@ -891,7 +899,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -4085,7 +4093,11 @@ const mindParts = [];
 
 globalThis.LifeBridge = {
     version: VERSION,
-    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon, rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },
+    api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon,
+        cal: { today: () => calToday(), between: (from, to) => calBetween(from, to) },
+        season: { now: () => seasonNow(), holidays: (y) => seasonHolidays(y) },
+        tastes: (who) => tastesOf(who), brief: (who) => briefOf(who),
+        rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },
     register(mod) {
         if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;
         bridgeMods.push(mod);
@@ -4146,7 +4158,7 @@ jQuery(async () => {
     painters.push((el, id) => paintDateGuard(el, id));
     hubMods.push({ pre: 'vo-', click: voiceClick, label: 'Голос' }, { pre: 'sl-', click: slipClick, label: 'Ляп-фикс' });
     hubInputs.push(slipInput);
-    initCal({ ...extApi, horaeAgenda });
+    initCal({ ...extApi, horaeAgenda, bridgeEvents });
     initSkip({ ...extApi, insertMarker, daysBrief, afterSkip: () => { ui.focus = 'last'; closeHub(); decorate(); scrollChatBottom(); } });
     hubMods.push({ pre: 'cal-', click: calClick, label: 'Календарь' }, { pre: 'sk-', click: skipClick, label: 'Перемотка' });
     hubInputs.push(skipInput);

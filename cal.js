@@ -193,6 +193,13 @@ export function eventsBetween(from, to) {
             if (inRange(d) && !out.some(x => x.d === d && flat(x.title) === flat(g.text))) out.push({ key: `horae:${d}:${A.hash(g.text)}`, d, time: '', title: g.text, who: [], kind: 'plan', src: 'horae', st: 'open', mes: g.messageIndex });
         }
     } catch { /* */ }
+    // события соседних модулей (мост): праздники Hearthtide и т.п.
+    try {
+        for (const e of A.bridgeEvents?.(from, to) || []) {
+            if (!e || !e.title || !/^\d{4}-\d{2}-\d{2}$/.test(String(e.d)) || !inRange(e.d)) continue;
+            out.push({ time: '', who: [], st: 'open', ...e, kind: KINDS[e.kind] ? e.kind : 'holiday', src: 'bridge', key: String(e.key || `bridge:${e.d}:${e.title}`), own: false });
+        }
+    } catch { /* без соседей */ }
     return out.sort((x, y) => x.d.localeCompare(y.d) || String(x.time).localeCompare(String(y.time)));
 }
 
