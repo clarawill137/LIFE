@@ -80,7 +80,8 @@ const cardHtml = (r) => `<div class="lf-und-c"><div class="lf-und-w">${A.ava(r.w
     ${r.th ? `<div class="lf-und-th">«${esc(r.th)}»</div>` : ''}
     ${r.sub ? `<div class="lf-und-r"><small>прячет</small>${esc(r.sub)}</div>` : ''}
     ${r.xp || r.gt ? `<div class="lf-und-x"><span><small>ждал</small>${esc(r.xp || '—')}</span><i>→</i><span><small>получил</small>${esc(r.gt || '—')}</span></div>` : ''}
-    ${r.fear ? `<div class="lf-und-r fear"><small>боится</small>${esc(r.fear)}</div>` : ''}</div>`;
+    ${r.fear ? `<div class="lf-und-r fear"><small>боится</small>${esc(r.fear)}</div>` : ''}
+    ${r.th ? `<button class="lf-und-say" data-act="cue-set" data-once="1" data-src="Под словами" data-key="und:${esc(r.who)}" data-text="${esc(`${A.shortName(r.who)} наконец произносит вслух то, о чём молчал: «${r.th}»`)}">⚡ пусть скажет это вслух</button>` : ''}</div>`;
 
 const opened = new Set();
 

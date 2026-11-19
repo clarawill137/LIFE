@@ -3369,3 +3369,43 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 .lf-kin-l { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; font-size: 13px; color: var(--lf-text2); }
 .lf-kin-l > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .lf-kin-l i, .lf-kin-l em { font-style: normal; color: var(--lf-dim); }
+
+/* ═════════ 0.56: ручное управление (команды в промпт), пульт близости, тела в сцене ═════════ */
+.lf-cue-g { margin: 10px 0 4px; }
+.lf-cue-g > small { display: block; margin: 0 2px 6px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--lf-dim); }
+.lf-chip.lf-cue { font-size: 12.5px; padding: 7px 12px; }
+.lf-chip.lf-cue.once { border-style: dashed; }
+.lf-chip.lf-cue.once.on { border-style: solid; background: linear-gradient(180deg, #a8782f, #7a5620); border-color: rgba(232, 195, 122, .6); }
+.lf-cue-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; padding: 8px 10px; border-radius: 14px; border: 1px solid rgba(217, 104, 123, .35); background: rgba(94, 31, 44, .16); }
+.lf-cue-strip > small { flex-basis: 100%; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--lf-rose2); }
+.lf-cue-strip span { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 4px 4px 10px; border-radius: 999px; background: rgba(0, 0, 0, .25); font-size: 12.5px; color: var(--lf-text); }
+.lf-cue-strip span i { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--lf-rose2); }
+.lf-cue-strip span.once i { color: #e8c37a; }
+.lf-cue-strip button { flex: none; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); color: var(--lf-text2); font-size: 11px; cursor: pointer; }
+.lf-cue-own { display: flex; gap: 6px; margin: 10px 0 6px; }
+.lf-cue-own input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--lf-line2); background: var(--lf-bg2); color: var(--lf-text); font: 13.5px var(--lf-sans); }
+.lf-cue-own .lf-btn { flex: none; padding: 8px 12px; font-size: 12.5px; }
+.lf-und-say, .mes .lf-und-say { display: inline-block; margin-top: 8px; padding: 5px 11px; border-radius: 999px; border: 1px dashed rgba(232, 195, 122, .5); background: rgba(232, 195, 122, .08); color: inherit; font-size: 12px; cursor: pointer; }
+
+.lf-lu { margin: 6px 0 10px; padding: 12px; border-radius: 16px; border: 1px solid rgba(217, 104, 123, .32); background: linear-gradient(180deg, rgba(94, 31, 44, .2), rgba(255, 255, 255, .02)); }
+.lf-lu-pose { margin-bottom: 8px; font: 500 14.5px/1.4 var(--lf-serif); color: var(--lf-text); }
+.lf-lu-w { padding: 8px 0; border-top: 1px solid var(--lf-line); }
+.lf-lu-h { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--lf-text); }
+.lf-lu-h .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+.lf-lu-h small { margin-left: auto; color: var(--lf-rose2); font-size: 12px; }
+.lf-lu-edge { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
+.lf-lu-edge i { flex: 1; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.lf-lu-edge i u { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7b2d3d, #d9687b 60%, #ffb3a0); transition: width .5s var(--lf-ease); }
+.lf-lu-edge b { flex: none; width: 26px; text-align: right; font-size: 12.5px; color: var(--lf-text); }
+.lf-lu-w p { margin: 2px 0 6px; font-size: 12.5px; line-height: 1.4; color: var(--lf-text2); }
+.lf-lu-z { display: flex; flex-wrap: wrap; gap: 5px; }
+.lf-lu-z span { padding: 3px 9px; border-radius: 999px; font-size: 12px; color: var(--lf-text); background: rgba(217, 104, 123, calc(.1 + var(--v, .5) * .5)); }
+.lf-lu-z b { font-weight: 600; margin-left: 2px; }
+.lf-lu-wear { display: block; margin-top: 6px; font-size: 12px; color: var(--lf-dim); }
+.lf-lu-k { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 6px 0; }
+.lf-lu-k small { flex-basis: 100%; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--lf-dim); }
+.lf-lu-k span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 10px; border-radius: 999px; border: 1px solid var(--lf-line2); font-size: 12.5px; color: var(--lf-text2); }
+.lf-lu-k.k-kink span, .lf-lu-k.k-fetish span { border-color: rgba(217, 104, 123, .4); background: rgba(94, 31, 44, .16); }
+.lf-lu-k.k-nogo span { border-color: rgba(228, 138, 90, .6); background: rgba(228, 138, 90, .1); color: #f0b89a; }
+.lf-lu-k.k-cold span { opacity: .75; }
+.lf-lu-k button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); font-size: 10px; cursor: pointer; }

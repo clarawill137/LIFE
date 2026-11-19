@@ -160,7 +160,7 @@ export function diaryHtml(who) {
         <header><b>${esc(p.day || '')}</b><span>${MOODS[p.mood] || ''}</span><button data-act="dy-del" data-id="${p.id}" title="вырвать страницу">${A.icon('x')}</button></header>
         <p>${md(p.text)}</p>
         ${p.about ? `<details class="lf-dy-about"><summary>о тебе</summary><p>${md(p.about)}</p></details>` : ''}
-        ${p.next ? `<footer class="${p.done ? 'done' : ''}"><small>решил</small>${esc(p.next)}<button class="lf-link" data-act="dy-done" data-id="${p.id}">${p.done ? 'вернуть' : 'уже неважно'}</button></footer>` : ''}
+        ${p.next ? `<footer class="${p.done ? 'done' : ''}"><small>решил</small>${esc(p.next)}${p.done ? '' : `<button class="lf-link" data-act="cue-set" data-once="1" data-src="Инициатива" data-key="dy:${p.id}" data-text="${esc(`${A.shortName(p.who)} сам, по своей воле делает то, что решил: ${p.next}`)}">⚡ пусть сделает сейчас</button>`}<button class="lf-link" data-act="dy-done" data-id="${p.id}">${p.done ? 'вернуть' : 'уже неважно'}</button></footer>` : ''}
     </article>`;
     const dream = (p) => `<div class="lf-dy-dream f${Math.max(0, p.fog ?? 0)}" data-act="dy-fog" data-id="${p.id}"><small>сон · ночь на ${esc(p.day || '')}</small><p>${esc(p.dream)}</p>${(p.fog ?? 0) <= 0 && p.mean ? `<details><summary>что за этим стоит</summary><p>${esc(p.mean)}</p></details>` : `<i>${(p.fog ?? 0) > 0 ? 'тапни — вспомнить' : ''}</i>`}</div>`;
     const dreams = cfg().dreams ? days.filter(p => p.dream) : [];

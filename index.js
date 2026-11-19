@@ -112,6 +112,8 @@ import { initPeek, peekSceneHtml, peekClick } from './peek.js';
 import { initStats, statsPrompt, statsChron, statsAfterPost, statsSceneHtml, statsAddHtml, statsClick } from './stats.js';
 import { initKin, kinHtml, kinClick } from './kin.js';
 import { initPanel, trackersBar, panelClick } from './panel.js';
+import { initCue, cuePrompt, cueAfterPost, cueClick, cueChip, cueOwnHtml, cueStripHtml, cueClear, fightPultHtml, duelPultHtml } from './cue.js';
+import { initLust, lustPrompt, lustChron, lustAfterPost, lustSceneHtml, lustPultHtml, lustHtml, lustClick, lustRecs } from './lust.js';
 import { initTrace, paintTrace, traceClick } from './trace.js';
 import { initDice, dicePrompt, diceAfterPost, diceSceneHtml, diceClick } from './dice.js';
 import { initAide, aideSceneHtml, aideClick } from './aide.js';
@@ -119,7 +121,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.55.0';
+const VERSION = '0.56.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -907,7 +909,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -2055,7 +2057,7 @@ function renderScene() {
         const mood = moodOf(n, st);
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
-    ${isCur ? (() => { try { return trackersBar(); } catch (e) { console.warn('[Life] трекеры', e); return ''; } })() : ''}
+    ${isCur ? (() => { try { return `${trackersBar()}${cueStripHtml()}`; } catch (e) { console.warn('[Life] трекеры', e); return ''; } })() : ''}
     ${isCur ? (() => { try { return stageHtml(); } catch (e) { console.warn('[Life] мизансцена', e); return ''; } })() : ''}
     ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
     ${isCur ? bridgeEach(m => m.sceneHtml?.(), 'сцена').join('') : ''}
@@ -4503,16 +4505,24 @@ jQuery(async () => {
         B3.register({ id: 'life-powers', prompt: (type) => powersPrompt(type), chron: () => powersChron(), afterPost: (i, j) => powersAfterPost(i, j), sceneHtml: () => powersSceneHtml() });
         B3.register({ id: 'life-stats', prompt: (type) => statsPrompt(type), chron: () => statsChron(), afterPost: (i, j) => statsAfterPost(i, j), sceneHtml: () => statsSceneHtml() });
         B3.register({ id: 'life-peek', sceneHtml: () => peekSceneHtml() });
+        initCue(extApi);
+        initLust({ ...extApi, moodNow, coreOf: (w) => coreOf(w), cueChip, cueOwnHtml, cueStripHtml, cueClear });
+        hubMods.push({ pre: 'cue-', click: cueClick, label: 'Команды' }, { pre: 'lu-', click: lustClick, label: 'Близость' });
+        chatClicks.push((act, el) => cueClick(act, el));
+        mindParts.push((who) => lustHtml(who));
+        addRecs(lustRecs);
+        B3.register({ id: 'life-cue', prompt: (type) => cuePrompt(type), afterPost: (i) => cueAfterPost(i) });
+        B3.register({ id: 'life-lust', prompt: (type) => lustPrompt(type), chron: (i) => lustChron(i), afterPost: (i, j) => lustAfterPost(i, j), sceneHtml: () => lustSceneHtml() });
         const cmx = () => chatMeta();
         const cnt = (n) => (n ? String(n) : '');
         const sOn = (k) => () => settings()[k]?.on !== false;
         initPanel(extApi, [
             { id: 'brew', ico: '⏳', name: 'Назревает', on: sOn('brew'), hint: 'К чему идёт накопленное: недосып, раны, деньги, обещания. «Предложить модели» — на один ответ.', state: () => cnt((cmx().brew?.list || []).filter(x => x.st === 'new' || x.st === 'armed').length), html: () => brewSceneHtml() },
             { id: 'know', ico: '👁', name: 'Кто что знает', on: sOn('know'), hint: 'Сведения не для всех и кто в курсе. Тому, кто пишет ответ, модель получает, чего он не знает.', state: () => cnt((cmx().know?.facts || []).filter(f => !f.pub).length), html: () => knowSceneHtml() },
-            { id: 'fight', ico: '⚔', name: 'Бой', on: sOn('fight'), hint: 'Оживает сам, когда в сцене драка, перестрелка или погоня: расстановка, адреналин, потом отходняк.', idle: 'Сейчас никто не дерётся.', state: () => (cmx().fight?.stage && cmx().fight.stage !== 'over' ? 'идёт' : ''), html: () => fightSceneHtml() },
-            { id: 'duel', ico: '🗣', name: 'Дуэль', on: sOn('duel'), hint: 'Оживает сама во время спора, ссоры, допроса: кто ведёт и кто что уступил.', idle: 'Сейчас никто не спорит.', state: () => (cmx().duel?.cur ? 'идёт' : ''), html: () => duelSceneHtml() },
+            { id: 'fight', ico: '⚔', name: 'Бой', on: sOn('fight'), hint: 'Оживает сам, когда в сцене драка, перестрелка или погоня: расстановка, адреналин, потом отходняк.', idle: 'Сейчас никто не дерётся.', state: () => (cmx().fight?.stage && cmx().fight.stage !== 'over' ? 'идёт' : ''), html: () => fightSceneHtml(), extra: () => fightPultHtml() },
+            { id: 'duel', ico: '🗣', name: 'Дуэль', on: sOn('duel'), hint: 'Оживает сама во время спора, ссоры, допроса: кто ведёт и кто что уступил.', idle: 'Сейчас никто не спорит.', state: () => (cmx().duel?.cur ? 'идёт' : ''), html: () => duelSceneHtml(), extra: () => duelPultHtml() },
             { id: 'bets', ico: '🎲', name: 'Пари', on: sOn('bets'), hint: 'Летописец сам замечает пари: кто с кем, на что, что на кону. Проигравший должен, пока не тапнешь «отдал».', idle: 'Открытых пари нет.', state: () => cnt((cmx().bets?.list || []).filter(x => x.st === 'open' || (!x.paid && x.stake)).length), html: () => betsSceneHtml() },
-            { id: 'heat', ico: '🔥', name: 'Близость', on: sOn('heat'), hint: '18+. Ход сцены, часы и следы на теле — сами; кубик близости — по кнопке.', idle: 'Сцена не идёт, следов нет.', state: () => (cmx().heat?.cur ? 'идёт' : cnt((cmx().heat?.marks || []).length)), html: () => `${heatSceneHtml()}${diceSceneHtml()}`, extra: () => (cmx().dice?.cur ? '' : '<button class="lf-btn full" data-act="dc-roll">🎲 Бросить кубик близости</button>') },
+            { id: 'heat', ico: '🔥', name: 'Близость', on: sOn('heat'), hint: '18+. Ход сцены, тела, следы — сами; ниже пульт: твой тап уходит в промпт.', idle: 'Сцена не идёт, следов нет — но пульт работает и заранее.', state: () => (cmx().heat?.cur ? 'идёт' : cnt((cmx().heat?.marks || []).length)), html: () => `${heatSceneHtml()}${lustSceneHtml()}${diceSceneHtml()}`, extra: () => `${cmx().dice?.cur ? '' : '<button class="lf-btn full" data-act="dc-roll">🎲 Бросить кубик близости</button>'}${lustPultHtml()}` },
             { id: 'home', ico: '🔧', name: 'Быт', on: sOn('home'), hint: 'Что сломано и не починено, кто кому должен, недосып за неделю, кто одет не по погоде; действующие вещества и эффекты.', idle: 'Ничего не сломано, долгов нет.', state: () => cnt((cmx().home?.broken || []).filter(x => !x.fixed).length + (cmx().home?.debts || []).filter(x => !x.paid).length), html: () => `${homeSceneHtml()}${powersSceneHtml()}` },
             { id: 'stats', ico: '📈', name: 'Свои статы', on: sOn('stats'), hint: 'Придумай показатель — «Ревность», «Подозрения Тони» — Летописец будет вести его после каждого поста.', idle: 'Пока ни одного.', state: () => cnt((cmx().stats?.defs || []).length), html: () => statsSceneHtml(), extra: () => ((cmx().stats?.defs || []).length ? '' : statsAddHtml()) },
             { id: 'peek', ico: '👂', name: 'Подслушать', on: sOn('peek'), hint: 'Разговор за кадром, которого твоя героиня не слышала. Читаешь только ты.', state: () => cnt((cmx().peek?.list || []).length), html: () => peekSceneHtml() },
