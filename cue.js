@@ -30,6 +30,17 @@ export function cueSet({ key, text, once = false, src = 'Сцена' }) {
     A.saveMeta(); A.updatePrompt();
     return true;
 }
+/** Взвести без переключения (для автоматики: повтор того же — не снимает). */
+export function cueArm({ key, text, once = false, src = 'Сцена' }) {
+    const s = M();
+    text = String(text || '').trim().slice(0, 400);
+    if (!text) return false;
+    key = String(key || text);
+    s.list = s.list.filter(x => x.key !== key);
+    s.list.push({ key, src, text, once: !!once, armedKey: lastKey() });
+    A.saveMeta(); A.updatePrompt();
+    return true;
+}
 export const cueHas = (key, text) => M().list.some(x => x.key === key && (text === undefined || x.text === text));
 export function cueClear(src) { const s = M(); const n = s.list.length; s.list = s.list.filter(x => x.src !== src); if (s.list.length !== n) { A.saveMeta(); A.updatePrompt(); } }
 
@@ -45,7 +56,7 @@ export function cuePrompt(type) {
     if (!A?.hasChat?.() || type === 'quiet' || type === 'impersonate') return '';
     const s = M();
     if (!s.list.length) return '';
-    const group = (list) => { const by = {}; for (const x of list) (by[x.src] = by[x.src] || []).push(x.text); return Object.entries(by).map(([src, t]) => `${src} — ${t.join('; ')}`).join('. '); };
+    const group = (list) => { const by = {}; for (const x of list) (by[x.src] = by[x.src] || []).push(x.text.replace(/[.\s]+$/, '')); return Object.entries(by).map(([src, t]) => `${src} — ${t.join('; ')}`).join('. '); };
     const once = s.list.filter(x => x.once), hold = s.list.filter(x => !x.once);
     const user = A.shortName(A.canonName(A.ctx().name1));
     return [

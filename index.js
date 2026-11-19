@@ -111,8 +111,18 @@ import { initPowers, powersPrompt, powersChron, powersAfterPost, powersHtml, pow
 import { initPeek, peekSceneHtml, peekClick } from './peek.js';
 import { initStats, statsPrompt, statsChron, statsAfterPost, statsSceneHtml, statsAddHtml, statsClick } from './stats.js';
 import { initKin, kinHtml, kinClick } from './kin.js';
-import { initPanel, trackersBar, panelClick } from './panel.js';
-import { initCue, cuePrompt, cueAfterPost, cueClick, cueChip, cueOwnHtml, cueStripHtml, cueClear, fightPultHtml, duelPultHtml } from './cue.js';
+import { initPanel, trackersBar, panelClick, openTracker } from './panel.js';
+import { initHouse, housePrompt, houseChron, houseAfterPost, houseHtml, houseClick, houseRecs, houseState, houseIrritants } from './house.js';
+import { initBills, billsPrompt, billsChron, billsAfterPost, billsHtml, billsClick, billsRecs, billsSpend, billsSweep, billsCalEvents, billsIrritants, billsState } from './bills.js';
+import { initBicker, bickerPrompt, bickerChron, bickerAfterPost, bickerHtml, bickerClick, bickerInput, bickerRecs, bickerState, partner as bickerPartner } from './bicker.js';
+import { homeBroken, sleepDebtOf } from './home.js';
+import { homeLoc as simHomeLoc, petsList as simPetsList } from './sim.js';
+import { onceArmed } from './modes.js';
+import { twistArmed } from './twists.js';
+import { dramaState, heatOf } from './drama.js';
+import { habitsOf } from './habits.js';
+import { arcCalEvents, arcGunsHistory } from './arcs.js';
+import { initCue, cuePrompt, cueAfterPost, cueClick, cueChip, cueOwnHtml, cueStripHtml, cueClear, fightPultHtml, duelPultHtml, cueArm, cueHas } from './cue.js';
 import { initFlags, flagsChron, flagsAfterPost, flagsHtml, flagsRecs } from './flags.js';
 import { initInvites, invPrompt, invChron, invAfterPost, invSceneHtml, invClick, invRecs } from './invites.js';
 import { cueSet } from './cue.js';
@@ -124,7 +134,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.57.0';
+const VERSION = '0.58.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -912,7 +922,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -949,6 +959,8 @@ function updateMovePrompt(type, consume = false) {
     try { const dp = settings().enabled && hasChat() ? duoPrompt(type, consume) : ''; if (dp) modes = [modes, dp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вдвоём', e); }
     try { const lp = settings().enabled && hasChat() ? rulesPrompt(type) : ''; if (lp) modes = [modes, lp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] правила сцены', e); }
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
+    // твои команды (пульты боя, спора, близости, перепалок) — тоже в самый конец, как нежнятинка
+    try { const qp = settings().enabled && hasChat() ? cuePrompt(type) : ''; if (qp) modes = [modes, qp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] команды', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
     try { applyEra(); } catch (e) { console.warn('[Life] эпоха', e); }
@@ -1541,6 +1553,28 @@ function relationsState() {
     return pairs;
 }
 
+/** Как менялась шкала from → to по постам: [{ i, v, d }] — так же, как её считает relationsState. */
+function relSeries(from, to, f = 'trust') {
+    const chat = chatArr();
+    const cm = chatMeta();
+    const a = canonName(from), b = canonName(to);
+    const def = SCALES.find(x => x[0] === f)?.[3] ?? 50;
+    let v = (cm.relBase || {})[dirKey(a, b)]?.[f] ?? (cm.pairBase || {})[pairKey(a, b)]?.[f] ?? def;
+    const out = [{ i: -1, v, d: '' }];
+    for (let i = 0; i < chat.length; i++) {
+        const e = chronOf(i);
+        if (!e || e.undone) continue;
+        for (const r of e.rel || []) {
+            if (sameName(r.a, r.b)) continue;
+            const pair = (sameName(r.a, a) && sameName(r.b, b)) || (sameName(r.a, b) && sameName(r.b, a));
+            if (!pair || (r.dir && !sameName(r.a, a)) || !r[f]) continue;
+            v = Math.max(0, Math.min(100, v + r[f]));
+            out.push({ i, v, d: chat[i]?.horae_meta?.timestamp?.story_date || '' });
+        }
+    }
+    return out;
+}
+
 /** Чувства from к to: { trust, closeness, … } или null. */
 function relOf(from, to) {
     const p = relationsState()[pairKey(from, to)];
@@ -1730,7 +1764,7 @@ const painters = [];
 const chatClicks = [];
 // модули со своими кнопками в хабе: префикс data-act → обработчик; и свои поля (change)
 const hubMods = [];
-const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac', 'know', 'trace', 'aide', 'city', 'pair', 'home', 'powers', 'stats', 'peek', 'flags', 'inv'];
+const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac', 'know', 'trace', 'aide', 'city', 'pair', 'home', 'powers', 'stats', 'peek', 'flags', 'inv', 'house', 'bills', 'bicker'];
 const hubInputs = [];
 
 function paintChips() {
@@ -2574,6 +2608,7 @@ function renderMoney() {
         ${b.state === 'due' || b.state === 'overdue' ? `<button class="lf-btn small primary" data-act="bill-pay" data-id="${esc(b.id)}">Оплатить</button>` : `<button class="lf-iconbtn" data-act="bill-del" data-id="${esc(b.id)}" title="Убрать">${icon('x')}</button>`}
     </div>`).join('')}</div>` : '<div class="lf-empty small">Счетов пока нет: аренда, свет, связь, страховка — добавь, и они будут списываться сами.</div>'}
     <button class="lf-btn full" data-act="bill-add">${icon('plus')} Добавить платёж</button>
+    ${(() => { try { return billsHtml(); } catch (e) { console.warn('[Life] счета', e); return ''; } })()}
     ${v.loans.length ? `${sec('Кредиты')}<div class="lf-bills">${v.loans.map(l => `<div class="lf-bill ${l.state}"><span class="lf-bill-ic">${icon('lock')}</span><span class="lf-bill-t"><b>${esc(l.name)}</b><small>осталось ${esc(l.remaining)} · ${esc(l.monthly)} ${l.day}-го</small></span>${l.state === 'due' || l.state === 'overdue' ? `<button class="lf-btn small primary" data-act="loan-pay" data-id="${esc(l.id)}">Платёж</button>` : `<span class="lf-bill-s">${l.state === 'paid' ? 'оплачено' : ''}</span>`}</div>`).join('')}</div>` : ''}
     <label class="lf-switch"><input type="checkbox" data-set="money.autopay" ${s.money.autopay ? 'checked' : ''}><span></span>Списывать сами в день оплаты ${v.hasDate ? '' : '<small>(нет даты истории — ждём её)</small>'}</label>
     ${sec('Операции')}
@@ -2761,6 +2796,9 @@ function renderCfg() {
         ${sw('on', 'Подслушанное', s.peek, 'peek.on')}
         ${sw('on', 'Флаг-монитор: зелёные и красные флаги', s.flags, 'flags.on')}
         ${sw('on', 'Приглашения: принять, отклонить, «обещала и не пришла»', s.inv, 'inv.on')}
+        ${sw('on', 'Дом: пыль, посуда, стирка, холодильник и мусор по времени истории', s.house, 'house.on')}
+        ${sw('on', 'Счета капают: почта, коммуналка, просрочки, чеки быта', s.bills, 'bills.on')}
+        ${sw('on', 'Перепалки: терпение, поводы, вечные темы', s.bicker, 'bicker.on')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
@@ -4303,6 +4341,7 @@ jQuery(async () => {
             chron: () => arcChron(),
             afterPost: (i, j) => arcAfterPost(i, j),
             sceneHtml: () => arcSceneHtml(),
+            calEvents: (from, to) => arcCalEvents(from, to),
         });
         globalThis.LifeBridge.register({
             id: 'life-twist',
@@ -4453,7 +4492,8 @@ jQuery(async () => {
     } catch (e) { console.warn('[Life] вкус', e); }
     // HUD-волна (0.52): бой, словесная дуэль, пари, под словами, близость и следы, шрамы доверия, дневник и сны, назревает, фракции, архив
     try {
-        initFight(extApi); initDuel(extApi); initBets(extApi); initUnder(extApi); initScars(extApi); initArchive(extApi);
+        initFight(extApi); initDuel(extApi); initBets(extApi); initUnder(extApi); initScars(extApi);
+        initArchive({ ...extApi, relSeries: (a, b, f) => relSeries(a, b, f), heatOf: (i) => heatOf(i), arcGunsHistory: () => arcGunsHistory(), bickerPartner: () => bickerPartner() });
         initHeat({ ...extApi, moodNow });
         initDiary({ ...extApi, coreOf: (w) => coreOf(w), handOf: (w) => handOf(w), heatEndedAt: (i) => heatEndedAt(i) });
         initBrew({ ...extApi, promptParts: () => promptParts });
@@ -4516,7 +4556,7 @@ jQuery(async () => {
         chatClicks.push((act, el) => cueClick(act, el));
         mindParts.push((who) => lustHtml(who));
         addRecs(lustRecs);
-        B3.register({ id: 'life-cue', prompt: (type) => cuePrompt(type), afterPost: (i) => cueAfterPost(i) });
+        B3.register({ id: 'life-cue', afterPost: (i) => cueAfterPost(i) });
         B3.register({ id: 'life-lust', prompt: (type) => lustPrompt(type), chron: (i) => lustChron(i), afterPost: (i, j) => lustAfterPost(i, j), sceneHtml: () => lustSceneHtml() });
         initFlags(extApi);
         initInvites({ ...extApi, cueSet: (o) => cueSet(o) });
@@ -4525,6 +4565,18 @@ jQuery(async () => {
         addRecs(flagsRecs, invRecs);
         B3.register({ id: 'life-flags', chron: () => flagsChron(), afterPost: (i, j) => flagsAfterPost(i, j) });
         B3.register({ id: 'life-inv', prompt: (type) => invPrompt(type), chron: () => invChron(), afterPost: (i, j) => invAfterPost(i, j), sceneHtml: () => invSceneHtml() });
+        // 0.58: дом живёт, счета капают, перепалки
+        initHouse({ ...extApi, homeLoc: () => simHomeLoc(), petsList: () => simPetsList(), cueChip, billsSpend: (i, l) => billsSpend(i, l) });
+        initBills({ ...extApi, homeBroken: () => homeBroken(), petsList: () => simPetsList(), homeLoc: () => simHomeLoc(), daysBrief, push: (o) => pushBanner(o), openBills: () => { openHub(); setTimeout(() => openTracker('bills'), 120); } });
+        initBicker({ ...extApi, cueArm, cueHas, cueChip, cueStripHtml, coreOf: (w) => coreOf(w), habitsOf: (w) => habitsOf(w), houseState: () => houseState(), houseIrritants: (P) => houseIrritants(P), billsIrritants: () => billsIrritants(),
+            sleepDebt: (w) => sleepDebtOf(w), homeLoc: () => simHomeLoc(), modesOn: () => modesOn(), onceArmed: () => onceArmed(), twistArmed: () => twistArmed(), dramaState: () => dramaState(), moodNow, daysBrief });
+        hubMods.push({ pre: 'hs-', click: houseClick, label: 'Дом' }, { pre: 'bl-', click: billsClick, label: 'Счета' }, { pre: 'bk-', click: bickerClick, label: 'Перепалки' });
+        hubInputs.push((el) => bickerInput(el));
+        addRecs(houseRecs, billsRecs, bickerRecs);
+        B3.register({ id: 'life-house', prompt: (type) => housePrompt(type), chron: (i) => houseChron(i), afterPost: (i, j) => houseAfterPost(i, j) });
+        B3.register({ id: 'life-bills', prompt: (type) => billsPrompt(type), chron: () => billsChron(), afterPost: (i, j) => billsAfterPost(i, j), calEvents: (from, to) => billsCalEvents(from, to) });
+        B3.register({ id: 'life-bicker', prompt: (type) => bickerPrompt(type), chron: (i) => bickerChron(i), afterPost: (i, j) => bickerAfterPost(i, j) });
+        setTimeout(() => { billsSweep().catch(e => console.warn('[Life] счета', e)); }, 8000);
         const cmx = () => chatMeta();
         const cnt = (n) => (n ? String(n) : '');
         const sOn = (k) => () => settings()[k]?.on !== false;
@@ -4535,7 +4587,9 @@ jQuery(async () => {
             { id: 'duel', ico: '🗣', name: 'Дуэль', on: sOn('duel'), hint: 'Оживает сама во время спора, ссоры, допроса: кто ведёт и кто что уступил.', idle: 'Сейчас никто не спорит.', state: () => (cmx().duel?.cur ? 'идёт' : ''), html: () => duelSceneHtml(), extra: () => duelPultHtml() },
             { id: 'bets', ico: '🎲', name: 'Пари', on: sOn('bets'), hint: 'Летописец сам замечает пари: кто с кем, на что, что на кону. Проигравший должен, пока не тапнешь «отдал».', idle: 'Открытых пари нет.', state: () => cnt((cmx().bets?.list || []).filter(x => x.st === 'open' || (!x.paid && x.stake)).length), html: () => betsSceneHtml() },
             { id: 'heat', ico: '🔥', name: 'Близость', on: sOn('heat'), hint: '18+. Ход сцены, тела, следы — сами; ниже пульт: твой тап уходит в промпт.', idle: 'Сцена не идёт, следов нет — но пульт работает и заранее.', state: () => (cmx().heat?.cur ? 'идёт' : cnt((cmx().heat?.marks || []).length)), html: () => `${heatSceneHtml()}${lustSceneHtml()}${diceSceneHtml()}`, extra: () => `${cmx().dice?.cur ? '' : '<button class="lf-btn full" data-act="dc-roll">🎲 Бросить кубик близости</button>'}${lustPultHtml()}` },
-            { id: 'home', ico: '🔧', name: 'Быт', on: sOn('home'), hint: 'Что сломано и не починено, кто кому должен, недосып за неделю, кто одет не по погоде; действующие вещества и эффекты.', idle: 'Ничего не сломано, долгов нет.', state: () => cnt((cmx().home?.broken || []).filter(x => !x.fixed).length + (cmx().home?.debts || []).filter(x => !x.paid).length), html: () => `${homeSceneHtml()}${powersSceneHtml()}` },
+            { id: 'bicker', ico: '🙄', name: 'Перепалки', on: sOn('bicker'), hint: 'Он с тобой ссориться не любит и уходит от конфликта — пока ты не доведёшь. Терпение, поводы, вечные темы; Life сама иногда подкидывает мелочь.', state: () => bickerState(), html: () => bickerHtml() },
+            { id: 'bills', ico: '📨', name: 'Счета', on: sOn('bills'), hint: 'Почта раз в неделю истории, коммуналка в начале месяца, чеки быта за день. В срок — списывается сам; не хватило денег — просрочка, пеня, а там и отключат.', state: () => { const b = billsState(); return b.cut ? '!' : cnt(b.open); }, html: () => billsHtml() },
+            { id: 'home', ico: '🔧', name: 'Быт', on: sOn('home'), hint: 'Дом сам пылится и пустеет по времени истории; что сломано, кто кому должен, недосып, кто одет не по погоде; действующие эффекты.', idle: 'Ничего не сломано, долгов нет.', state: () => cnt(houseState().filter(x => x.lvl >= 2).length + (cmx().home?.broken || []).filter(x => !x.fixed).length + (cmx().home?.debts || []).filter(x => !x.paid).length), html: () => `${houseHtml()}${homeSceneHtml()}${powersSceneHtml()}` },
             { id: 'stats', ico: '📈', name: 'Свои статы', on: sOn('stats'), hint: 'Придумай показатель — «Ревность», «Подозрения Тони» — Летописец будет вести его после каждого поста.', idle: 'Пока ни одного.', state: () => cnt((cmx().stats?.defs || []).length), html: () => statsSceneHtml(), extra: () => ((cmx().stats?.defs || []).length ? '' : statsAddHtml()) },
             { id: 'inv', ico: '✉', name: 'Приглашения', on: sOn('inv'), hint: 'Кто куда позвал и ждёт ответа. Принятое помнится до дня; обещала и не пришла — он задет.', idle: 'Никто никуда не звал.', state: () => cnt((cmx().inv?.list || []).filter(x => ['open', 'yes', 'missed'].includes(x.st)).length), html: () => invSceneHtml() },
             { id: 'peek', ico: '👂', name: 'Подслушать', on: sOn('peek'), hint: 'Разговор за кадром, которого твоя героиня не слышала. Читаешь только ты.', state: () => cnt((cmx().peek?.list || []).length), html: () => peekSceneHtml() },

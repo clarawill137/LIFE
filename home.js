@@ -35,6 +35,9 @@ function M() {
 }
 const broken = () => M().broken.filter(x => !x.fixed);
 const debts = () => M().debts.filter(x => !x.paid);
+/** Для счетов и перепалок: что сломано и не починено. */
+export const homeBroken = () => broken();
+export function sleepDebtOf(who) { return sleepDebt(who); }
 
 /** Долг сна: по последним семи записанным ночам. */
 function sleepDebt(who) {

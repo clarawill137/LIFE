@@ -25,6 +25,15 @@ function watch() {
     }, 700);
 }
 
+/** Открыть лист трекера по id (и из других модулей: «Почта» → Счета). */
+export function openTracker(id) {
+    const t = list.find(x => x.id === id);
+    if (!t) return false;
+    A.openSheet(`${t.ico} ${esc(t.name)}`, `<div class="lf-hint">${esc(t.hint)}</div><div class="lf-trk-body" data-trk="${t.id}">${bodyOf(t)}</div>`);
+    watch();
+    return true;
+}
+
 export function trackersBar() {
     if (!A?.hasChat?.()) return '';
     const shown = list.filter(t => safe(t.on, true) !== false);
@@ -39,13 +48,7 @@ function people() {
 
 export function panelClick(act, el) {
     if (!act.startsWith('trk-')) return false;
-    if (act === 'trk-open') {
-        const t = list.find(x => x.id === el.dataset.id);
-        if (!t) return true;
-        A.openSheet(`${t.ico} ${esc(t.name)}`, `<div class="lf-hint">${esc(t.hint)}</div><div class="lf-trk-body" data-trk="${t.id}">${bodyOf(t)}</div>`);
-        watch();
-        return true;
-    }
+    if (act === 'trk-open') { openTracker(el.dataset.id); return true; }
     if (act === 'trk-map') {
         const row = (ico, name, where) => `<div class="lf-trk-m"><span>${ico}</span><div><b>${name}</b><small>${where}</small></div></div>`;
         A.openSheet('🧭 Что где', `
@@ -55,6 +58,8 @@ export function panelClick(act, el) {
             ${row('⚠', 'Не мог знать', 'появляется под ответом, только если персонаж проговорился')}
             <div class="lf-hint">Здесь, в Сцене — чипы сверху</div>
             ${list.map(t => row(t.ico, esc(t.name), esc(t.hint))).join('')}
+            <div class="lf-hint">Деньги</div>
+            ${row('📨', 'Счета', 'чип в полке и вкладка Деньги: почта раз в неделю, коммуналка раз в месяц, чеки быта')}
             <div class="lf-hint">На странице персонажа → Жизнь → Психика</div>
             ${row('📓', 'Дневник, сны, дневник тела', 'страница пишется сама с новым днём истории')}
             ${row('🩹', 'Шрамы доверия и следы на теле', 'за что сдвигалось доверие; что ещё не сошло')}

@@ -7,6 +7,13 @@ let A = null;
 export function initArcs(api) { A = api; }
 
 const esc = (v) => A.esc(v);
+const SIZE = { main: 'главное', side: 'побочное', short: 'мелочь' };
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymdOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+/** Сегодня по истории — YYYY-MM-DD или ''. */
+function todayYmd() { try { const d = A.parseDate(A.worldState()?.timestamp?.story_date); return d && !isNaN(d) ? ymdOf(d) : ''; } catch { return ''; } }
+const dmy = (s) => { const [, m, d] = String(s).split('-'); return `${d}.${m}`; };
+const overdue = (g, t = todayYmd()) => !!(g.due && t && g.due < t && g.fired == null);
 const userName = () => A.canonName(A.ctx().name1) || A.ctx().name1 || 'игрок';
 
 function M() {
@@ -47,11 +54,21 @@ function context() {
 const PLAN_SYSTEM = `Ты сценарист длинной литературной ролевой истории на русском. Игрок задаёт сюжетку — линию на ближайшее время.
 Разложи её на 3–5 битов: ключевые повороты по порядку, каждый 6–14 слов, конкретно (кто, что делает, что меняется). Биты — направление, не сценарий: между ними живая игра; без финального «и жили счастливо»; не решай за игрока его поступки и чувства.
 Добавь 1–2 чеховских ружья: деталь, которую надо заложить заранее, мимоходом (setup, 5–12 слов), и как она выстрелит потом (payoff, 5–12 слов), и к какому биту (beat — номер бита, не первого).
-Опирайся на то, что уже есть в истории. Ответь только JSON: {"title":"2–5 слов","beats":["…"],"guns":[{"setup":"…","payoff":"…","beat":2}]}`;
+У ружья может быть срок: due_days — через сколько дней истории оно должно выстрелить, если в истории есть срок (ультиматум, дата, ожидание) или так задумано, иначе 0; size — вес нити: main (главное), side (побочное), short (мелочь).
+Опирайся на то, что уже есть в истории. Ответь только JSON: {"title":"2–5 слов","beats":["…"],"guns":[{"setup":"…","payoff":"…","beat":2,"due_days":0,"size":"side"}]}`;
 
 const NEXT_SYSTEM = `Ты сценарист длинной литературной ролевой истории на русском. Сюжетка закрыта — предложи 3 идеи следующей: разных по тону — одна тихая (быт, близость, отдых), одна напряжённая (опасность, работа, прошлое догоняет), одна неожиданная.
 Каждая — название 2–5 слов и одно предложение, о чём. Опирайся на открытые нити: последние дни, обещания, тайны, люди; не повторяй прошлые сюжетки; не решай за игрока.
 Ответь только JSON: {"next":[{"title":"…","why":"…"}]}`;
+
+const dueAfter = (t, n) => { const d = new Date(`${t}T12:00:00`); d.setDate(d.getDate() + n); return ymdOf(d); };
+/** Дата через n дней истории (YYYY-MM-DD) или ''. */
+function dueIn(n) {
+    const t = todayYmd();
+    if (!t || !(n > 0)) return '';
+    const d = new Date(`${t}T12:00:00`); d.setDate(d.getDate() + Math.round(n));
+    return ymdOf(d);
+}
 
 function mkArc(j, title, by) {
     const a = M();
@@ -60,6 +77,7 @@ function mkArc(j, title, by) {
     const guns = (Array.isArray(j?.guns) ? j.guns : []).slice(0, 3).map(g => ({
         id: ++a.seq, t: String(g?.setup || g?.t || '').trim().slice(0, 140), pay: String(g?.payoff || g?.pay || '').trim().slice(0, 140),
         beat: Math.max(1, Math.min(beats.length, Math.round(Number(g?.beat) || beats.length))), planted: null, fired: null, arm: '',
+        size: SIZE[String(g?.size)] ? String(g.size) : '', due: dueIn(Number(g?.due_days)),
     })).filter(g => g.t && g.pay);
     return { id: ++a.seq, title: String(title || j?.title || 'Сюжетка').trim().slice(0, 80), beats, guns, at: A.lastAiIndex(), by };
 }
@@ -79,7 +97,7 @@ export async function planArc(title) {
 function closeArc(withNext = true) {
     const a = M();
     if (!a.cur) return;
-    a.past.push({ title: a.cur.title, beats: a.cur.beats.length, done: doneCount(a.cur), at: A.lastAiIndex() });
+    a.past.push({ title: a.cur.title, beats: a.cur.beats.length, done: doneCount(a.cur), at: A.lastAiIndex(), guns: a.cur.guns.map(g => ({ t: g.t, pay: g.pay, planted: g.planted, fired: g.fired, due: g.due || '', size: g.size || '' })) });
     if (a.past.length > 12) a.past = a.past.slice(-12);
     a.cur = null;
     A.saveMeta();
@@ -105,7 +123,11 @@ export function arcPrompt(type) {
     const nb = nextBeat(a);
     if (!nb) return '';
     const live = a.guns.filter(g => g.planted != null && g.fired == null);
-    return `[Сюжетка «${a.title}»: пройдено ${doneCount(a)} из ${a.beats.length}. Следующий бит: «${nb.t}» — веди к нему естественно и в своём темпе (не обязательно в этом ответе), не объявляй его, не перескакивай и не закрывай сюжетку раньше времени; если ${A.shortName(userName())} свернёт в сторону — подстраивайся.${live.length ? ` Заложено и ещё не выстрелило: ${live.map(g => `«${g.t}»`).join('; ')} — держи в уме.` : ''}]`;
+    const late = a.guns.filter(g => overdue(g) && g.planted != null && g.arm !== 'fire');
+    const soon = a.guns.filter(g => g.due && g.fired == null && !overdue(g));
+    const dl = [late.length ? ` Просрочено: ${late.map(g => `«${g.t}» — должно было выстрелить к ${dmy(g.due)}`).join('; ')} — эта нить просит развязки.` : '', soon.length ? ` Сроки: ${soon.map(g => `«${g.t}» — до ${dmy(g.due)}${g.size === 'main' ? ' (главное)' : ''}`).join('; ')}.` : ''].join('');
+    const note = `[Сюжетка «${a.title}»: пройдено ${doneCount(a)} из ${a.beats.length}. Следующий бит: «${nb.t}» — веди к нему естественно и в своём темпе (не обязательно в этом ответе), не объявляй его, не перескакивай и не закрывай сюжетку раньше времени; если ${A.shortName(userName())} свернёт в сторону — подстраивайся.${live.length ? ` Заложено и ещё не выстрелило: ${live.map(g => `«${g.t}»`).join('; ')} — держи в уме.` : ''}]`;
+    return dl && note.endsWith(']') ? `${note.slice(0, -1)}${dl}]` : note;
 }
 
 /** Ружьё на один ответ (в самый конец промпта). consume — генерация пошла. */
@@ -165,8 +187,12 @@ export function arcAfterPost(i, j) {
         const since = Math.max(a.at ?? -1, ...a.guns.map(g => g.planted ?? -1));
         const toPlant = a.guns.find(g => g.planted == null);
         const done = doneCount(a);
-        const toFire = a.guns.find(g => g.planted != null && g.fired == null && done >= g.beat - 1 && aiCount(g.planted) >= 4);
+        const t = todayYmd();
+        const lateFire = a.guns.find(g => overdue(g, t) && g.planted != null && aiCount(g.planted) >= 2);
+        const soonPlant = a.guns.find(g => g.due && g.planted == null && t && g.due <= dueAfter(t, 1));
+        const toFire = lateFire || a.guns.find(g => g.planted != null && g.fired == null && done >= g.beat - 1 && aiCount(g.planted) >= 4);
         if (toFire) toFire.arm = 'fire';
+        else if (soonPlant) soonPlant.arm = 'plant';
         else if (toPlant && aiCount(since) >= 2) toPlant.arm = 'plant';
     }
     if (!nextBeat(a)) {
@@ -175,6 +201,23 @@ export function arcAfterPost(i, j) {
         return;
     }
     A.saveMeta();
+}
+
+/** Сроки ружей — в Календарь (через мост). */
+export function arcCalEvents(from, to) {
+    const a = arcNow();
+    if (!a) return [];
+    return a.guns.filter(g => g.due && g.due >= from && g.due <= to).map(g => ({ key: `gun:${a.id}:${g.id}`, d: g.due, title: `🔫 ${g.t}${g.size === 'main' ? ' (главное)' : ''}`, kind: 'deadline', st: g.fired != null ? 'done' : 'open' }));
+}
+
+/** Для архива: ружья текущей и прошлых сюжеток. */
+export function arcGunsHistory() {
+    const a = A?.hasChat?.() ? M() : null;
+    if (!a) return [];
+    const out = [];
+    for (const p of a.past || []) for (const g of p.guns || []) out.push({ ...g, arc: p.title, closed: true });
+    if (a.cur) for (const g of a.cur.guns) out.push({ t: g.t, pay: g.pay, planted: g.planted, fired: g.fired, due: g.due || '', size: g.size || '', arc: a.cur.title, closed: false });
+    return out;
 }
 
 // ───────────── вид: Сцена ─────────────
@@ -198,7 +241,8 @@ export function arcSceneHtml() {
         <div class="lf-arc-bar">${c.beats.map((b, n) => `<button class="lf-arc-dot${b.done != null ? ' done' : b === nb ? ' next' : ''}" data-act="arc-beat" data-n="${n}" title="${esc(b.t)}"><i></i></button>`).join('<span class="lf-arc-line"></span>')}</div>
         <ol class="lf-arc-beats">${c.beats.map((b, n) => `<li class="${b.done != null ? 'done' : b === nb ? 'next' : ''}"><button data-act="arc-beat" data-n="${n}">${esc(b.t)}${b.done != null ? ` <i>#${b.done}</i>` : ''}</button></li>`).join('')}</ol>
         ${c.guns.length ? `<div class="lf-arc-guns">${c.guns.map(g => `<div class="lf-arc-gun${g.fired != null ? ' fired' : ''}">
-            <div><b>${esc(g.t)}</b><small>→ ${esc(g.pay)}</small><small class="st">${gunSt(g)}</small></div>
+            <div><b>${g.size ? `<i class="lf-arc-sz ${g.size}">${SIZE[g.size]}</i> ` : ''}${esc(g.t)}</b><small>→ ${esc(g.pay)}</small><small class="st">${gunSt(g)}${g.due && g.fired == null ? ` · ${overdue(g) ? `<em class="late">просрочено с ${dmy(g.due)}</em>` : `срок ${dmy(g.due)}`}` : ''}</small></div>
+            ${g.fired == null ? `<button class="lf-iconbtn sm" data-act="arc-gun-due" data-id="${g.id}" title="срок и вес">${A.icon('calendar')}</button>` : ''}
             ${g.fired == null ? `<button class="lf-chip" data-act="arc-gun" data-id="${g.id}">${g.planted == null ? (g.arm === 'plant' ? 'не сейчас' : 'Заложить') : (g.arm === 'fire' ? 'не сейчас' : 'Выстрелить')}</button>` : ''}
         </div>`).join('')}</div>` : ''}
         <div class="lf-actions tight"><button class="lf-btn" data-act="arc-gun-add">${A.icon('plus')} Ружьё</button><button class="lf-btn" data-act="arc-poster">${A.icon('film')} ${c.poster ? 'Другой постер' : 'Постер'}</button><button class="lf-btn ghost" data-act="arc-close">${A.icon('check')} Закрыть сюжетку</button></div>
@@ -269,11 +313,33 @@ export async function arcClick(act, el) {
             if (g.arm) A.toast('info', g.arm === 'plant' ? 'Заложится в следующем ответе' : 'Выстрелит в следующем ответе', '🔫 Ружьё', { timeOut: 1800 });
             return done();
         }
+        case 'arc-gun-due': {
+            const g = c?.guns.find(x => x.id === Number(el.dataset.id));
+            if (!g) return true;
+            A.openSheet('🔫 Срок ружья', `<div class="lf-hint">«${esc(g.t)}» → «${esc(g.pay)}». Срок вышел — ружьё выстрелит при первой возможности, а нить попросит развязки.</div>
+                <div class="lf-field"><label>Срок (дата истории)</label><input type="date" data-in="gun-due" value="${esc(g.due || '')}"></div>
+                <div class="lf-field"><label>Вес нити</label><select data-in="gun-size"><option value="">—</option>${Object.entries(SIZE).map(([k, l]) => `<option value="${k}"${g.size === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+                <button class="lf-btn primary full" data-act="arc-gun-due-save" data-id="${g.id}">${A.icon('check')} Сохранить</button>`);
+            return true;
+        }
+        case 'arc-gun-due-save': {
+            const g = c?.guns.find(x => x.id === Number(el.dataset.id));
+            if (!g) return true;
+            const box = el.closest('.lf-sheet') || document;
+            const due = String(box.querySelector('[data-in="gun-due"]')?.value || '');
+            const size = String(box.querySelector('[data-in="gun-size"]')?.value || '');
+            g.due = /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : '';
+            g.size = SIZE[size] ? size : '';
+            A.closeSheet();
+            return done();
+        }
         case 'arc-gun-add': {
             A.openSheet('🔫 Чеховское ружьё', `
                 <div class="lf-field"><label>Что заложить (мимоходом)</label><input type="text" data-in="gun-t" placeholder="у Баки на кухне чужая зажигалка"></div>
                 <div class="lf-field"><label>Как выстрелит потом</label><input type="text" data-in="gun-p" placeholder="зажигалка — Земо, он был в квартире"></div>
                 <div class="lf-field"><label>К какому биту</label><select data-in="gun-b">${(c?.beats || []).map((b, n) => `<option value="${n + 1}"${n === (c.beats.length - 1) ? ' selected' : ''}>${n + 1}. ${esc(A.cut(b.t, 50))}</option>`).join('')}</select></div>
+                <div class="lf-field"><label>Срок (дата истории, можно пусто)</label><input type="date" data-in="gun-due"></div>
+                <div class="lf-field"><label>Вес нити</label><select data-in="gun-size"><option value="">—</option>${Object.entries(SIZE).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
                 <button class="lf-btn primary full" data-act="arc-gun-save">${A.icon('check')} Добавить</button>`);
             return true;
         }
@@ -283,7 +349,9 @@ export async function arcClick(act, el) {
             const t = box.querySelector('[data-in="gun-t"]')?.value?.trim();
             const pay = box.querySelector('[data-in="gun-p"]')?.value?.trim();
             if (!t || !pay) { A.toast('warning', 'Нужны оба поля', '🔫 Ружьё'); return true; }
-            c.guns.push({ id: ++a.seq, t: t.slice(0, 140), pay: pay.slice(0, 140), beat: Number(box.querySelector('[data-in="gun-b"]')?.value) || c.beats.length, planted: null, fired: null, arm: '' });
+            const due = String(box.querySelector('[data-in="gun-due"]')?.value || '');
+            const size = String(box.querySelector('[data-in="gun-size"]')?.value || '');
+            c.guns.push({ id: ++a.seq, t: t.slice(0, 140), pay: pay.slice(0, 140), beat: Number(box.querySelector('[data-in="gun-b"]')?.value) || c.beats.length, planted: null, fired: null, arm: '', due: /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : '', size: SIZE[size] ? size : '' });
             A.closeSheet();
             return done();
         }

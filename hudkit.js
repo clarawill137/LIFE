@@ -57,3 +57,43 @@ export function mount(el, cls, html, hash) {
     node.dataset.sig = sig;
     if (old) old.replaceWith(node); else (el.querySelector('.mes_block') || el).append(node);
 }
+
+/** Момент истории: время Horae (мс или null), индекс последнего поста и день. */
+export function clock(A) {
+    const chat = A.chatArr();
+    return { ts: storyNow(A), mes: chat.length - 1, day: storyDay(A) };
+}
+
+/** Сколько часов истории между двумя моментами; без дат — по постам (~15 минут на ответ). */
+export function hoursBetween(A, a, b = clock(A)) {
+    if (!a) return 0;
+    if (a.ts != null && b.ts != null) return Math.max(0, (b.ts - a.ts) / 3.6e6);
+    const chat = A.chatArr();
+    let n = 0;
+    for (let i = Math.max(0, (a.mes ?? b.mes) + 1); i <= b.mes && i < chat.length; i++) if (chat[i] && !chat[i].is_user && !chat[i].is_system) n++;
+    return n * 0.25;
+}
+
+/** Хвост её поста прямо перед ответом i (для Летописца: перепалки и дела по дому) — один раз на проход Летописца. */
+let tailMark = { i: -1, t: 0 };
+export function herPostTail(A, i, max = 2200) {
+    const chat = A.chatArr();
+    const m = chat[i - 1];
+    if (!m || !m.is_user) return '';
+    if (tailMark.i === i && Date.now() - tailMark.t < 4000) return '';
+    tailMark = { i, t: Date.now() };
+    const t = A.plainText(m.mes || '');
+    if (t.length <= 700) return '';   // короткий — Летописец и так видит его целиком
+    return `Её пост перед этим ответом — конец (для быта и перепалок):\n…${t.slice(-max)}`;
+}
+
+/** Сцена у них дома? home — место дома (Life → Жизнь), loc — место сцены по Horae. */
+const DWELL = /квартир|(?<![а-яёa-z0-9])дом(?![а-яёa-z0-9])|апартамент|пентхаус|лофт|спальн|кухн|гостин|ванн/i;
+const NOT_HOME = /отел|гостиниц|мотел|хостел|кафе|ресторан|бар(?![а-яё])|офис|штаб|башн|больниц|клиник|лаборатор|база|бункер/i;
+export function atHome(A, home) {
+    const loc = String(A.worldState()?.scene?.location || '');
+    if (!loc) return false;
+    const top = (x) => A.norm(A.locTop ? A.locTop(x) : x).replace(/[«»"'.]/g, '').trim();
+    if (home) { const a = top(loc), b = top(home); if (a && b && (a === b || a.startsWith(b) || b.startsWith(a))) return true; }
+    return DWELL.test(top(loc)) && !NOT_HOME.test(loc);
+}
