@@ -78,7 +78,10 @@ function promptOf(x) {
     const k = kindById(x.kind);
     if (!k) return '';
     const U = userName();
-    return `[THIS reply only — TWIST requested by ${U}. Kind: ${k[2]} — ${k[3]} ${scaleById(x.scale)[3]}${x.text ? ` Make exactly this happen: ${x.text}` : ' Choose the concrete event yourself and surprise the player.'} It must have a cause that fits what is already established (history, lorebooks, known people) and leave a consequence that is NOT resolved in this reply. Weave it into the scene naturally, in the preset's language, style and format; do not announce it as a twist and do not break the voices. Never decide ${U}'s actions, words or feelings — show the twist arriving and leave ${U} room to react.]`;
+    // код-мозг: твист вслепую без вида — пусть растёт из того, что на самом деле назрело
+    let ripe = '';
+    try { if (!x.text && x.kind === 'any') ripe = String(globalThis.LifeBrain?.ripe?.() || ''); } catch { /* */ }
+    return `[THIS reply only — TWIST requested by ${U}. Kind: ${k[2]} — ${k[3]} ${scaleById(x.scale)[3]}${x.text ? ` Make exactly this happen: ${x.text}` : ` Choose the concrete event yourself and surprise the player.${ripe ? ` What is actually ripe right now (prefer growing the twist out of it): ${ripe}.` : ''}`} It must have a cause that fits what is already established (history, lorebooks, known people) and leave a consequence that is NOT resolved in this reply. Weave it into the scene naturally, in the preset's language, style and format; do not announce it as a twist and do not break the voices. Never decide ${U}'s actions, words or feelings — show the twist arriving and leave ${U} room to react.]`;
 }
 
 /** Текст для модели. consume — генерация пошла: твист отработал на этом ответе. */

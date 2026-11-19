@@ -19,6 +19,7 @@ function cfg() {
     return s.stats;
 }
 const on = () => cfg().on !== false;
+const JUMP = 25;   // больше этого числовой показатель за один пост не сдвигается
 
 function M() {
     const cm = A.chatMeta();
@@ -57,9 +58,12 @@ export function statsAfterPost(i, j) {
         for (const k of keysOf(d)) {
             const hit = Object.keys(row).find(n => A.sameName(n, k) || A.norm(n) === A.norm(k));
             if (hit === undefined) continue;
-            const v = d.type === 'num' ? clamp(Math.round(Number(row[hit])), 0, 100) : str(String(row[hit] ?? ''), 60);
+            let v = d.type === 'num' ? clamp(Math.round(Number(row[hit])), 0, 100) : str(String(row[hit] ?? ''), 60);
             if (d.type === 'num' && !Number.isFinite(Number(row[hit]))) continue;
             s.vals[d.id] = s.vals[d.id] || {};
+            // инерция: считает код — показатель не прыгает больше чем на JUMP за один пост, что бы ни назвала модель
+            const prev = s.vals[d.id][k];
+            if (d.type === 'num' && Number.isFinite(Number(prev))) v = clamp(v, Number(prev) - JUMP, Number(prev) + JUMP);
             if (s.vals[d.id][k] !== v) { s.vals[d.id][k] = v; changed = true; }
         }
     }

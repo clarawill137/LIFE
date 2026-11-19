@@ -124,6 +124,7 @@ import { knowKept } from './know.js';
 import { powersFx } from './powers.js';
 import { stepsBetween } from './steps.js';
 import { coreAdd } from './ooc.js';
+import { emoHint } from './emo.js';
 import { bickerPatience } from './bicker.js';
 import { trigAt } from './triggers.js';
 import { homeLoc as simHomeLoc, petsList as simPetsList } from './sim.js';
@@ -144,7 +145,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.2';
+const VERSION = '0.58.3';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4190,6 +4191,8 @@ globalThis.LifeBridge = {
             wants: (who) => innerWants(who),                                       // свои желания: [{ t, mes, voiced }]
             fx: (who) => powersFx(who),                                            // действующие эффекты: [{ what, left }]
             steps: (a, b) => stepsBetween(a, b),                                   // прожитое вдвоём: { n, themes }
+            // 0.58.3
+            face: (i, who, k) => emoHint(i, who, k),                               // подсказать лицо поста, если Летописец его не увидел
         },
         lore: { about: (who, o) => loreFor(who, o), card: (who, max) => cardText(who, max), core: (who) => coreOf(who), key: (who) => simLifeKey(who), coreAdd: (who, line) => coreAdd(who, line) },
         // полки: свой трекер в Сцене, свой блок в «Персонаж → Жизнь → Психика», свои строки в «Что записал пост»

@@ -59,6 +59,11 @@ export function langPrompt(type) {
         if (['fight', 'danger', 'tension'].includes(v)) now = ' Сейчас в сцене злость и напряжение.';
         else if (['tender', 'comfort'].includes(v) || md?.intimOn) now = ' Сейчас в сцене нежность.';
     } catch { /* */ }
+    // код-мозг знает про каждого: дошло ли до той ступени, где человек срывается на свой язык
+    try {
+        const hot = here.filter(n => !NARR.test(n) && langOf(n)).map(n => [n, globalThis.LifeBrain?.tongue?.(n)]).filter(([, w]) => w);
+        if (hot.length) now = ` Сейчас: ${hot.map(([n, w]) => `${A.shortName(n)} — ${w}`).join('; ')} — это тот самый момент, когда переходит.`;
+    } catch { /* */ }
     return `[Языки: ${rows.join('. ')}.${now} Переходят, когда к месту, — коротко и в оригинале, смысл по контексту или переводом в скобках; не через строчку.]`;
 }
 

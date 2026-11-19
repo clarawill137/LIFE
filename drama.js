@@ -126,7 +126,10 @@ export function dramaPrompt(type, consume = false) {
     if (s.mode === 'hold') return HOLD;
     if (s.mode !== 'spark') return '';
     if (consume) { const d = M(); d.spark = s.t; d.hand = false; A.saveMeta(); }
-    return spark(s.streak);
+    // код-мозг: искра не из воздуха, а из того, что у кого-то на самом деле назрело
+    let ripe = '';
+    try { ripe = String(globalThis.LifeBrain?.ripe?.() || ''); } catch { /* */ }
+    return ripe ? spark(s.streak).replace(/\]\s*$/, ` Что назрело на самом деле — лучше всего начать с этого: ${ripe}.]`) : spark(s.streak);
 }
 
 // ───────────── Сцена ─────────────
