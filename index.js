@@ -20,6 +20,7 @@ import { initArcs, arcPrompt, arcOnce, arcChron, arcAfterPost, arcSceneHtml, arc
 import { initAlbum, albumHtml, albumClick, albumSetImg } from './album.js';
 import { initEmo, emoChron, emoAfterPost, emoSrc, emoStripHtml, emoClick, emoSetImg, EMOS } from './emo.js';
 import { initReply, replyReady, replyPrompt, replyChron, replyAfterPost, paintReply, replyClick, warm as replyWarm } from './reply.js';
+import { initRules, rulesJoin, rulesWarm, rulesReady, rulesPrompt, paintRules, rulesClick, rulesHtml, rulesRecs } from './rules.js';
 import { initFresh, freshPrompt, freshAfterPost, freshHtml, freshClick } from './fresh.js';
 import { initFrames, framesChron, framesAfterPost, paintFrame, frameRowHtml, frameClick, FRAMES } from './frames.js';
 import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather.js';
@@ -111,7 +112,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.53.2';
+const VERSION = '0.54.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -934,6 +935,7 @@ function updateMovePrompt(type, consume = false) {
     try { const ap = settings().enabled && hasChat() ? arcOnce(type, consume) : ''; if (ap) modes = [modes, ap].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] ружьё', e); }
     try { const cp = settings().enabled && hasChat() ? castPrompt(type, consume) : ''; if (cp) modes = [modes, cp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] каждый за себя', e); }
     try { const dp = settings().enabled && hasChat() ? duoPrompt(type, consume) : ''; if (dp) modes = [modes, dp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] вдвоём', e); }
+    try { const lp = settings().enabled && hasChat() ? rulesPrompt(type) : ''; if (lp) modes = [modes, lp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] правила сцены', e); }
     try { const rp = settings().enabled && hasChat() ? replyPrompt(type) : ''; if (rp) modes = [modes, rp].filter(Boolean).join('\n'); } catch (e) { console.warn('[Life] не пропусти', e); }
     try { paintKnock(); } catch (e) { console.warn('[Life] стук', e); }
     try { applySeason(); } catch (e) { console.warn('[Life] сезон', e); }
@@ -948,6 +950,8 @@ function updateMovePrompt(type, consume = false) {
 globalThis.life_intercept = async function (_chat, _size, _abort, type) {
     // «не пропусти»: дождаться разбора поста игрока (не дольше нескольких секунд)
     try { if (type !== 'quiet' && settings().enabled) await replyReady(type); } catch (e) { console.warn('[Life] не пропусти', e); }
+    // «правила сцены»: обычно сверены тем же запросом; иначе — дождаться своего
+    try { if (type !== 'quiet' && settings().enabled) await rulesReady(type); } catch (e) { console.warn('[Life] правила сцены', e); }
     // «покажи им»: дождаться, пока модель разглядит картинку из поста игрока
     try { if (type !== 'quiet' && settings().enabled) await seeReady(type); } catch (e) { console.warn('[Life] покажи им', e); }
     // Летописец ещё читает прошлый ответ — подождать, чтобы модель видела свежее состояние (раны, рука, кто где)
@@ -2654,6 +2658,8 @@ function renderWorld() {
         body = (() => { try { return cityHtml(); } catch (e) { console.warn('[Life] город', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'arch') {
         body = (() => { try { return archiveHtml(); } catch (e) { console.warn('[Life] архив', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'rules') {
+        body = (() => { try { return rulesHtml(); } catch (e) { console.warn('[Life] правила сцены', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'taste') {
         body = (() => { try { return tasteHtml(); } catch (e) { console.warn('[Life] вкус', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'time') {
@@ -2668,7 +2674,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['taste', 'Вкус'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['taste', 'Вкус'], ['rules', 'Правила'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -4143,7 +4149,14 @@ jQuery(async () => {
     hubInputs.push((el) => { if (el?.dataset?.in === 'care-file') { careInput(el); return true; } return false; });
     // копия настроек Life на сервер — раз в день, тихо
     setTimeout(() => { backupAuto().then(ok => { if (ok) console.info('[Life] копия настроек — на сервере'); }).catch(e => console.warn('[Life] копия настроек', e)); }, 30000);
-    initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c) });
+    initReply({ ...extApi, onChoice: (u, c) => echoAdd(u, c), rulesJoin: (u) => rulesJoin(u) });
+    // «Правила сцены» (0.54): свои «когда → что подсказать», сверяются запросом «не пропусти»
+    try {
+        initRules(extApi);
+        painters.push((el, id) => paintRules(el, id));
+        chatClicks.push((act, el) => rulesClick(act, el));
+        hubMods.push({ pre: 'rl-', click: rulesClick, label: 'Правила сцены' });
+    } catch (e) { console.warn('[Life] правила сцены', e); }
     initFresh(extApi);
     initFrames(extApi);
     initArcs({ ...extApi, peopleList, daysBrief, faceRef });
@@ -4204,6 +4217,7 @@ jQuery(async () => {
     initGuide({ ...extApi, openHub });
     initDraft(extApi);
     addRecs((i) => coreRecs(i), calRecs, stanceRecs, ritualRecs, stepsRecs, shardsRecs, trigRecs, hurtRecs, simRecs, innerRecs, replyRecs, echoRecs);
+    addRecs(rulesRecs);
     hubMods.push({ pre: 'rec-', click: recsClick, label: 'Что записал пост' });
     initFix({ ...extApi, openHub, closeHub, queueChron: (i) => queueChron(i), shootPost: (i, kind, at) => shootShot(i, { kind, at }), recsSheet: (i) => recsSheet(i), guideSheet: (k) => guideSheet(k), coreOf: (w) => coreOf(w) });
     initLore(extApi);
@@ -4512,6 +4526,8 @@ jQuery(async () => {
         try { recapSeen(); } catch { /* */ }
         // «не пропусти»: разбирать пост сразу, пока таверна собирает генерацию
         try { if (settings().enabled) replyWarm(Number(id)); } catch (e) { console.warn('[Life] не пропусти', e); }
+        // «правила сцены»: если «не пропусти» их с собой не взяло (выключено, пост короткий или уже разобран) — своим запросом
+        try { if (settings().enabled) rulesWarm(Number(id)); } catch (e) { console.warn('[Life] правила сцены', e); }
         try { if (settings().enabled) seeWarm(Number(id)); } catch (e) { console.warn('[Life] покажи им', e); }
         setTimeout(() => { try { paintDraft(); } catch { /* */ } }, 120);
     });

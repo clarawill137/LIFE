@@ -29,7 +29,7 @@ function M() {
 const keyOf = (i) => { const m = A.chatArr()[i]; return m ? `${i}:${A.hash(m.mes || '')}` : ''; };
 
 /** Последний пост игрока, на который сейчас отвечают (между ним и ответом — только системные). */
-function userIndexFor(type) {
+export function userIndexFor(type) {
     const chat = A.chatArr();
     let end = chat.length - 1;
     if (type === 'swipe') end = chat.length - 2;
@@ -66,11 +66,17 @@ async function extract(u) {
     const text = A.plainText(m?.mes || '').trim();
     if (text.length < 25) return { items: [], skip: true };
     let prev = '';
-    for (let j = u - 1; j >= 0 && !prev; j--) if (chat[j] && !chat[j].is_system && !chat[j].is_user) prev = A.cut(A.plainText(chat[j].mes), 700);
+    // именно конец: на него она и отвечает (раньше сюда уходило начало поста — шапка и первые абзацы)
+    for (let j = u - 1; j >= 0 && !prev; j--) if (chat[j] && !chat[j].is_system && !chat[j].is_user) { const t = A.plainText(chat[j].mes).trim(); prev = t.length > 700 ? `…${t.slice(t.length - 699).trimStart()}` : t; }
     const here = (A.worldState().scene?.characters_present || []).map(A.canonName).filter(Boolean);
-    const input = [`Игрок пишет за: ${userName()}`, here.length ? `В сцене: ${here.join(', ')}` : '', prev ? `Конец предыдущего поста:\n${prev}` : '', `Пост игрока:\n${A.cut(text, 4000)}`].filter(Boolean).join('\n\n');
-    const out = await A.askModel([{ role: 'system', content: SYSTEM }, { role: 'user', content: input }], 700);
-    const j = A.extractJson(out);
+    // «Правила сцены» сверяются этим же запросом: их условия — в конец, отбор — полем rules
+    const rules = A.rulesJoin?.(u) || null;
+    const input = [`Игрок пишет за: ${userName()}`, here.length ? `В сцене: ${here.join(', ')}` : '', prev ? `Конец предыдущего поста:\n${prev}` : '', `Пост игрока:\n${A.cut(text, 4000)}`, rules?.input || ''].filter(Boolean).join('\n\n');
+    let j = null;
+    try {
+        const out = await A.askModel([{ role: 'system', content: SYSTEM + (rules?.system || '') }, { role: 'user', content: input }], 700 + (rules?.tokens || 0));
+        j = A.extractJson(out);
+    } finally { try { rules?.take(j); } catch (e) { console.warn('[Life] правила сцены', e); } }
     const items = (Array.isArray(j?.items) ? j.items : []).map(x => ({ t: String(x?.t || '').trim().slice(0, 140), to: String(x?.to || '').trim().slice(0, 40) })).filter(x => x.t).slice(0, 5);
     return { items, choice: j?.choice && typeof j.choice === 'object' && !Array.isArray(j.choice) ? j.choice : null };
 }

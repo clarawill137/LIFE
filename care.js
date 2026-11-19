@@ -111,7 +111,7 @@ function download(name, text) {
 
 // ───────────── вид (Мир → ⚙) ─────────────
 
-const LABELS = { index: 'прочее', reply: 'не пропусти', see: 'покажи им', days: 'дни', fix: 'правки поста', draft: 'черновик', fresh: 'свежесть', agenda: 'закулисье', shots: 'кадры', twists: 'твисты', inner: 'мысли', sim: 'жизнь', arcs: 'сюжетка', slip: 'ляп-фикс', hurt: 'травмы', people: 'люди', canon: 'канон', habits: 'привычки', lang: 'языки', ooc: 'OOC', steps: 'прожитое', shards: 'осколки', skip: 'перемотка', cal: 'календарь', route: 'дорога', ambient: 'запахи', mend: 'дописать пост' };
+const LABELS = { index: 'прочее', reply: 'не пропусти', rules: 'правила сцены', see: 'покажи им', days: 'дни', fix: 'правки поста', draft: 'черновик', fresh: 'свежесть', agenda: 'закулисье', shots: 'кадры', twists: 'твисты', inner: 'мысли', sim: 'жизнь', arcs: 'сюжетка', slip: 'ляп-фикс', hurt: 'травмы', people: 'люди', canon: 'канон', habits: 'привычки', lang: 'языки', ooc: 'OOC', steps: 'прожитое', shards: 'осколки', skip: 'перемотка', cal: 'календарь', route: 'дорога', ambient: 'запахи', mend: 'дописать пост' };
 
 export function statsHtml() {
     const st = A.settings().stats || {};
