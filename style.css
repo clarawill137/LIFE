@@ -3653,9 +3653,10 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #lf-pm .lf-pm-tg.on i::after { transform: translateX(16px); }
 
 /* запасной стиль (0.59.1): строка «Стиль» в окне, список стилей в настройках, картинка, которую сейчас перерисовывают */
+#lf-pm .lf-pm-chips.af { align-items: center; flex-wrap: wrap; }
 #lf-pm .lf-pm-chips.st { align-items: center; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
 #lf-pm .lf-pm-chips.st::-webkit-scrollbar { display: none; }
-#lf-pm .lf-pm-chips.st > span { flex: none; margin-right: 2px; font-size: 12.5px; color: var(--lf-dim, #a3958f); }
+#lf-pm .lf-pm-chips.st > span, #lf-pm .lf-pm-chips.af > span { flex: none; margin-right: 2px; font-size: 12.5px; color: var(--lf-dim, #a3958f); }
 #lf-pm .lf-pm-err button { margin-bottom: 6px; }
 #lf-pm .lf-pm-sel { flex: none; display: block; width: 100%; min-height: 44px; margin: 0; padding: 0 12px; border-radius: 12px; border: 1px solid var(--lf-line2, rgba(236, 222, 216, .2)); background: rgba(0, 0, 0, .28); color: inherit; font: inherit; font-size: 16px; }
 #lf-pm .lf-pm-sel:focus { border-color: rgba(217, 104, 123, .6); outline: none; }

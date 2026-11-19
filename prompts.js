@@ -9,6 +9,7 @@
 // Там же «источники»: тип API, адрес, ключ и модель SLAY запоминаются под именем и переключаются тапом.
 // Запасной стиль (0.59.1): картинку завернул фильтр — она сама перерисовывается в другом стиле из библиотеки SLAY
 // (по умолчанию «Клаус»); обычный стиль при этом остаётся обычным. Такая картинка и по ↻ SLAY рисуется в своём стиле.
+// 0.59.2: не с первого отказа, а со второго подряд (настройка 1–3) — до этого ещё попытка как есть.
 // Файлы SLAY не трогаются: всё через его настройки и кнопки, так что его обновление ничего не затрёт.
 
 import { icon } from './icons.js';
@@ -45,6 +46,7 @@ function cfg() {
     if (c.fb.auto === undefined) c.fb.auto = true;      // сама перерисовывать в нём
     if (typeof c.fb.name !== 'string') c.fb.name = '';  // имя стиля; пусто — «Клаус», если он есть в библиотеке SLAY
     if (!c.fb.lib || typeof c.fb.lib !== 'object' || Array.isArray(c.fb.lib)) c.fb.lib = {}; // имя → текст стиля
+    if (![1, 2, 3].includes(c.fb.after)) c.fb.after = 2;   // с какого отказа фильтра подряд уходить в запасной стиль
     return c;
 }
 
@@ -297,6 +299,7 @@ async function rerender(i) {
     if (mesEl(i)) { try { c.updateMessageBlock?.(i, m); } catch (e) { console.warn('[Life] промты: перерисовать пост', e); } }
     try { await c.eventSource.emit((c.eventTypes || c.event_types).MESSAGE_UPDATED, i); } catch { /* */ }
     A.paintSoon?.();
+    for (const ms of [60, 250]) setTimeout(() => seePost(i), ms);   // SLAY соберёт плашки ошибок заново — попыток за ними нет
 }
 
 /** Заменить один тег в посте — в тексте, показе и текущем свайпе. */
@@ -670,67 +673,126 @@ async function translate({ prompt, aspect, request = '', error = '', soften = fa
 }
 
 // ───────────── фильтр → запасной стиль ─────────────
+// Отказ фильтра часто случаен: тот же промт со второго раза проходит. Поэтому в запасной стиль картинка уходит
+// не с первого отказа, а с N-го (настройка, по умолчанию со второго); до этого Life сама пробует ещё раз как есть.
 
-const fbBusy = new Set();          // картинки, уже стоящие в очереди на запасной стиль
-let fbChain = Promise.resolve();   // по одной: каждая — это вызов Летописца и рисовалки
+const fbRec = new Map();           // картинка → { n: сколько раз её не пропустил фильтр, done: с ней закончили, at }
+const fbSeen = new WeakSet();      // плашки ошибок, уже посчитанные: каждая неудачная попытка SLAY — новая плашка
+const fbBusy = new Set();          // картинки в очереди
+let fbChain = Promise.resolve();   // по одной: каждая — это вызовы рисовалки и Летописца
 let fbHinted = false;
+let fbChat = null;
 
-/** SLAY сообщил об отказе фильтра — найти такие картинки в последних постах и перерисовать в запасном стиле. */
+const fbAfter = () => Math.min(3, Math.max(1, Number(cfg().fb.after) || 2));
+const fbId = (i, t) => `${i}:${sigOf(t.data, t.raw)}`;
+const fbOpen = (t) => !t.video && tagState(t) === 'error' && !!t.data?.prompt && !styleOf(t.data);   // в своём стиле ещё не пробовали
+const chatKey = () => { try { const c = A.ctx(); return String(c.getCurrentChatId?.() ?? c.chatId ?? ''); } catch { return ''; } };
+/** Плашки ошибок поста — «уже видели»: после пересборки поста они новые, но попыток за ними нет. */
+const seePost = (i) => { for (const n of mesEl(i)?.querySelectorAll('.iig-error-placeholder') || []) fbSeen.add(n); };
+
+/** Посчитать новые отказы фильтра у картинок поста. */
+function noteRefusals(i, newest) {
+    const fresh = newest && lastSlayErr && Date.now() - lastSlayErr.at < 20000 ? lastSlayErr : null;
+    tagsOf(i).forEach((t, k) => {
+        if (!fbOpen(t)) return;
+        const id = fbId(i, t);
+        const node = nodeFor(i, k);
+        const rec = fbRec.get(id) || { n: 0, done: false, at: 0 };
+        if (node?.matches?.('.iig-error-placeholder')) {
+            if (fbSeen.has(node)) return;
+            fbSeen.add(node);
+            if (fbBusy.has(id) || explainError(errOf(node))?.kind !== 'filter') return;   // свои попытки очередь считает сама
+        } else {
+            // у фото в карточке GC плашки нет — судим по отказу, который пришёл только что (и один раз на отказ)
+            if (!fresh || fbBusy.has(id) || rec.at === fresh.at || explainError(fresh.msg)?.kind !== 'filter') return;
+            rec.at = fresh.at;
+        }
+        rec.n++;
+        rec.done = false;
+        fbRec.set(id, rec);
+    });
+}
+
+/** SLAY сообщил об отказе фильтра — посчитать отказы в последних постах и поставить такие картинки в очередь. */
 function scanFiltered() {
-    if (!A?.hasChat?.() || A.settings().enabled === false || !cfg().fb.auto || !slayOn()) return;
-    if (!fallbackStyle()) {
-        if (!fbHinted) { fbHinted = true; A.toast('info', 'Фильтр не пропустил картинку. Запасной стиль ещё не выбран: ✎ на картинке → Настройки → «Запасной стиль».', '✎ Промт', { timeOut: 7000 }); }
-        return;
-    }
+    if (!A?.hasChat?.() || A.settings().enabled === false || !slayOn()) return;
+    const key = chatKey();
+    if (key !== fbChat) { fbChat = key; fbRec.clear(); }
     const chat = A.chatArr();
-    const fresh = lastSlayErr && Date.now() - lastSlayErr.at < 20000 ? lastSlayErr.msg : '';
     for (let i = chat.length - 1, posts = 0; i >= 0 && posts < 3; i--) {
         const m = chat[i];
         if (!m || m.is_user || typeof m.mes !== 'string' || !m.mes.includes('data-iig-instruction')) continue;
         posts++;
-        if (!mesEl(i) || (S && S.ad.mes === i)) continue;   // пост не на экране; открыто окно картинки из него — там своя кнопка
+        if (!mesEl(i)) continue;   // пост не на экране
+        noteRefusals(i, posts === 1);
+        if (!cfg().fb.auto || (S && S.ad.mes === i)) continue;   // выключено; открыто окно картинки из этого поста — там своя кнопка
         tagsOf(i).forEach((t, k) => {
-            if (t.video || tagState(t) !== 'error' || !t.data?.prompt || styleOf(t.data)) return;   // в своём стиле уже пробовали
-            const node = nodeFor(i, k);
-            // причина отказа написана на плашке самой картинки; у фото в карточке GC плашки нет — там судим по отказу,
-            // который пришёл только что, и только в самом свежем посте
-            const why = node?.matches?.('.iig-error-placeholder') ? errOf(node) : (posts === 1 ? fresh : '');
-            if (explainError(why)?.kind !== 'filter') return;
-            const id = `${i}:${sigOf(t.data, t.raw)}`;
-            if (fbBusy.has(id)) return;
+            if (!fbOpen(t)) return;
+            const id = fbId(i, t), rec = fbRec.get(id);
+            if (!rec || rec.done || fbBusy.has(id)) return;
             fbBusy.add(id);
-            fbChain = fbChain.then(() => autoFallback(i, k)).catch(e => console.warn('[Life] промты: запасной стиль', e)).finally(() => fbBusy.delete(id));
+            fbChain = fbChain.then(() => autoFallback(i, k, rec)).catch(e => console.warn('[Life] промты: запасной стиль', e)).finally(() => fbBusy.delete(id));
         });
     }
 }
 
-/** Одна картинка, которую не пропустил фильтр: снять с промта прежний стиль и нарисовать в запасном. Один раз. */
-async function autoFallback(i, k) {
+/** Одна картинка, которую не пропустил фильтр: до порога — ещё попытка как есть, на пороге — в запасном стиле. */
+async function autoFallback(i, k, rec) {
     const m = A.chatArr()[i];
     if (!m) return;
     // SLAY ещё дорисовывает соседние картинки этого поста — не пересобирать пост у него под руками
     await until(() => !mesEl(i)?.querySelector('.iig-loading-placeholder'), DRAW_MS, 500);
-    const fb = fallbackStyle();
-    if (A.chatArr()[i] !== m || !fb || !cfg().fb.auto || (S && S.ad.mes === i)) return;
+    if (A.chatArr()[i] !== m) return;
+    scanFiltered();   // соседей посчитать сейчас: после пересборки поста причина отказа с их плашек пропадёт
+    const stop = () => A.chatArr()[i] !== m || !cfg().fb.auto || (S && S.ad.mes === i);
+    if (stop()) return;
     const ad = tagAdapter(i, k);
     const cur = ad.read();
-    if (!cur || cur.state !== 'error' || cur.pmStyle) return;
-    A.toast('info', `Фильтр не пропустил картинку — перерисовываю в стиле «${esc(fb.name)}».`, '✎ Запасной стиль', { timeOut: 5000 });
-    busyMark(i, k, true);
-    const my = { ad, first: { p: cur.prompt, ar: cur.aspect, src: '', note: '', at: Date.now(), by: '', sn: '' } };
-    let prompt = cur.prompt;
-    try { prompt = (await translate({ prompt, aspect: cur.aspect, restyle: true })).prompt; }
-    catch (e) { console.warn('[Life] промты: прежний стиль с промта не сняла — рисую как есть', e); }
-    if (A.chatArr()[i] !== m) return;
-    const by = imageModel().name;
+    if (!cur || cur.state !== 'error' || cur.pmStyle) { rec.done = true; return; }
+    const need = fbAfter();
+    const T = '✎ Запасной стиль';
     try {
-        await ad.save({ prompt, aspect: cur.aspect, style: fb.name });
-        const r = await ad.draw();
-        histPush(my, { p: prompt, ar: cur.aspect, src: r.src, note: `фильтр → стиль «${fb.name}»`, at: Date.now(), by, sn: fb.name });
-        A.toast('success', `Готово, в стиле «${esc(fb.name)}». Не то — ✎ на картинке.`, '✎ Запасной стиль', { timeOut: 3500 });
-    } catch (e) {
-        A.toast('warning', `И в стиле «${esc(fb.name)}» не вышло: ${esc(A.cut(String(e?.message || e), 160))}`, '✎ Запасной стиль', { timeOut: 7000 });
+        // до порога — ещё раз как есть, в общем стиле
+        while (rec.n < need) {
+            A.toast('info', `Фильтр не пропустил картинку — пробую ещё раз (отказ ${rec.n} из ${need}).`, T, { timeOut: 4000 });
+            busyMark(i, k, true);
+            try {
+                await ad.draw();
+                rec.done = true;
+                A.toast('success', 'Повторная попытка прошла — картинка в общем стиле.', T, { timeOut: 3500 });
+                return;
+            } catch (e) {
+                seePost(i);
+                if (explainError(String(e?.message || e))?.kind !== 'filter') { rec.done = true; console.warn('[Life] промты: повторная попытка не вышла, и это не фильтр', e); return; }   // запасной стиль тут не поможет
+                rec.n++;
+            }
+            if (stop()) return;
+        }
+        const fb = fallbackStyle();
+        if (!fb) {
+            rec.done = true;
+            if (!fbHinted) { fbHinted = true; A.toast('info', 'Фильтр не пропускает картинку. Запасной стиль ещё не выбран: ✎ на картинке → Настройки → «Запасной стиль».', '✎ Промт', { timeOut: 7000 }); }
+            return;
+        }
+        A.toast('info', `Фильтр не пропустил картинку${need > 1 ? ` ${need} раза подряд` : ''} — перерисовываю в стиле «${esc(fb.name)}».`, T, { timeOut: 5000 });
+        busyMark(i, k, true);
+        const my = { ad, first: { p: cur.prompt, ar: cur.aspect, src: '', note: '', at: Date.now(), by: '', sn: '' } };
+        let prompt = cur.prompt;
+        try { prompt = (await translate({ prompt, aspect: cur.aspect, restyle: true })).prompt; }
+        catch (e) { console.warn('[Life] промты: прежний стиль с промта не сняла — рисую как есть', e); }
+        if (stop()) return;
+        rec.done = true;   // в запасном — одна попытка
+        const by = imageModel().name;
+        try {
+            await ad.save({ prompt, aspect: cur.aspect, style: fb.name });
+            const r = await ad.draw();
+            histPush(my, { p: prompt, ar: cur.aspect, src: r.src, note: `фильтр → стиль «${fb.name}»`, at: Date.now(), by, sn: fb.name });
+            A.toast('success', `Готово, в стиле «${esc(fb.name)}». Не то — ✎ на картинке.`, T, { timeOut: 3500 });
+        } catch (e) {
+            A.toast('warning', `И в стиле «${esc(fb.name)}» не вышло: ${esc(A.cut(String(e?.message || e), 160))}`, T, { timeOut: 7000 });
+        }
     } finally {
+        seePost(i);
         busyMark(i, k, false);
         A.paintSoon?.();
     }
@@ -782,6 +844,7 @@ function closeManager() {
     box?.remove();
     box = null;
     S = null;
+    setTimeout(() => { try { scanFiltered(); } catch { /* */ } }, 400);   // пока окно было открыто, его пост запасной стиль не трогал
 }
 
 const dirty = () => !!S && (S.prompt.trim() !== String(S.base || '').trim() || S.aspect !== S.baseAspect || S.pmStyle !== S.basePm);
@@ -848,6 +911,7 @@ function fbSetHtml() {
     const opt = (v, label) => `<option value="${esc(v)}"${f.name === v ? ' selected' : ''}>${esc(label)}</option>`;
     return `<label class="lf-pm-l"><span>Запасной стиль</span><small>когда фильтр не пропустил</small></label>
         <button class="lf-pm-tg${f.auto ? ' on' : ''}" data-pm="set" data-v="fb.auto"><i></i><span>Фильтр не пропустил картинку — сама перерисую её в запасном стиле</span></button>
+        <div class="lf-pm-chips af"><span>с какого отказа подряд</span>${[1, 2, 3].map(n => `<button class="lf-pm-chip${f.after === n ? ' on' : ''}" data-pm="fbafter" data-v="${n}">${n}-го</button>`).join('')}</div>
         <select class="lf-pm-sel" data-in="fbname">
             ${opt('', auto ? `сам: «${auto}»` : 'сам: «Клаус» из библиотеки SLAY')}
             ${names.map(n => opt(n, n)).join('')}
@@ -855,7 +919,7 @@ function fbSetHtml() {
         </select>
         ${f.name === OWN_STYLE ? `<textarea class="lf-pm-ta small" data-in="fbtext" rows="3" placeholder="По-английски, как описывают стиль: flat 2D cartoon, bold clean outlines, soft cel shading…">${esc(f.lib[OWN_STYLE] || '')}</textarea>` : ''}
         <div class="lf-pm-dim">${lib.length
-        ? `Общий стиль не меняется. В запасном рисуется только та картинка, которую не пропустил фильтр, — и её ↻ потом тоже. Стили — из библиотеки SLAY (${lib.length}).`
+        ? `Отказ фильтра часто случаен, поэтому до выбранного отказа пробую ещё раз как есть. Общий стиль не меняется: в запасном рисуется только та картинка, которую фильтр так и не пропустил, — и её ↻ потом тоже. Стили — из библиотеки SLAY (${lib.length}).`
         : 'Библиотека стилей SLAY в этом браузере ещё не скачана: открой в настройках SLAY «Выбрать стиль» один раз — список появится здесь.'}${fallbackStyle() ? '' : ' Сейчас запасного стиля нет.'}</div>`;
 }
 
@@ -977,6 +1041,7 @@ async function onBoxClick(ev) {
     if (act === 'src-del') { if (confirm(`Убрать источник «${b.dataset.v}»? Само подключение в SLAY останется как есть.`)) { const l = sources(); const k = l.findIndex(x => x.name === b.dataset.v); if (k >= 0) l.splice(k, 1); saveAll(); paint(); } return; }
     if (S.busy) return;
     if (act === 'ar') { S.aspect = b.dataset.v; paint(); return; }
+    if (act === 'fbafter') { cfg().fb.after = Number(b.dataset.v) || 2; A.saveSettings(); paint(); return; }
     if (act === 'undo') { if (S.prev) { S.prompt = S.prev.prompt; S.aspect = S.prev.aspect; S.pmStyle = S.prev.pmStyle ?? S.pmStyle; S.prev = null; S.note = ''; paint(); } return; }
     if (act === 'style') { if (b.dataset.v) restyleNow(b.dataset.v); else plainNow(); return; }
     if (act === 'chip') { fixNow(b.dataset.v); return; }
