@@ -46,7 +46,7 @@ import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
 import { initEra, applyEra, eraHtml, eraClick } from './era.js';
 import { initFix, paintFix, fixTap, fixClick, rewriteFor } from './fix.js';
-import { initLore, coreRefresh } from './lore.js';
+import { initLore, coreRefresh, loreFor, cardText } from './lore.js';
 import { initSeed, seedApply } from './seed.js';
 import { makeChronMemory } from './memory.js';
 import { eraId, inEra, addEra } from './scope.js';
@@ -111,11 +111,16 @@ import { initPowers, powersPrompt, powersChron, powersAfterPost, powersHtml, pow
 import { initPeek, peekSceneHtml, peekClick } from './peek.js';
 import { initStats, statsPrompt, statsChron, statsAfterPost, statsSceneHtml, statsAddHtml, statsClick } from './stats.js';
 import { initKin, kinHtml, kinClick } from './kin.js';
-import { initPanel, trackersBar, panelClick, openTracker } from './panel.js';
+import { initPanel, trackersBar, panelClick, openTracker, addTracker } from './panel.js';
 import { initHouse, housePrompt, houseChron, houseAfterPost, houseHtml, houseClick, houseRecs, houseState, houseIrritants } from './house.js';
 import { initBills, billsPrompt, billsChron, billsAfterPost, billsHtml, billsClick, billsRecs, billsSpend, billsSweep, billsCalEvents, billsIrritants, billsState } from './bills.js';
 import { initBicker, bickerPrompt, bickerChron, bickerAfterPost, bickerHtml, bickerClick, bickerInput, bickerRecs, bickerState, partner as bickerPartner } from './bicker.js';
 import { homeBroken, sleepDebtOf } from './home.js';
+// мост: органы чувств для соседних расширений (код-мозг)
+import { hurtCount } from './hurt.js';
+import { innerNeeds, innerStateOf, innerSetState } from './inner.js';
+import { bickerPatience } from './bicker.js';
+import { trigAt } from './triggers.js';
 import { homeLoc as simHomeLoc, petsList as simPetsList } from './sim.js';
 import { onceArmed } from './modes.js';
 import { twistArmed } from './twists.js';
@@ -134,7 +139,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.0';
+const VERSION = '0.58.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -922,7 +927,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки' };
+const BRIDGE_NAMES = { brain: 'код-мозг', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -4163,6 +4168,27 @@ globalThis.LifeBridge = {
         cal: { today: () => calToday(), between: (from, to) => calBetween(from, to), add: (e) => calAdd(e) },
         season: { now: () => seasonNow(), holidays: (y) => seasonHolidays(y) },
         tastes: (who) => tastesOf(who), brief: (who) => briefOf(who),
+        // 0.58.1 — органы чувств: соседнее расширение (код-мозг) читает, что Life знает о теле и нервах, и ничего не ломает
+        senses: {
+            hurt: (who) => ({ lvl: hurtLevel(who), n: hurtCount(who) }),          // самая тяжёлая свежая рана 0–4 и сколько их
+            sleep: (who) => sleepDebtOf(who),                                      // { debt, nights, last } или null
+            needs: (who) => innerNeeds(who),                                       // { food, energy, clean, health } или null
+            stones: () => stonesNow(),                                             // { who, lvl, mode, pend } или null
+            patience: () => bickerPatience(),                                      // { who, pat, cur } или null
+            trigAt: (i) => trigAt(i),                                              // триггеры, сработавшие в посте i
+            mood: () => moodNow(),
+            state: (who) => innerStateOf(who),                                     // состояние из «Внутри»
+            setState: (who, id, why, i, src) => innerSetState(who, id, why, i, src),
+        },
+        lore: { about: (who, o) => loreFor(who, o), card: (who, max) => cardText(who, max), core: (who) => coreOf(who), key: (who) => simLifeKey(who) },
+        // полки: свой трекер в Сцене, свой блок в «Персонаж → Жизнь → Психика», свои строки в «Что записал пост»
+        shelf: {
+            tracker: (t) => addTracker(t),
+            open: (id) => { openHub(); setTimeout(() => openTracker(id), 140); },
+            mind: (fn) => { if (typeof fn === 'function') mindParts.push(fn); },
+            recs: (fn) => addRecs(fn),
+        },
+        hash, plainText,
         rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },
     register(mod) {
         if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;

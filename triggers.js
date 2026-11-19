@@ -185,6 +185,22 @@ export function trigAfterPost(i, j, m) {
     A.saveMeta();
 }
 
+/** Мост: что сработало в посте i — [{ who, t, coped, lvl }]; lvl — сила реакции на тот момент (1–3). */
+export function trigAt(i) {
+    const out = [];
+    try {
+        if (!A?.hasChat?.() || !trigOn()) return out;
+        for (const [who, tr] of allPairs()) {
+            const st = M().st[`${A.canonName(who)}|${tr.id}`];
+            const e = st?.eps?.find(x => x.mes === i);
+            if (!e) continue;
+            const later = st.eps.filter(x => x.mes >= i).reduce((a, x) => a + (x.stepped || 0), 0);
+            out.push({ who: A.canonName(who), t: e.t || tr.t, coped: !!e.coped, lvl: Math.max(1, Math.min(3, (st.lvl || 0) + later)) });
+        }
+    } catch { /* */ }
+    return out;
+}
+
 // ───────────── вид: Персонаж → Жизнь → Психика ─────────────
 
 export function trigHtml(who) {

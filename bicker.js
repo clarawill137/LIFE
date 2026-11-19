@@ -318,6 +318,15 @@ export function bickerHtml() {
     <div class="lf-chips wrap">${Object.entries(STYLE).map(([k, [l]]) => `<button class="lf-chip${c.style === k ? ' on' : ''}" data-act="bk-style" data-k="${k}">${l}</button>`).join('')}</div>`;
 }
 
+/** Мост: терпение сейчас — { who, pat, cur } или null (перепалки выключены или пары нет). */
+export function bickerPatience() {
+    try {
+        if (!A?.hasChat?.() || !on()) return null;
+        const P = partner();
+        return P ? { who: P, pat: patNow(), cur: !!M().cur } : null;
+    } catch { return null; }
+}
+
 export const bickerState = () => { const s = M(); return s.cur ? 'идёт' : patNow() < 65 ? `${patNow()}` : ''; };
 
 export async function bickerClick(act, el) {
