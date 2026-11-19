@@ -3409,3 +3409,21 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 .lf-lu-k.k-nogo span { border-color: rgba(228, 138, 90, .6); background: rgba(228, 138, 90, .1); color: #f0b89a; }
 .lf-lu-k.k-cold span { opacity: .75; }
 .lf-lu-k button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: var(--lf-dim); font-size: 10px; cursor: pointer; }
+
+/* ═════════ 0.57: приглашения, флаги, тело словами ═════════ */
+.lf-inv { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-inv-c { padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(232, 195, 122, .35); background: rgba(232, 195, 122, .06); }
+.lf-inv-c.st-yes { border-color: rgba(127, 183, 164, .45); background: rgba(127, 183, 164, .07); }
+.lf-inv-c.st-missed { border-color: rgba(217, 80, 106, .5); background: rgba(94, 31, 44, .18); }
+.lf-inv-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.lf-inv-h .lf-ava.xs { margin: 0; width: 28px; height: 28px; flex: none; }
+.lf-inv-h b { display: block; font: 500 14.5px/1.3 var(--lf-serif); color: var(--lf-text); }
+.lf-inv-h small, .lf-inv-c .lf-actions small { display: block; font-size: 12px; color: var(--lf-dim); }
+.lf-inv-c .lf-actions { align-items: center; }
+.lf-flg-bar { display: flex; height: 6px; margin: 6px 0; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .08); }
+.lf-flg-bar i { background: #7fb7a4; }
+.lf-flg-bar u { background: #d9506a; }
+.lf-flg { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 8px; }
+.lf-flg > div { display: flex; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--lf-text2); }
+.lf-flg p { margin: 0; }
+.lf-lu-body { color: var(--lf-text) !important; font-style: italic; }

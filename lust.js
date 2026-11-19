@@ -14,7 +14,8 @@ const esc = (v) => A.esc(v);
 
 const SRC = 'Близость';
 const HOT = /(секс|трах|раздева|расст[её]г|стон|целу|поцелу|в постел|оргазм|кончи|возбужд|ласка|член|грудь|бёдр|бедр|нагот|голы[йе]|голая|обнаж)/i;
-const KIND = { kink: 'заводит', fetish: 'фетиш', nogo: 'табу', cold: 'гасит' };
+const KIND = { kink: 'заводит', fetish: 'фетиш', nogo: 'табу', cold: 'гасит', libido: 'либидо', exp: 'опыт' };
+const TREND = { up: '↑', peak: '●', down: '↓' };
 
 const POSES = ['лицом к лицу, он сверху', 'она сверху', 'она сверху, спиной к нему', 'сзади, она на коленях', 'на боку, он сзади', 'стоя, у стены', 'она на краю стола', 'сидя, она у него на коленях', 'она на животе, он сверху', 'он ртом — ей', 'она ртом — ему', 'руками, не раздеваясь до конца'];
 const BELLY_OK = /на боку|она сверху|на коленях|сидя|ртом|руками/;
@@ -44,7 +45,7 @@ function wanted(i) {
 }
 
 const RULE_HOT = `
-hot — подробности идущей сексуальной сцены (взрослые, по согласию). ТОЛЬКО если в посте идёт секс, иначе null: {"pose":"поза целиком: кто где, как расположены тела, руки, вес, угол и ритм — 6-20 слов","who":[{"name":"имя","edge":70,"shows":"как это видно: дыхание, голос, мышцы, слова — 4-12 слов","pulse":120,"zones":[{"z":"шея","v":8,"t":"что с ней происходит, 2-8 слов"}],"wear":"что на нём осталось и в каком виде (бельё сдвинуто, рубашка расстёгнута) — 2-10 слов, или пусто"}],"sounds":["звук и на что похож, 2-8 слов"]}. edge — близость к пику 0-100; zones — до 4 самых чувствительных сейчас зон тела, v — 0-10; sounds — до 3. Только по тексту поста.`;
+hot — подробности идущей сексуальной сцены (взрослые, по согласию). ТОЛЬКО если в посте идёт секс, иначе null: {"pose":"поза целиком: кто где, как расположены тела, руки, вес, угол и ритм — 6-20 слов","who":[{"name":"имя","edge":70,"shows":"как это видно: дыхание, голос, мышцы, слова — 4-12 слов","pulse":120,"breath":"дыхание, 2-5 слов","body":"что с его телом сейчас — откровенно, словами поста: возбуждение и как оно видно, где и как касаются, как тело отвечает; 6-22 слова","zones":[{"z":"шея","v":8,"tr":"up|peak|down","t":"что с ней происходит, 2-8 слов"}],"wear":"что на нём осталось и в каком виде (бельё сдвинуто, рубашка расстёгнута) — 2-10 слов, или пусто"}],"sounds":["звук и на что похож, 2-8 слов"]}. edge — близость к пику 0-100; zones — до 4 самых чувствительных сейчас зон тела, v — 0-10; sounds — до 3. Только по тексту поста.`;
 const RULE_TURN = `
 turnons — что в этом посте СТАЛО ЯСНО про постоянные сексуальные вкусы взрослого персонажа: [{"who":"имя","kind":"kink|fetish|nogo|cold","t":"что именно, 2-10 слов"}]. kink — практика или динамика, которая заводит; fetish — вещь, часть тела или обстановка; nogo — жёсткий отказ; cold — то, что гасит желание. Только явное в тексте, не разовое настроение. Нечего — [].`;
 
@@ -75,8 +76,8 @@ export function lustAfterPost(i, j) {
         s.cur = {
             mes: i, pose: str(h.pose, 220), sounds: arr(h.sounds).map(x => str(x, 80)).filter(Boolean).slice(0, 3),
             who: arr(h.who).slice(0, 3).map(w => ({
-                name: A.canonName(str(w?.name, 50)), edge: clamp(Math.round(w?.edge), 0, 100), shows: str(w?.shows, 140), pulse: clamp(Math.round(w?.pulse) || 0, 0, 220), wear: str(w?.wear, 120),
-                zones: arr(w?.zones).slice(0, 4).map(z => ({ z: str(z?.z, 30), v: clamp(Math.round(z?.v), 0, 10), t: str(z?.t, 80) })).filter(z => z.z),
+                name: A.canonName(str(w?.name, 50)), edge: clamp(Math.round(w?.edge), 0, 100), shows: str(w?.shows, 140), pulse: clamp(Math.round(w?.pulse) || 0, 0, 220), breath: str(w?.breath, 50), body: str(w?.body, 240), wear: str(w?.wear, 120),
+                zones: arr(w?.zones).slice(0, 4).map(z => ({ z: str(z?.z, 30), v: clamp(Math.round(z?.v), 0, 10), tr: TREND[str(z?.tr)] ? str(z.tr) : '', t: str(z?.t, 80) })).filter(z => z.z),
             })).filter(w => w.name),
         };
         changed = true;
@@ -93,10 +94,10 @@ async function collect(who) {
     let core = '';
     try { core = A.coreOf?.(who) || ''; } catch { /* */ }
     if (!desc && !core) throw new Error(`не нашла описание ${who} — впиши руками`);
-    const sys = `Ты помощник автора взрослой ролевой истории (все персонажи совершеннолетние). По описанию персонажа выпиши его постоянные сексуальные вкусы. Ответ — строго один JSON по-русски: {"list":[{"kind":"kink|fetish|nogo|cold","t":"что именно, 2-10 слов"}]}. kink — практики и динамика, которые заводят; fetish — вещи, части тела, обстановка; nogo — жёсткие отказы и почему; cold — что гасит желание. До 10, только то, что следует из описания, травм и характера; не выдумывай.`;
+    const sys = `Ты помощник автора взрослой ролевой истории (все персонажи совершеннолетние). По описанию персонажа выпиши его постоянные сексуальные вкусы. Ответ — строго один JSON по-русски: {"list":[{"kind":"kink|fetish|nogo|cold|libido|exp","t":"что именно, 2-12 слов"}]}. kink — практики и динамика, которые заводят; fetish — вещи, части тела, обстановка; nogo — жёсткие отказы и почему; cold — что гасит желание; libido — как часто хочет и что питает или глушит желание (одна запись); exp — опыт: сколько и какого было до этой истории (одна запись). До 12, только то, что следует из описания, травм и характера; не выдумывай.`;
     const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: `Персонаж: ${who}.\n${desc}${core ? `\nЯдро: ${A.cut(core, 900)}` : ''}` }], 900, { check: (x) => Array.isArray(x?.list), what: `Вкусы — ${A.shortName(who)}` });
     let n = 0;
-    for (const r of arr(j.list).slice(0, 10)) if (addTrait(who, str(r?.kind), str(r?.t, 90), -1)) n++;
+    for (const r of arr(j.list).slice(0, 12)) if (addTrait(who, str(r?.kind), str(r?.t, 110), -1)) n++;
     A.saveMeta();
     return n;
 }
@@ -120,7 +121,7 @@ export function lustPrompt(type) {
         const t = traitsOf(n).filter(x => !x.off);
         if (!t.length) continue;
         const by = (k) => t.filter(x => x.kind === k).slice(-5).map(x => x.t).join(', ');
-        rows.push(`${A.shortName(n)}: ${[by('kink') && `заводит — ${by('kink')}`, by('fetish') && `фетиши — ${by('fetish')}`, by('nogo') && `ТАБУ, не пересекать — ${by('nogo')}`, by('cold') && `гасит — ${by('cold')}`].filter(Boolean).join('; ')}`);
+        rows.push(`${A.shortName(n)}: ${[by('kink') && `заводит — ${by('kink')}`, by('fetish') && `фетиши — ${by('fetish')}`, by('nogo') && `ТАБУ, не пересекать — ${by('nogo')}`, by('cold') && `гасит — ${by('cold')}`, by('libido') && `либидо — ${by('libido')}`].filter(Boolean).join('; ')}`);
     }
     if (rows.length) out.push(`[Вкусы в постели: ${rows.join(' | ')}. Табу не нарушается и не «проверяется»; остальное — краска, к месту, не списком.]`);
     return out.join('\n');
@@ -155,10 +156,11 @@ export function lustSceneHtml() {
     return `${A.sec('Тела в сцене')}
     <div class="lf-lu">
         ${c.pose ? `<div class="lf-lu-pose">${esc(c.pose)}</div>` : ''}
-        ${c.who.map(w => `<div class="lf-lu-w"><div class="lf-lu-h">${A.ava(w.name, 'xs')}<b>${esc(A.shortName(w.name))}</b>${w.pulse ? `<small>♥ ${w.pulse}</small>` : ''}</div>
+        ${c.who.map(w => `<div class="lf-lu-w"><div class="lf-lu-h">${A.ava(w.name, 'xs')}<b>${esc(A.shortName(w.name))}</b>${w.pulse || w.breath ? `<small>${w.pulse ? `♥ ${w.pulse}` : ''}${w.breath ? ` · ${esc(w.breath)}` : ''}</small>` : ''}</div>
             <div class="lf-lu-edge"><i><u style="width:${w.edge}%"></u></i><b>${w.edge}</b></div>
             ${w.shows ? `<p>${esc(w.shows)}</p>` : ''}
-            ${w.zones.length ? `<div class="lf-lu-z">${w.zones.map(z => `<span style="--v:${z.v / 10}" title="${esc(z.t)}">${esc(z.z)} <b>${z.v}</b></span>`).join('')}</div>` : ''}
+            ${w.body ? `<p class="lf-lu-body">${esc(w.body)}</p>` : ''}
+            ${w.zones.length ? `<div class="lf-lu-z">${w.zones.map(z => `<span style="--v:${z.v / 10}" title="${esc(z.t)}">${esc(z.z)} <b>${z.v}</b>${z.tr ? ` ${TREND[z.tr]}` : ''}</span>`).join('')}</div>` : ''}
             ${w.wear ? `<small class="lf-lu-wear">на нём/ней: ${esc(w.wear)}</small>` : ''}</div>`).join('')}
         ${c.sounds.length ? `<div class="lf-hint">🔊 ${esc(c.sounds.join(' · '))}</div>` : ''}
     </div>`;

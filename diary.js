@@ -92,10 +92,10 @@ async function writeBody(who, mes) {
         const chat = A.chatArr();
         const rows = [];
         for (let i = mes; i >= 0 && rows.length < 6; i--) if (A.isPost(chat[i])) rows.unshift(`${chat[i].name}: ${A.cut(A.plainText(chat[i].mes), 1500)}`);
-        const sys = `Ты пишешь «дневник тела» персонажа ролевой истории для взрослых — запись от первого лица о собственном теле сразу после близости (все участники — взрослые, всё по согласию). По-русски. Ответ — строго один JSON: {"text":"3-6 предложений: что тело получило и чего хотело, что ноет и что ещё помнит, какие следы он на себе находит, что его удивило, чего он стыдится или чем гордится. Откровенно, телесно, без эвфемизмов и без пересказа сцены; его голос.","mood":"desire|shame|tenderness|emptiness|triumph|anxiety"}`;
-        const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: `Персонаж: ${who}.\nСцена:\n${rows.join('\n\n')}` }], 700, { check: (x) => !!str(x?.text, 4000), what: `Дневник тела — ${A.shortName(who)}` });
+        const sys = `Ты пишешь «дневник тела» персонажа ролевой истории для взрослых — запись от первого лица о собственном теле сразу после близости (все участники — взрослые, всё по согласию). По-русски. Ответ — строго один JSON: {"text":"3-6 предложений: что тело получило и чего хотело, что ноет и что ещё помнит, какие следы он на себе находит, что его удивило, чего он стыдится или чем гордится. Откровенно, телесно, без эвфемизмов и без пересказа сцены; его голос.","mood":"desire|shame|tenderness|emptiness|triumph|anxiety","review":"его отзыв об этом разе, 2-4 предложения: что сработало, что нет, что повторить и чего больше никогда","best":"лучший момент, 3-10 слов","awkward":"самый неловкий момент, 3-10 слов, или пусто","stars":4}. stars — его оценка от 1 до 5.`;
+        const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: `Персонаж: ${who}.\nСцена:\n${rows.join('\n\n')}` }], 1000, { check: (x) => !!str(x?.text, 4000), what: `Дневник тела — ${A.shortName(who)}` });
         const s = M();
-        const page = { id: `d${++s.seq}`, who, kind: 'body', day: storyDay(A), text: str(j.text, 1600), mood: MOODS[str(j.mood)] ? str(j.mood) : 'tenderness', mes, at: Date.now() };
+        const page = { id: `d${++s.seq}`, who, kind: 'body', day: storyDay(A), text: str(j.text, 1600), mood: MOODS[str(j.mood)] ? str(j.mood) : 'tenderness', review: str(j.review, 700), best: str(j.best, 120), awkward: str(j.awkward, 120), stars: Math.max(0, Math.min(5, Math.round(Number(j.stars) || 0))), mes, at: Date.now() };
         s.pages.push(page);
         A.saveMeta();
         return page;
@@ -168,7 +168,7 @@ export function diaryHtml(who) {
     ${days.length ? `<div class="lf-dy">${days.map(page).join('')}</div>` : '<div class="lf-hint">Страница появится сама, когда в истории наступит новый день, — или напиши сейчас.</div>'}
     <div class="lf-actions tight"><button class="lf-btn" data-act="dy-write" data-who="${esc(name)}">${A.icon('pencil')} Написать за сегодня</button><button class="lf-chip${cfg().auto ? ' on' : ''}" data-act="dy-auto">сам, с новым днём</button><button class="lf-chip${cfg().feed ? ' on' : ''}" data-act="dy-feed">«решил» — модели</button></div>
     ${dreams.length ? `${A.sec('Сны')}<div class="lf-dy">${dreams.map(dream).join('')}</div>` : ''}
-    ${body.length ? `${A.sec('Дневник тела', '18+')}<div class="lf-dy">${body.map(p => `<details class="lf-dy-body"><summary>${esc(p.day || '')} · ${MOODS[p.mood] || ''}</summary><article class="lf-dy-p m-${p.mood}${hand}"><p>${md(p.text)}</p><button class="lf-link" data-act="dy-del" data-id="${p.id}">убрать</button></article></details>`).join('')}</div>` : ''}`;
+    ${body.length ? `${A.sec('Дневник тела', '18+')}<div class="lf-dy">${body.map(p => `<details class="lf-dy-body"><summary>${esc(p.day || '')} · ${MOODS[p.mood] || ''}${p.stars ? ` · ${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}` : ''}</summary><article class="lf-dy-p m-${p.mood}${hand}"><p>${md(p.text)}</p>${p.review ? `<p><b>Как оно было.</b> ${md(p.review)}</p>` : ''}${p.best ? `<footer><small>лучшее</small>${esc(p.best)}</footer>` : ''}${p.awkward ? `<footer><small>неловкое</small>${esc(p.awkward)}</footer>` : ''}<button class="lf-link" data-act="dy-del" data-id="${p.id}">убрать</button></article></details>`).join('')}</div>` : ''}`;
 }
 
 export async function diaryClick(act, el) {
