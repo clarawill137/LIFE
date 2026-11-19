@@ -4,14 +4,17 @@
 // Nano Banana, GPT Image, Grok, FLUX и NovelAI пишутся по-разному (pmtags.js → DIALECTS).
 // Правка остаётся в самом посте: следующий ↻ рисует уже по ней, повторять её не надо. Версии промта и картинок
 // хранятся в чате — к любой можно вернуться. Не нарисовалось — в окне причина и «смягчить под фильтр».
-// Рисует тот же SLAY, его же кнопкой (со всеми рефами, стилем и описаниями); фото в карточках GC — Гардероб, как и раньше.
+// Рисует тот же SLAY, его же кнопкой (со всеми рефами, стилем и описаниями) — и фото в карточках GC тоже;
+// Гардероб подхватывает, только если SLAY выключен или не отозвался.
 // Там же «источники»: тип API, адрес, ключ и модель SLAY запоминаются под именем и переключаются тапом.
+// Запасной стиль (0.59.1): картинку завернул фильтр — она сама перерисовывается в другом стиле из библиотеки SLAY
+// (по умолчанию «Клаус»); обычный стиль при этом остаётся обычным. Такая картинка и по ↻ SLAY рисуется в своём стиле.
 // Файлы SLAY не трогаются: всё через его настройки и кнопки, так что его обновление ничего не затрёт.
 
 import { icon } from './icons.js';
 import { artBlocks } from './art.js';
 import {
-    scanTags, tagState, withIns, withSrc, ordOf, replaceNth, sameButSrc, sigOf, parseIns, encodeIns, cleanPrompt,
+    scanTags, tagState, isPicture, withIns, withSrc, ordOf, replaceNth, sameButSrc, sigOf, parseIns, encodeIns, cleanPrompt,
     ASPECTS, imageModelOf, DIALECTS, dialectNote, explainError, sourceSnap, sourceIsCurrent,
 } from './pmtags.js';
 
@@ -23,7 +26,9 @@ const DRAW_MS = 6 * 60 * 1000; // дольше SLAY сам не ждёт
 export function initPrompts(api) {
     A = api;
     hookToasts();
+    hookSlayButtons();
     setInterval(() => { try { sweep(); } catch (e) { console.warn('[Life] промты: сверка постов', e); } }, 3000);
+    for (const ms of [1500, 7000]) setTimeout(() => { try { styleUnstick(true); } catch { /* настройки SLAY ещё не подняты */ } }, ms);
     setTimeout(() => { try { firstSource(); } catch (e) { console.warn('[Life] промты: источник', e); } }, 7000);
 }
 
@@ -36,6 +41,10 @@ function cfg() {
     if (c.dialect === undefined) c.dialect = true; // подсказка основной модели: под какую рисовалку писать промт
     if (!Array.isArray(c.quick)) c.quick = [];     // свои быстрые правки
     if (typeof c.looks !== 'string') c.looks = ''; // приметы персонажей — для рисовалок без рефов
+    if (!c.fb || typeof c.fb !== 'object') c.fb = {};   // запасной стиль на случай фильтра
+    if (c.fb.auto === undefined) c.fb.auto = true;      // сама перерисовывать в нём
+    if (typeof c.fb.name !== 'string') c.fb.name = '';  // имя стиля; пусто — «Клаус», если он есть в библиотеке SLAY
+    if (!c.fb.lib || typeof c.fb.lib !== 'object' || Array.isArray(c.fb.lib)) c.fb.lib = {}; // имя → текст стиля
     return c;
 }
 
@@ -43,6 +52,116 @@ const slay = () => A.ctx().extensionSettings?.slay_image_gen || null;
 /** Какая рисовалка сейчас выбрана в SLAY. */
 export const imageModel = () => imageModelOf(slay());
 const looks = () => String(cfg().looks || '').trim() || String(slay()?.atlasCharacterPrompt || '').trim();
+const slayOn = () => { const st = slay(); return !!st && st.enabled !== false; };
+
+// ───────────── стиль отдельной картинки и запасной стиль ─────────────
+// Картинка может рисоваться не в общем стиле, а в своём. Какой картинке какой стиль — записано в данных чата,
+// а не в посте: пост читает модель (теги последних постов — тоже), и поле в теге она начала бы копировать в новые
+// картинки. Ключ записи — метка картинки (pm) и отпечаток её промта: метка, скопированная моделью в другую
+// картинку, придёт с другим промтом — и стиль за ней не увяжется. Текст стиля берётся по имени из библиотеки SLAY
+// или из настроек Life.
+
+const FB_AUTO = /клаус|klaus/i;
+const OWN_STYLE = 'свой';
+
+const stHash = (p) => A.hash(String(p || '').replace(/'/g, '’').replace(/</g, '‹').replace(/>/g, '›').replace(/\s+/g, ' ').trim());
+function stStore() {
+    const cm = A.chatMeta();
+    if (!cm.pm || typeof cm.pm !== 'object') cm.pm = {};
+    if (!cm.pm.st || typeof cm.pm.st !== 'object') cm.pm.st = {};
+    return cm.pm.st;
+}
+/** Имя своего стиля картинки по её инструкции; '' — рисуется в общем. */
+function styleOf(d) {
+    const e = d?.pm ? stStore()[d.pm] : null;
+    return Array.isArray(e) && e[1] === stHash(d.prompt) ? String(e[0] || '') : '';
+}
+function setStyleOf(d, name) {
+    if (!d?.pm) return;
+    const st = stStore();
+    delete st[d.pm];
+    if (name) st[d.pm] = [name, stHash(d.prompt)];
+    const keys = Object.keys(st);
+    if (keys.length > 400) for (const k of keys.slice(0, keys.length - 400)) delete st[k];
+    A.saveMeta();
+}
+
+/** Библиотека стилей SLAY: то, что он сам уже скачал в этот браузер, и свои стили из его настроек. [{ name, prompt }] */
+let libMemo = null;
+function slayStyles() {
+    if (libMemo && Date.now() - libMemo.at < 15000) return libMemo.list;   // кэш SLAY — пара мегабайт, а окно перерисовывается часто
+    const out = [];
+    const add = (x) => { const name = String(x?.name || '').trim(), prompt = String(x?.prompt || '').trim(); if (name && prompt && !out.some(y => y.name === name)) out.push({ name, prompt }); };
+    for (const key of ['slay_styles_cache_v3', 'slay_styles_cache_v2']) {
+        try { for (const x of JSON.parse(localStorage.getItem(key) || 'null')?.styles || []) add(x); } catch { /* кэша нет */ }
+    }
+    try { const own = slay()?.customStyles; for (const x of (typeof own === 'string' ? JSON.parse(own || '[]') : own) || []) add(x); } catch { /* своих нет */ }
+    libMemo = { at: Date.now(), list: out };
+    return out;
+}
+
+/** Текст стиля по имени: запомненный в настройках Life (он есть на всех устройствах), иначе из библиотеки SLAY. */
+function styleText(name) {
+    name = String(name || '').trim();
+    if (!name) return '';
+    return String(cfg().fb.lib[name] || slayStyles().find(x => x.name === name)?.prompt || '').trim();
+}
+
+/** Запомнить текст стиля в настройках Life: библиотека SLAY лежит в памяти браузера, на другом устройстве её может не быть. */
+function keepStyle(name, prompt) {
+    const f = cfg().fb;
+    if (!name || !prompt || f.lib[name] === prompt) return;
+    f.lib[name] = prompt;
+    const keys = Object.keys(f.lib);
+    if (keys.length > 8) delete f.lib[keys.find(k => k !== name && k !== f.name && k !== OWN_STYLE) || keys[0]];
+    A.saveSettings();
+}
+
+/** Запасной стиль: выбранный в настройках окна, иначе «Клаус» из библиотеки SLAY. null — взять неоткуда. */
+function fallbackStyle() {
+    const f = cfg().fb;
+    const name = f.name.trim() || Object.keys(f.lib).find(k => FB_AUTO.test(k)) || slayStyles().find(x => FB_AUTO.test(x.name))?.name || '';
+    const prompt = styleText(name);
+    if (!prompt) return null;
+    keepStyle(name, prompt);
+    return { name, prompt };
+}
+
+// SLAY берёт стиль из своих настроек (если он там выбран) и только потом из тега картинки, а читает его сразу,
+// в самом тапе по своей кнопке. Поэтому на этот тап стиль в настройках подменяется и тут же возвращается:
+// картинка рисуется в своём стиле, а общий стиль остаётся каким был — и для соседних картинок, и на потом.
+function holdStyle(text, name) {
+    const st = slay();
+    if (!st || !text) return;
+    if (!st.lifePmStyle) st.lifePmStyle = { slayStyle: st.slayStyle || '', slayStyleName: st.slayStyleName || '' };
+    st.slayStyle = text;
+    st.slayStyleName = name || 'стиль картинки';
+    setTimeout(styleUnstick, 0);
+}
+/** Вернуть общий стиль. save — после сбоя (вкладку закрыли ровно в этот миг, и подмена успела сохраниться). */
+function styleUnstick(save = false) {
+    const st = slay();
+    const b = st?.lifePmStyle;
+    if (!b) return;
+    st.slayStyle = b.slayStyle || '';
+    st.slayStyleName = b.slayStyleName || '';
+    delete st.lifePmStyle;
+    if (save === true) saveAll();
+}
+
+/** Тап по ↻ или «Попробовать снова» SLAY у картинки со своим стилем — она рисуется в нём. И её тап, и наш идут здесь. */
+function hookSlayButtons() {
+    document.addEventListener('click', (ev) => {
+        const b = ev.target?.closest?.('.iig-regen-btn, .iig-error-retry');
+        if (!b || !b.closest('#chat')) return;
+        const node = b.closest('.iig-error-placeholder') || b.closest('.iig-img-wrap')?.querySelector('img[data-iig-instruction]');
+        const name = node ? styleOf(parseIns(node.getAttribute('data-iig-instruction') || '')) : '';
+        if (!name) return;
+        const text = styleText(name);
+        if (text) holdStyle(text, name);
+        else console.warn(`[Life] промты: стиль «${name}» не найден ни в настройках, ни в библиотеке SLAY — рисую в общем`);
+    }, true);
+}
 
 /** Заметка основной модели (в промпт ответа): как писать промт картинки под выбранную рисовалку. */
 export function pmPrompt(type) {
@@ -96,7 +215,7 @@ const mesEl = (i) => document.querySelector(`#chat .mes[mesid="${i}"]`);
 const NODE_SEL = 'img[data-iig-instruction], video[data-iig-instruction], .iig-error-placeholder[data-iig-instruction]';
 function nodesOf(i) {
     const mt = mesEl(i)?.querySelector('.mes_text');
-    return mt ? [...mt.querySelectorAll(NODE_SEL)].filter(x => !x.closest('.lf-shot, .lf-detail')) : [];
+    return mt ? [...mt.querySelectorAll(NODE_SEL)].filter(x => !x.closest('.lf-shot, .lf-detail, .lf-pm-proxy')) : [];
 }
 const nodeSig = (x) => { const raw = x.getAttribute('data-iig-instruction') || ''; return sigOf(parseIns(raw), raw); };
 const tagsOf = (i) => scanTags(A.chatArr()[i]?.mes);
@@ -132,6 +251,14 @@ function slayCtl(node) {
     return btn ? { kind: 'regen', btn } : null;
 }
 
+/** Что SLAY написал на плашке ошибки. Полный текст он кладёт в подсказку, но кавычки в ней не экранирует — она рвётся
+ *  на первой же (а ответы сервисов — это JSON); на самой плашке текст целый, но обрезан. Берём что длиннее. */
+function errOf(node) {
+    const el = node?.querySelector?.('.iig-error-msg');
+    const a = String(el?.getAttribute('title') || '').trim(), b = String(el?.textContent || '').trim();
+    return a.length >= b.length ? a : b;
+}
+
 // ошибки SLAY живут только в его тостах — запоминаем последнюю, чтобы показать в окне причину
 let lastSlayErr = null;
 function hookToasts() {
@@ -139,7 +266,13 @@ function hookToasts() {
     if (!t || t.__lifePm || typeof t.error !== 'function') return;
     const fn = t.error;
     t.error = function (message, title, ...rest) {
-        try { if (/slay/i.test(String(title || ''))) lastSlayErr = { msg: String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, ''), at: Date.now() }; } catch { /* */ }
+        try {
+            if (/slay/i.test(String(title || ''))) {
+                lastSlayErr = { msg: String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, ''), at: Date.now() };
+                // фильтр — через пару секунд (SLAY дорисует плашку ошибки) посмотреть, не перерисовать ли в запасном стиле
+                if (explainError(lastSlayErr.msg)?.kind === 'filter') setTimeout(() => { try { scanFiltered(); } catch (e) { console.warn('[Life] промты: запасной стиль', e); } }, 1500);
+            }
+        } catch { /* */ }
         return fn.call(this, message, title, ...rest);
     };
     t.__lifePm = true;
@@ -181,47 +314,109 @@ function swapTag(i, m, t, nf) {
     rekey(i, old);
 }
 
-/** Рисует сам SLAY — его кнопкой, значит со всеми его рефами, стилем и описаниями. null — у картинки нет кнопки SLAY. */
-async function slayDraw(i, k, onStep) {
-    const m = A.chatArr()[i];
-    let ctl = slayCtl(nodeFor(i, k));
-    if (!ctl) {
-        // после сохранения пост с несостоявшейся картинкой пересобирается — её плашка встаёт не сразу
-        if (slay()?.enabled === false || tagState(tagsOf(i)[k]) !== 'error') return null;
-        ctl = await until(() => slayCtl(nodeFor(i, k)), 4000);
-        if (!ctl) return null;
-    }
-    const before = m.mes;
-    const t0 = tagsOf(i)[k];
-    const oldSrc = t0?.src || '';
-    // ↻ SLAY читает промт с самой картинки на экране — там должен стоять ровно тот, что сейчас в посте
-    if (ctl.kind === 'regen' && t0?.data) nodeFor(i, k)?.setAttribute('data-iig-instruction', encodeIns(t0.data));
-    const started = Date.now();
-    onStep?.('рисует SLAY…');
-    ctl.btn.click();
+/** Дождаться, пока SLAY дорисует по своей кнопке. */
+async function slayWait(ctl, el) {
     if (ctl.kind === 'regen') {
         await sleep(150);
         await until(() => !ctl.btn.classList.contains('iig-regen-busy'), DRAW_MS, 500);
-    } else {
-        const loading = () => !!mesEl(i)?.querySelector('.iig-loading-placeholder');
-        await until(() => loading() || tagState(tagsOf(i)[k]) !== 'error', 3000, 150);
-        await until(() => !loading(), DRAW_MS, 500);
-        await sleep(400); // SLAY дописывает путь в пост и сохраняет чат
+        return;
     }
-    if (A.chatArr()[i] !== m) throw new Error('чат сменился, пока рисовалось');
-    if (m.mes !== before) rekey(i, before);
-    let t = tagsOf(i)[k];
-    if (t && tagState(t) !== 'ok') {
-        // SLAY нарисовал, а путь в пост не дописал: его «путь значка ошибки» не совпал с тем, что стоит в посте
-        // (так бывает, если папку расширения переименовали) — после перезагрузки картинка снова стала бы ошибкой. Дописываем сами.
-        const live = nodeFor(i, k);
-        const got = live?.tagName === 'IMG' ? live.getAttribute('src') || '' : '';
-        if (got && !/error\.svg|\[IMG:/i.test(got)) { swapTag(i, m, t, withSrc(t, got)); await A.ctx().saveChat(); t = tagsOf(i)[k]; }
+    const loading = () => !!el?.querySelector('.iig-loading-placeholder');
+    await until(loading, 3000, 150);
+    await until(() => !loading(), DRAW_MS, 500);
+    await sleep(400); // SLAY дописывает путь в пост и сохраняет чат
+}
+
+/**
+ * Двойник картинки для SLAY — скрытый <img> с тем же промтом в том же посте: SLAY сам вешает на него свою ↻,
+ * по ней и рисуем. Нужен, когда своей кнопки SLAY у картинки нет (карточка GC унесла её из его обёртки) и когда
+ * его кнопка вписала бы новый путь сразу в несколько картинок поста (см. slayDraw).
+ * own — дать двойнику путь самой картинки: тогда SLAY сам впишет новый на его место. Иначе путь-пустышка,
+ * которой в посте нет: SLAY нарисует, а путь в нужный тег впишем мы.
+ */
+async function slayProxy(i, t, own) {
+    const mt = mesEl(i)?.querySelector('.mes_text');
+    if (!mt) return null;
+    const box = document.createElement('span');
+    box.className = 'lf-pm-proxy';
+    box.hidden = true;
+    box.style.display = 'none';
+    box.setAttribute('contenteditable', 'false');
+    const img = document.createElement('img');
+    img.setAttribute('data-iig-instruction', encodeIns(t.data));
+    img.setAttribute('src', own ? t.src : `data:,life-pm-${A.uid()}`);
+    box.append(img);
+    mt.append(box);
+    const node = () => box.querySelector('img[data-iig-instruction]');
+    const ctl = await until(() => { const c = slayCtl(node()); return c?.kind === 'regen' ? c : null; }, 3000, 100);
+    if (!ctl) { box.remove(); return null; }
+    return { box, ctl, node };
+}
+
+/** Сколько тегов поста SLAY задел бы, вписывая новый путь на место этого (он меняет путь по всему тексту поста). */
+function srcTwins(i, t) {
+    const all = tagsOf(i);
+    if (tagState(t) === 'ok') return all.filter(x => x.src === t.src).length;
+    return all.filter(x => tagState(x) !== 'ok').length;   // значок ошибки и «ещё не рисовалась» — у всех таких путь один
+}
+
+const busyMark = (i, k, on) => { try { nodeFor(i, k)?.classList?.toggle('lf-pm-drawing', on); } catch { /* */ } };
+
+/** Рисует сам SLAY — его кнопкой, значит со всеми его рефами, стилем и описаниями. null — SLAY выключен или не отозвался. */
+async function slayDraw(i, k, onStep) {
+    if (!slayOn() || !mesEl(i)) return null;
+    const m = A.chatArr()[i];
+    const t0 = tagsOf(i)[k];
+    if (!t0?.data) return null;
+    const sig = sigOf(t0.data, t0.raw);
+    const alone = srcTwins(i, t0) <= 1;
+    let node = () => nodeFor(i, k);
+    let ctl = alone ? slayCtl(node()) : null;
+    // после сохранения пост с несостоявшейся картинкой пересобирается — её плашка встаёт не сразу
+    if (!ctl && alone && tagState(t0) === 'error') ctl = await until(() => slayCtl(node()), 2500);
+    let proxy = null;
+    if (!ctl) {
+        proxy = await slayProxy(i, t0, alone && tagState(t0) === 'ok');
+        if (!proxy) return null;
+        ctl = proxy.ctl;
+        node = proxy.node;
     }
-    if (t && tagState(t) === 'ok' && t.src !== oldSrc) return { src: t.src };
-    const why = (lastSlayErr && lastSlayErr.at >= started ? lastSlayErr.msg : '')
-        || nodeFor(i, k)?.querySelector?.('.iig-error-msg')?.getAttribute('title') || '';
-    throw new Error(why || 'SLAY не нарисовал картинку');
+    const before = m.mes;
+    const oldSrc = t0.src || '';
+    // ↻ SLAY читает промт с самой картинки на экране — там должен стоять ровно тот, что сейчас в посте
+    if (ctl.kind === 'regen') node()?.setAttribute('data-iig-instruction', encodeIns(t0.data));
+    const started = Date.now();
+    onStep?.('рисует SLAY…');
+    if (proxy) busyMark(i, k, true);
+    try {
+        ctl.btn.click();
+        await slayWait(ctl, mesEl(i));
+        if (A.chatArr()[i] !== m) throw new Error('чат сменился, пока рисовалось');
+        if (m.mes !== before) rekey(i, before);
+        let t = tagsOf(i)[k];
+        if (t && !(tagState(t) === 'ok' && t.src !== oldSrc)) {
+            // SLAY нарисовал, а путь в пост не вписал: рисовали через двойника с путём-пустышкой, или его «путь значка
+            // ошибки» не совпал с тем, что стоит в посте (тогда после перезагрузки картинка снова стала бы ошибкой).
+            // Новый путь стоит на картинке на экране — вписываем его в свой тег сами.
+            const seenImgs = [node(), nodeFor(i, k), ...[...(mesEl(i)?.querySelectorAll('.mes_text img[data-iig-instruction]') || [])].filter(x => nodeSig(x) === sig)];
+            const got = seenImgs.map(x => (x?.tagName === 'IMG' ? x.getAttribute('src') || '' : '')).find(src => isPicture(src) && src !== oldSrc && !src.startsWith('data:'));
+            if (got) {
+                const m0 = m.mes;
+                swapTag(i, m, t, withSrc(t, got));
+                if (m.mes !== m0) await A.ctx().saveChat();
+                t = tagsOf(i)[k];
+            }
+        }
+        if (t && tagState(t) === 'ok' && t.src !== oldSrc) return { src: t.src };
+        const why = (lastSlayErr && lastSlayErr.at >= started ? lastSlayErr.msg : '') || errOf(node()) || errOf(nodeFor(i, k)) || '';
+        throw new Error(why || 'SLAY не нарисовал картинку');
+    } finally {
+        if (proxy) {
+            proxy.box.remove();
+            busyMark(i, k, false);
+            try { if (A.chatArr()[i] === m) await rerender(i); } catch { /* пост перерисуется сам */ }
+        }
+    }
 }
 
 /** Рисует Гардероб (как «проявить» у карточек): лица названных в промте — рефами. */
@@ -238,7 +433,8 @@ async function lifeDraw(i, cur, onStep) {
         try { const r = await A.faceRef?.(n, 768); if (r) { refs.push(r); got.push(A.canonName?.(n) || n); } } catch { /* без рефа */ }
     }
     const note = refs.length ? `Reference images, in order: ${got.join(', ')} — keep each face, hair, skin tone, scars and marks exactly as in the reference; the references are only for who is who.\n` : '';
-    const style = d.style && d.style !== 'photo' && im.kind !== 'nai' ? `Style: ${String(d.style).replace(/_/g, ' ')}.\n` : '';
+    const own = styleText(styleOf(d));
+    const style = own ? `Style: ${own}\n` : d.style && d.style !== 'photo' && im.kind !== 'nai' ? `Style: ${String(d.style).replace(/_/g, ' ')}.\n` : '';
     const tail = im.kind === 'nai' ? '' : 'No text, no letters, no watermark.';
     const src = await A.drawPicture(`${d.prompt}\n${note}${style}${tail}`.trim(), { aspect: d.aspect_ratio || d.aspectRatio || '4:3', prefix: 'life_pm', max: 1600, refs, who: names });
     if (A.chatArr()[i] !== m) throw new Error('чат сменился, пока рисовалось');
@@ -253,52 +449,59 @@ async function lifeDraw(i, cur, onStep) {
 /** Картинка SLAY в посте (k-я по счёту): читать промт, сохранить, нарисовать, вернуть старую. */
 function tagAdapter(i, k0) {
     let pm = tagsOf(i)[k0]?.data?.pm || '';
+    // метка должна быть только у этой картинки; стоит в посте выше — значит, модель списала её оттуда вместе с тегом
+    let copied = !!pm && A.chatArr().some((m, j) => j < i && typeof m?.mes === 'string' && m.mes.includes(pm));
     const msg = () => A.chatArr()[i];
     // тег ищется заново при каждом обращении (текст поста меняется): по своей метке, иначе по номеру
-    const pick = (ts) => (pm && ts.find(t => t.data?.pm === pm)) || ts[k0] || null;
+    const pick = (ts) => (pm && !copied && ts.find(t => t.data?.pm === pm)) || ts[k0] || null;
     const cur = () => pick(tagsOf(i));
     const idx = () => { const ts = tagsOf(i); const t = pick(ts); return t ? ts.indexOf(t) : -1; };
     const inCard = () => { const t = cur(); const m = msg(); return !!t && !!m && /<art\b/i.test(m.mes) && artBlocks(m.mes).some(b => b.full.includes(t.full)); };
-    const engine = () => (!inCard() && (slayCtl(nodeFor(i, idx())) || (tagState(cur()) === 'error' && slay()?.enabled !== false)) ? 'slay' : 'life');
+    const engine = () => (slayOn() && mesEl(i) ? 'slay' : 'life');
     return {
-        kind: 'post', mes: i,
+        kind: 'post', mes: i, styled: true,
         get title() { return `${inCard() ? 'фото в карточке' : 'картинка'} · пост #${i}`; },
         read() {
             const t = cur();
             if (!t?.data) return null;
             const state = tagState(t);
-            const said = state === 'error' ? (nodeFor(i, idx())?.querySelector?.('.iig-error-msg')?.getAttribute('title') || 'Картинка не была сгенерирована') : '';
-            return { prompt: String(t.data.prompt || ''), aspect: String(t.data.aspect_ratio || t.data.aspectRatio || ''), src: state === 'ok' ? t.src : '', state, error: said };
+            const said = state === 'error' ? (errOf(nodeFor(i, idx())) || 'Картинка не была сгенерирована') : '';
+            return { prompt: String(t.data.prompt || ''), aspect: String(t.data.aspect_ratio || t.data.aspectRatio || ''), src: state === 'ok' ? t.src : '', state, error: said, pmStyle: copied ? '' : styleOf(t.data) };
         },
-        hid: () => (pm ? `t:${pm}` : ''),
+        hid: () => (pm && !copied ? `t:${pm}` : ''),
         engine,
-        extra() {
+        extra(own = '') {
             // что рисовалка получит сверх этого промта — чтобы было видно, почему имена важны
-            if (engine() !== 'slay') return 'Гардероб сам допишет: рефы лиц тех, кто назван по имени, и стиль из тега.';
+            if (engine() !== 'slay') return `Гардероб сам допишет: рефы лиц тех, кто назван по имени, и стиль${own ? ` «${own}»` : ' из тега'}.`;
             const st = slay() || {};
-            const style = st.slayStyle ? (st.slayStyleName || 'свой') : String(cur()?.data?.style || '').replace(/_/g, ' ');
+            const d = cur()?.data || {};
+            const style = own || (st.slayStyle ? (st.slayStyleName || 'свой') : String(d.style || '').replace(/_/g, ' '));
             return `SLAY сам допишет: ${style ? `стиль «${style}», ` : ''}рефы тех, кто назван по имени${st.apiType === 'atlas' && String(st.atlasCharacterPrompt || '').trim() ? ', описания персонажей' : ''}.`;
         },
-        async save({ prompt, aspect }) {
+        /** style: имя своего стиля картинки, '' — общий, не задан — оставить как было. */
+        async save({ prompt, aspect, style }) {
             const m = msg(), ts = tagsOf(i), t = pick(ts);
             if (!m || !t) throw new Error('картинка пропала из поста');
             const node = nodeFor(i, ts.indexOf(t), ts);
             const next = { ...(t.data || {}), prompt: cleanPrompt(prompt) };
             if (aspect) { next.aspect_ratio = aspect; delete next.aspectRatio; }
-            if (!next.pm) next.pm = A.uid();   // своя метка: по ней картинка узнаётся после любых правок промта
+            const was = copied ? '' : styleOf(t.data);
+            if (!next.pm || copied) next.pm = A.uid();   // своя метка: по ней картинка узнаётся после любых правок промта
             pm = next.pm;
+            copied = false;
+            const want = style === undefined ? was : String(style || '');
+            if (want !== styleOf(next)) setStyleOf(next, want);   // стиль едет за промтом: отпечаток — по новому
             const nf = withIns(t, next);
             if (nf === t.full) return false;
             const failed = tagState(t) === 'error';
             swapTag(i, m, t, nf);
             if (node) node.setAttribute('data-iig-instruction', encodeIns(next)); // живой элемент: ↻ SLAY читает промт отсюда
             await A.ctx().saveChat();
-            if (failed || inCard()) await rerender(i);   // плашка ошибки помнит старый промт; карточку собирает движок GC
+            if (failed) await rerender(i);   // плашка ошибки помнит старый промт — пусть SLAY соберёт её заново
             return true;
         },
         async draw(onStep) {
-            if (!inCard()) { const r = await slayDraw(i, idx(), onStep); if (r) return r; }
-            return lifeDraw(i, cur, onStep);
+            return (await slayDraw(i, idx(), onStep)) || lifeDraw(i, cur, onStep);
         },
         async setSrc(src) {
             const m = msg(), t = cur();
@@ -375,7 +578,7 @@ function histPush(my, e) {
     const rec = st[id] = st[id] || { v: [] };
     if (!rec.v.length && my.first) rec.v.push(my.first);
     const last = rec.v[rec.v.length - 1];
-    if (!(last && last.p === e.p && last.ar === e.ar && last.src === e.src)) rec.v.push(e);
+    if (!(last && last.p === e.p && last.ar === e.ar && last.src === e.src && (last.sn || '') === (e.sn || ''))) rec.v.push(e);
     if (rec.v.length > 9) rec.v.splice(1, rec.v.length - 9); // исходный остаётся всегда
     rec.at = Date.now();
     const keys = Object.keys(st);
@@ -444,16 +647,19 @@ ${d.refs
         ? '- People keep their first names exactly as written — the extension maps each name to a reference photo. Never replace a name with a description and never describe faces, hair or eye colour of named people.'
         : `- This model has no reference photos: every name must be replaced by that person's look.${lookText ? ` Looks: ${lookText}` : ' If a look is unknown, keep the neutral traits already in the prompt.'}`}
 - If there is no request, only re-write the same picture in this model's manner.
+- If the request is RESTYLE: delete every sentence or phrase about art style, medium, rendering technique, brushwork, palette, "lens feel" or a style reference, and add none — the new style reaches the renderer separately. Who, pose, clothes, place and light stay word for word where possible.
 - If the last attempt was refused by moderation, remove or soften what most likely caused it — bare skin becomes covered or implied, wounds lose graphic detail, names of real actors, celebrities, brands and franchises go away — and keep the scene, the people and the mood. Say in the note what you softened.
 - English only, one line, no line breaks, no quotation marks inside the prompt.`;
 
-async function translate({ prompt, aspect, request = '', error = '', soften = false }) {
+async function translate({ prompt, aspect, request = '', error = '', soften = false, restyle = false, styled = false }) {
     const im = imageModel();
     const d = DIALECTS[im.kind] || DIALECTS.generic;
     const user = [
         `CURRENT PROMPT:\n${prompt}`,
         `CURRENT ASPECT RATIO: ${aspect || 'not set'}`,
-        request ? `THE PLAYER ASKS (Russian): ${request}` : soften ? 'THE PLAYER ASKS: make it pass moderation, as the rules say.' : 'NO REQUEST: only re-write this picture in the model\'s manner.',
+        restyle ? 'THE PLAYER ASKS: RESTYLE — strip the style words, as the rules say; change nothing else.'
+            : request ? `THE PLAYER ASKS (Russian): ${request}` : soften ? 'THE PLAYER ASKS: make it pass moderation, as the rules say.' : 'NO REQUEST: only re-write this picture in the model\'s manner.',
+        styled && !restyle ? 'NOTE: the art style of this picture reaches the renderer separately — keep the prompt free of art-style, medium and rendering-technique words.' : '',
         error ? `THE LAST ATTEMPT FAILED WITH: ${A.cut(error, 400)}` : '',
     ].filter(Boolean).join('\n\n');
     const raw = await A.askModel([{ role: 'system', content: TR_SYSTEM(d, im, A.cut(looks(), 900)) }, { role: 'user', content: user }], 1500, 'Промты');
@@ -461,6 +667,73 @@ async function translate({ prompt, aspect, request = '', error = '', soften = fa
     const p = cleanPrompt(j?.prompt);
     if (p.length < 12) throw new Error('Летописец не вернул промт — попробуй ещё раз');
     return { prompt: p, aspect: ASPECTS.includes(j.aspect_ratio) ? j.aspect_ratio : '', note: String(j.note || '').trim().slice(0, 120) };
+}
+
+// ───────────── фильтр → запасной стиль ─────────────
+
+const fbBusy = new Set();          // картинки, уже стоящие в очереди на запасной стиль
+let fbChain = Promise.resolve();   // по одной: каждая — это вызов Летописца и рисовалки
+let fbHinted = false;
+
+/** SLAY сообщил об отказе фильтра — найти такие картинки в последних постах и перерисовать в запасном стиле. */
+function scanFiltered() {
+    if (!A?.hasChat?.() || A.settings().enabled === false || !cfg().fb.auto || !slayOn()) return;
+    if (!fallbackStyle()) {
+        if (!fbHinted) { fbHinted = true; A.toast('info', 'Фильтр не пропустил картинку. Запасной стиль ещё не выбран: ✎ на картинке → Настройки → «Запасной стиль».', '✎ Промт', { timeOut: 7000 }); }
+        return;
+    }
+    const chat = A.chatArr();
+    const fresh = lastSlayErr && Date.now() - lastSlayErr.at < 20000 ? lastSlayErr.msg : '';
+    for (let i = chat.length - 1, posts = 0; i >= 0 && posts < 3; i--) {
+        const m = chat[i];
+        if (!m || m.is_user || typeof m.mes !== 'string' || !m.mes.includes('data-iig-instruction')) continue;
+        posts++;
+        if (!mesEl(i) || (S && S.ad.mes === i)) continue;   // пост не на экране; открыто окно картинки из него — там своя кнопка
+        tagsOf(i).forEach((t, k) => {
+            if (t.video || tagState(t) !== 'error' || !t.data?.prompt || styleOf(t.data)) return;   // в своём стиле уже пробовали
+            const node = nodeFor(i, k);
+            // причина отказа написана на плашке самой картинки; у фото в карточке GC плашки нет — там судим по отказу,
+            // который пришёл только что, и только в самом свежем посте
+            const why = node?.matches?.('.iig-error-placeholder') ? errOf(node) : (posts === 1 ? fresh : '');
+            if (explainError(why)?.kind !== 'filter') return;
+            const id = `${i}:${sigOf(t.data, t.raw)}`;
+            if (fbBusy.has(id)) return;
+            fbBusy.add(id);
+            fbChain = fbChain.then(() => autoFallback(i, k)).catch(e => console.warn('[Life] промты: запасной стиль', e)).finally(() => fbBusy.delete(id));
+        });
+    }
+}
+
+/** Одна картинка, которую не пропустил фильтр: снять с промта прежний стиль и нарисовать в запасном. Один раз. */
+async function autoFallback(i, k) {
+    const m = A.chatArr()[i];
+    if (!m) return;
+    // SLAY ещё дорисовывает соседние картинки этого поста — не пересобирать пост у него под руками
+    await until(() => !mesEl(i)?.querySelector('.iig-loading-placeholder'), DRAW_MS, 500);
+    const fb = fallbackStyle();
+    if (A.chatArr()[i] !== m || !fb || !cfg().fb.auto || (S && S.ad.mes === i)) return;
+    const ad = tagAdapter(i, k);
+    const cur = ad.read();
+    if (!cur || cur.state !== 'error' || cur.pmStyle) return;
+    A.toast('info', `Фильтр не пропустил картинку — перерисовываю в стиле «${esc(fb.name)}».`, '✎ Запасной стиль', { timeOut: 5000 });
+    busyMark(i, k, true);
+    const my = { ad, first: { p: cur.prompt, ar: cur.aspect, src: '', note: '', at: Date.now(), by: '', sn: '' } };
+    let prompt = cur.prompt;
+    try { prompt = (await translate({ prompt, aspect: cur.aspect, restyle: true })).prompt; }
+    catch (e) { console.warn('[Life] промты: прежний стиль с промта не сняла — рисую как есть', e); }
+    if (A.chatArr()[i] !== m) return;
+    const by = imageModel().name;
+    try {
+        await ad.save({ prompt, aspect: cur.aspect, style: fb.name });
+        const r = await ad.draw();
+        histPush(my, { p: prompt, ar: cur.aspect, src: r.src, note: `фильтр → стиль «${fb.name}»`, at: Date.now(), by, sn: fb.name });
+        A.toast('success', `Готово, в стиле «${esc(fb.name)}». Не то — ✎ на картинке.`, '✎ Запасной стиль', { timeOut: 3500 });
+    } catch (e) {
+        A.toast('warning', `И в стиле «${esc(fb.name)}» не вышло: ${esc(A.cut(String(e?.message || e), 160))}`, '✎ Запасной стиль', { timeOut: 7000 });
+    } finally {
+        busyMark(i, k, false);
+        A.paintSoon?.();
+    }
 }
 
 // ───────────── окно ─────────────
@@ -490,13 +763,15 @@ export function openPromptManager(ad) {
     S = {
         ad, prompt: cur.prompt, aspect: cur.aspect, base: cur.prompt, baseAspect: cur.aspect, src: cur.src, state: cur.state,
         err: cur.error ? { msg: cur.error, ...(explainError(cur.error) || {}) } : null,
+        pmStyle: cur.pmStyle || '', basePm: cur.pmStyle || '',   // имя своего стиля картинки; пусто — общий
         fix: '', note: '', busy: '', step: '', prev: null, fold: '',
-        first: { p: cur.prompt, ar: cur.aspect, src: cur.src, note: '', at: Date.now(), by: '' },
+        first: { p: cur.prompt, ar: cur.aspect, src: cur.src, note: '', at: Date.now(), by: '', sn: cur.pmStyle || '' },
     };
     box = document.createElement('div');
     box.id = 'lf-pm';
     box.addEventListener('click', onBoxClick);
     box.addEventListener('input', onBoxInput);
+    box.addEventListener('change', onBoxInput);   // список стилей: не всякий браузер шлёт input на <select>
     box.addEventListener('keydown', onBoxKey);
     (topDialog() || document.body).append(box);
     paint();
@@ -509,7 +784,8 @@ function closeManager() {
     S = null;
 }
 
-const dirty = () => !!S && (S.prompt.trim() !== String(S.base || '').trim() || S.aspect !== S.baseAspect);
+const dirty = () => !!S && (S.prompt.trim() !== String(S.base || '').trim() || S.aspect !== S.baseAspect || S.pmStyle !== S.basePm);
+const saveArgs = (my) => ({ prompt: my.prompt, aspect: my.aspect, style: my.ad.styled ? my.pmStyle : undefined });
 const wordsOf = (t) => (String(t).trim() ? String(t).trim().split(/\s+/).length : 0);
 
 function previewHtml() {
@@ -520,6 +796,7 @@ function previewHtml() {
         <p>${esc(S.err.text || 'Сервис картинок ответил ошибкой.')}</p>
         ${S.err.msg ? `<details><summary>Что ответил сервис</summary><code>${esc(A.cut(S.err.msg, 600))}</code></details>` : ''}
         ${S.err.kind === 'filter' ? `<button data-pm="soften">${icon('feather')} Смягчить под фильтр</button>` : ''}
+        ${S.err.kind === 'filter' && S.ad.styled && !S.pmStyle && fallbackStyle() ? `<button data-pm="style" data-v="${esc(fallbackStyle().name)}">${icon('palette')} В стиле «${esc(fallbackStyle().name)}»</button>` : ''}
         ${S.err.kind === 'key' || S.err.kind === 'money' ? `<button data-pm="fold" data-v="src">${icon('plug')} Источники</button>` : ''}
     </div></div>`;
 }
@@ -544,11 +821,42 @@ function histHtml(hist) {
     const when = (t) => { try { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
     return `<div class="lf-pm-sub">${hist.map((v, k) => `<div class="lf-pm-v${v.src && v.src === S.src ? ' on' : ''}">
         ${v.src ? `<img src="${esc(v.src)}" alt="" loading="lazy" data-pm="zoom">` : `<i>${icon('image')}</i>`}
-        <div><b>${k === 0 ? 'Исходный' : esc(v.note || 'правка')}</b><small>${[when(v.at), v.by].filter(Boolean).map(esc).join(' · ')}</small>
+        <div><b>${k === 0 ? 'Исходный' : esc(v.note || 'правка')}</b><small>${[when(v.at), v.by, v.sn ? `стиль «${v.sn}»` : ''].filter(Boolean).map(esc).join(' · ')}</small>
             <p>${esc(A.cut(v.p, 150))}</p>
             <span><button data-pm="hist-load" data-k="${k}">взять промт</button>${v.src && v.src !== S.src ? `<button data-pm="hist-back" data-k="${k}">вернуть картинку</button>` : ''}</span>
         </div>
     </div>`).reverse().join('')}</div>`;
+}
+
+/** Строка «Стиль» под промтом: общий (как у всех картинок) или свой — запасной. */
+function styleRowHtml() {
+    if (!S.ad.styled) return '';
+    const names = [...new Set([S.pmStyle, fallbackStyle()?.name].filter(Boolean))];
+    if (!names.length) return '';
+    return `<div class="lf-pm-chips st"><span>Стиль</span><button class="lf-pm-chip${S.pmStyle ? '' : ' on'}" data-pm="style" data-v="">общий</button>${names.map(n => `<button class="lf-pm-chip${S.pmStyle === n ? ' on' : ''}" data-pm="style" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
+}
+
+function fbSetHtml() {
+    const f = cfg().fb;
+    const lib = slayStyles();
+    // автор библиотеки мог поправить стиль — запомненный текст обновить
+    let fresh = false;
+    for (const x of lib) if (f.lib[x.name] && f.lib[x.name] !== x.prompt) { f.lib[x.name] = x.prompt; fresh = true; }
+    if (fresh) A.saveSettings();
+    const names = [...new Set([...lib.map(x => x.name), ...Object.keys(f.lib).filter(k => k !== OWN_STYLE)])].sort((a, b) => a.localeCompare(b));
+    const auto = names.find(n => FB_AUTO.test(n)) || '';
+    const opt = (v, label) => `<option value="${esc(v)}"${f.name === v ? ' selected' : ''}>${esc(label)}</option>`;
+    return `<label class="lf-pm-l"><span>Запасной стиль</span><small>когда фильтр не пропустил</small></label>
+        <button class="lf-pm-tg${f.auto ? ' on' : ''}" data-pm="set" data-v="fb.auto"><i></i><span>Фильтр не пропустил картинку — сама перерисую её в запасном стиле</span></button>
+        <select class="lf-pm-sel" data-in="fbname">
+            ${opt('', auto ? `сам: «${auto}»` : 'сам: «Клаус» из библиотеки SLAY')}
+            ${names.map(n => opt(n, n)).join('')}
+            ${opt(OWN_STYLE, 'свой текст…')}
+        </select>
+        ${f.name === OWN_STYLE ? `<textarea class="lf-pm-ta small" data-in="fbtext" rows="3" placeholder="По-английски, как описывают стиль: flat 2D cartoon, bold clean outlines, soft cel shading…">${esc(f.lib[OWN_STYLE] || '')}</textarea>` : ''}
+        <div class="lf-pm-dim">${lib.length
+        ? `Общий стиль не меняется. В запасном рисуется только та картинка, которую не пропустил фильтр, — и её ↻ потом тоже. Стили — из библиотеки SLAY (${lib.length}).`
+        : 'Библиотека стилей SLAY в этом браузере ещё не скачана: открой в настройках SLAY «Выбрать стиль» один раз — список появится здесь.'}${fallbackStyle() ? '' : ' Сейчас запасного стиля нет.'}</div>`;
 }
 
 function setHtml() {
@@ -558,6 +866,7 @@ function setHtml() {
         ${tg('auto', 'После «поправить» сразу рисовать')}
         ${tg('dialect', 'Подсказывать модели, под какую рисовалку писать промт в посте')}
         ${tg('on', '✎ на картинках в постах')}
+        ${fbSetHtml()}
         <label class="lf-pm-l"><span>Приметы</span><small>для NovelAI — рефов у неё нет</small></label>
         <textarea class="lf-pm-ta small" data-in="looks" rows="3" placeholder="По-английски, коротко: Hedy — …; Bucky — … Пусто — возьму описания персонажей из настроек SLAY.">${esc(c.looks)}</textarea>
         ${c.quick.length ? `<label class="lf-pm-l"><span>Свои быстрые правки</span><small>тап — убрать</small></label><div class="lf-pm-chips">${c.quick.map((q, k) => `<button class="lf-pm-chip" data-pm="quick-del" data-k="${k}">${esc(q)} ✕</button>`).join('')}</div>` : ''}
@@ -571,7 +880,7 @@ function paint() {
     const d = DIALECTS[im.kind] || DIALECTS.generic;
     const hist = histOf();
     const eng = (() => { try { return S.ad.engine(); } catch { return 'life'; } })();
-    const extra = (() => { try { return S.ad.extra?.() || ''; } catch { return ''; } })();
+    const extra = (() => { try { return S.ad.extra?.(S.pmStyle) || ''; } catch { return ''; } })();
     const n = wordsOf(S.prompt);
     const chev = (k) => icon(S.fold === k ? 'chevU' : 'chevD');
     const top = box.querySelector('.lf-pm-body')?.scrollTop || 0;
@@ -591,6 +900,7 @@ function paint() {
             <textarea class="lf-pm-ta" data-in="prompt" rows="6" spellcheck="false" autocapitalize="off" autocorrect="off">${esc(S.prompt)}</textarea>
             ${extra ? `<div class="lf-pm-dim">${esc(extra)}</div>` : ''}
             ${S.ad.fixedAspect ? '' : `<div class="lf-pm-chips ar">${AR_SHOWN.map(a => `<button class="lf-pm-chip${a === S.aspect ? ' on' : ''}" data-pm="ar" data-v="${a}">${a}</button>`).join('')}</div>`}
+            ${styleRowHtml()}
             <button class="lf-pm-fold" data-pm="fold" data-v="hist">${icon('clock')}<span>Версии${hist.length > 1 ? ` · ${hist.length}` : ''}</span>${chev('hist')}</button>
             ${S.fold === 'hist' ? histHtml(hist) : ''}
             <button class="lf-pm-fold" data-pm="fold" data-v="set">${icon('sliders')}<span>Настройки</span>${chev('set')}</button>
@@ -626,6 +936,15 @@ function onBoxInput(ev) {
     if (k === 'prompt') { S.prompt = el.value; tick(); }
     else if (k === 'fix') S.fix = el.value;
     else if (k === 'looks') { cfg().looks = el.value.slice(0, 1200); A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } }
+    else if (k === 'fbtext') { cfg().fb.lib[OWN_STYLE] = el.value.slice(0, 1500); A.saveSettings(); if (ev.type === 'change') paint(); }   // дописала и вышла из поля — обновить строку «Стиль»
+    else if (k === 'fbname') {
+        const f = cfg().fb;
+        if (f.name === el.value) return;
+        f.name = el.value;
+        if (f.name && f.name !== OWN_STYLE) keepStyle(f.name, styleText(f.name));
+        A.saveSettings();
+        paint();
+    }
 }
 
 function onBoxKey(ev) {
@@ -643,7 +962,7 @@ async function onBoxClick(ev) {
     if (act === 'x') { closeManager(); return; }
     if (act === 'zoom') { const src = b.getAttribute('src'); if (src) A.lightbox?.(src, ''); return; }
     if (act === 'fold') { S.fold = S.fold === b.dataset.v ? '' : b.dataset.v; paint(); return; }
-    if (act === 'set') { const c = cfg(); c[b.dataset.v] = !c[b.dataset.v]; A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } A.paintSoon?.(); paint(); return; }
+    if (act === 'set') { const c = cfg(); if (b.dataset.v === 'fb.auto') c.fb.auto = !c.fb.auto; else c[b.dataset.v] = !c[b.dataset.v]; A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } A.paintSoon?.(); paint(); return; }
     if (act === 'quick-del') { cfg().quick.splice(Number(b.dataset.k), 1); A.saveSettings(); paint(); return; }
     if (act === 'quick-add') {
         const t = S.fix.trim();
@@ -658,14 +977,15 @@ async function onBoxClick(ev) {
     if (act === 'src-del') { if (confirm(`Убрать источник «${b.dataset.v}»? Само подключение в SLAY останется как есть.`)) { const l = sources(); const k = l.findIndex(x => x.name === b.dataset.v); if (k >= 0) l.splice(k, 1); saveAll(); paint(); } return; }
     if (S.busy) return;
     if (act === 'ar') { S.aspect = b.dataset.v; paint(); return; }
-    if (act === 'undo') { if (S.prev) { S.prompt = S.prev.prompt; S.aspect = S.prev.aspect; S.prev = null; S.note = ''; paint(); } return; }
+    if (act === 'undo') { if (S.prev) { S.prompt = S.prev.prompt; S.aspect = S.prev.aspect; S.pmStyle = S.prev.pmStyle ?? S.pmStyle; S.prev = null; S.note = ''; paint(); } return; }
+    if (act === 'style') { if (b.dataset.v) restyleNow(b.dataset.v); else plainNow(); return; }
     if (act === 'chip') { fixNow(b.dataset.v); return; }
     if (act === 'fix') { fixNow(S.fix); return; }
     if (act === 'soften') { fixNow('', { soften: true }); return; }
     if (act === 'model') { fixNow('', { convert: true }); return; }
     if (act === 'draw') { drawNow(); return; }
     if (act === 'save') { saveNow(); return; }
-    if (act === 'hist-load') { const v = histOf()[Number(b.dataset.k)]; if (v) { S.prev = { prompt: S.prompt, aspect: S.aspect }; S.prompt = v.p; if (v.ar && !S.ad.fixedAspect) S.aspect = v.ar; S.note = 'промт из версии — можно править и рисовать'; paint(); } return; }
+    if (act === 'hist-load') { const v = histOf()[Number(b.dataset.k)]; if (v) { S.prev = { prompt: S.prompt, aspect: S.aspect, pmStyle: S.pmStyle }; S.prompt = v.p; if (v.ar && !S.ad.fixedAspect) S.aspect = v.ar; if (S.ad.styled) S.pmStyle = v.sn || ''; S.note = 'промт из версии — можно править и рисовать'; paint(); } return; }
     if (act === 'hist-back') { backTo(histOf()[Number(b.dataset.k)]); }
 }
 
@@ -702,9 +1022,9 @@ async function fixNow(request, { soften = false, convert = false } = {}) {
     paint();
     let ok = false;
     try {
-        const out = await translate({ prompt: my.prompt, aspect: my.aspect, request, error: my.err?.msg || '', soften });
+        const out = await translate({ prompt: my.prompt, aspect: my.aspect, request, error: my.err?.msg || '', soften, styled: !!my.pmStyle });
         if (S !== my) return;
-        my.prev = { prompt: my.prompt, aspect: my.aspect };
+        my.prev = { prompt: my.prompt, aspect: my.aspect, pmStyle: my.pmStyle };
         my.prompt = out.prompt;
         if (out.aspect && !my.ad.fixedAspect) my.aspect = out.aspect;
         my.note = out.note || request || (convert ? 'переписан под рисовалку' : 'смягчён');
@@ -720,6 +1040,48 @@ async function fixNow(request, { soften = false, convert = false } = {}) {
     if (ok && S === my && cfg().auto && !convert) await drawNow();
 }
 
+/** Эту картинку — в своём стиле (запасном): слова о прежнем стиле из промта убрать, стиль уйдёт рисовалке отдельно. */
+async function restyleNow(name) {
+    const my = S;
+    if (!my || my.busy || my.pmStyle === name) return;
+    if (!styleText(name)) { A.toast('warning', `Не нашла текст стиля «${esc(name)}» — выбери запасной стиль в настройках окна.`, '✎ Промт', { timeOut: 6000 }); return; }
+    const prev = { prompt: my.prompt, aspect: my.aspect, pmStyle: my.pmStyle };
+    let lost = false;
+    if (!my.pmStyle && my.prompt.trim()) {
+        my.busy = 'tr';
+        my.step = 'снимаю с промта прежний стиль…';
+        paint();
+        try {
+            const out = await translate({ prompt: my.prompt, aspect: my.aspect, restyle: true });
+            if (S !== my) return;
+            my.prompt = out.prompt;
+        } catch (e) {
+            console.warn('[Life] промты: снять стиль', e);
+            lost = true;
+        } finally {
+            my.busy = '';
+        }
+    }
+    my.prev = prev;
+    my.pmStyle = name;
+    my.note = lost ? `стиль «${name}»; слова о прежнем стиле из промта убери руками — Летописец не ответил` : `стиль «${name}»`;
+    if (S !== my) return;
+    paint();
+    if (cfg().auto) await drawNow();
+}
+
+/** Обратно в общий стиль: промт — из последней версии, где слова о стиле ещё были на месте. */
+function plainNow() {
+    const my = S;
+    if (!my || my.busy || !my.pmStyle) return;
+    const v = [...histOf(my)].reverse().find(x => !x.sn && x.p);
+    my.prev = { prompt: my.prompt, aspect: my.aspect, pmStyle: my.pmStyle };
+    if (v) my.prompt = v.p;
+    my.pmStyle = '';
+    my.note = v ? 'общий стиль — промт вернула из версии до смены стиля' : 'общий стиль';
+    paint();
+}
+
 async function saveNow() {
     const my = S;
     if (!my || my.busy) return;
@@ -727,10 +1089,11 @@ async function saveNow() {
     my.step = 'сохраняю…';
     paint();
     try {
-        await my.ad.save({ prompt: my.prompt, aspect: my.aspect });
+        await my.ad.save(saveArgs(my));
         my.base = my.prompt;
         my.baseAspect = my.aspect;
-        histPush(my, { p: my.prompt, ar: my.aspect, src: my.src, note: my.note || 'правка руками', at: Date.now(), by: '' });
+        my.basePm = my.pmStyle;
+        histPush(my, { p: my.prompt, ar: my.aspect, src: my.src, note: my.note || 'правка руками', at: Date.now(), by: '', sn: my.pmStyle });
         A.toast('success', 'Промт в посте. ↻ нарисует уже по нему.', '✎ Промт', { timeOut: 2200 });
     } catch (e) {
         A.toast('warning', esc(String(e?.message || e)), '✎ Промт', { timeOut: 6000 });
@@ -749,14 +1112,15 @@ async function drawNow() {
     paint();
     const by = imageModel().name;
     try {
-        await my.ad.save({ prompt: my.prompt, aspect: my.aspect });
+        await my.ad.save(saveArgs(my));
         my.base = my.prompt;
         my.baseAspect = my.aspect;
+        my.basePm = my.pmStyle;
         const r = await my.ad.draw((step) => { my.step = step; if (S === my) { const el = box?.querySelector('.lf-pm-wait span'); if (el) el.textContent = step; } });
         my.src = r.src;
         my.state = 'ok';
         my.err = null;
-        histPush(my, { p: my.prompt, ar: my.aspect, src: r.src, note: my.note || 'перерисовка', at: Date.now(), by });
+        histPush(my, { p: my.prompt, ar: my.aspect, src: r.src, note: my.note || 'перерисовка', at: Date.now(), by, sn: my.pmStyle });
         my.note = '';
         my.prev = null;
         if (S !== my) A.toast('success', 'Картинка готова.', '✎ Промт', { timeOut: 2200 });
@@ -780,9 +1144,10 @@ async function backTo(v) {
     my.step = 'возвращаю…';
     paint();
     try {
-        await my.ad.save({ prompt: v.p, aspect: v.ar || my.aspect });
+        await my.ad.save({ prompt: v.p, aspect: v.ar || my.aspect, style: my.ad.styled ? v.sn || '' : undefined });
         await my.ad.setSrc(v.src);
         my.prompt = my.base = v.p;
+        my.pmStyle = my.basePm = my.ad.styled ? v.sn || '' : '';
         if (v.ar) my.aspect = my.baseAspect = v.ar;
         my.src = v.src;
         my.state = 'ok';

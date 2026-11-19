@@ -3580,7 +3580,7 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #lf-pm .lf-pm-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 0 16px 14px; }
 #lf-pm .lf-pm-body > * { flex: none; }
 #lf-pm .lf-pm-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--lf-line, rgba(236, 222, 216, .11)); background: #171214; border-radius: 0; }
-#lf-pm .lf-pm-card.busy .lf-pm-go, #lf-pm .lf-pm-card.busy .lf-pm-fix, #lf-pm .lf-pm-card.busy .lf-pm-chips.quick, #lf-pm .lf-pm-card.busy .lf-pm-chips.ar { opacity: .5; pointer-events: none; }
+#lf-pm .lf-pm-card.busy .lf-pm-go, #lf-pm .lf-pm-card.busy .lf-pm-fix, #lf-pm .lf-pm-card.busy .lf-pm-chips.quick, #lf-pm .lf-pm-card.busy .lf-pm-chips.ar, #lf-pm .lf-pm-card.busy .lf-pm-chips.st { opacity: .5; pointer-events: none; }
 
 #lf-pm .lf-pm-prev { flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 14px; background: #0f0b0c; }
 #lf-pm .lf-pm-prev img { display: block; max-width: 100%; max-height: 26vh; object-fit: contain; cursor: zoom-in; }
@@ -3651,3 +3651,15 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #lf-pm .lf-pm-tg i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #ede4df; transition: transform .2s; }
 #lf-pm .lf-pm-tg.on i { background: var(--lf-rose, #d9687b); }
 #lf-pm .lf-pm-tg.on i::after { transform: translateX(16px); }
+
+/* запасной стиль (0.59.1): строка «Стиль» в окне, список стилей в настройках, картинка, которую сейчас перерисовывают */
+#lf-pm .lf-pm-chips.st { align-items: center; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+#lf-pm .lf-pm-chips.st::-webkit-scrollbar { display: none; }
+#lf-pm .lf-pm-chips.st > span { flex: none; margin-right: 2px; font-size: 12.5px; color: var(--lf-dim, #a3958f); }
+#lf-pm .lf-pm-err button { margin-bottom: 6px; }
+#lf-pm .lf-pm-sel { flex: none; display: block; width: 100%; min-height: 44px; margin: 0; padding: 0 12px; border-radius: 12px; border: 1px solid var(--lf-line2, rgba(236, 222, 216, .2)); background: rgba(0, 0, 0, .28); color: inherit; font: inherit; font-size: 16px; }
+#lf-pm .lf-pm-sel:focus { border-color: rgba(217, 104, 123, .6); outline: none; }
+#chat .lf-pm-proxy { display: none !important; }
+#chat .lf-pm-drawing { animation: lf-pm-draw 1.4s ease-in-out infinite; }
+@keyframes lf-pm-draw { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { #chat .lf-pm-drawing { animation: none; opacity: .6; } }

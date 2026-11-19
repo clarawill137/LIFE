@@ -51,16 +51,21 @@ export function scanTags(text) {
         const aEnd = (q && s[je] === q ? je + 1 : je) - st;
         const outside = full.slice(0, aStart) + full.slice(aEnd);
         const src = (outside.match(/\bsrc\s*=\s*["']?([^"'\s>]+)/i) || [])[1] || '';
-        out.push({ start: st, end, full, raw, data: parseIns(raw), src, aStart, aEnd, video });
+        const stamp = /\bdata-iig-error\s*=/i.test(outside);   // SLAY 5.x: метка несостоявшейся картинки на самом теге
+        out.push({ start: st, end, full, raw, data: parseIns(raw), src, stamp, aStart, aEnd, video });
         pos = end;
     }
     return out;
 }
 
+const BLANK_GIF = /^data:image\/gif;base64,R0lGODlhAQABA/;   // пустой пиксель: так SLAY 5.x пишет ошибку (с меткой) и ожидание
+/** Путь настоящей картинки, а не заглушки, значка ошибки или пустого пикселя. */
+export const isPicture = (src) => !!src && src !== '#' && !/\[IMG:|error\.svg/i.test(src) && !BLANK_GIF.test(src);
 /** ok — картинка есть; wait — ещё не рисовалась ([IMG:GEN]); error — SLAY не смог. */
 export function tagState(t) {
-    if (!t?.src || /\[IMG:/i.test(t.src) || t.src === '#') return 'wait';
-    return /error\.svg/i.test(t.src) ? 'error' : 'ok';
+    if (!t) return 'wait';
+    if (isPicture(t.src)) return 'ok';
+    return /error\.svg/i.test(t.src || '') || t.stamp ? 'error' : 'wait';
 }
 
 /** Инструкция для одинарных кавычек атрибута: без ', < и > (их SLAY и таверна не переживают). */
