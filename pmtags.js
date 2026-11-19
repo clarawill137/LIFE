@@ -236,6 +236,8 @@ export function sourceSnap(st, name) {
         naisteraModel: st.naisteraModel || '',
         naisteraAspectRatio: st.naisteraAspectRatio || '',
         atlasModel: st.atlasModel || '',
+        novelModel: st.novelModel || '',               // SLAY 5.x: NovelAI напрямую
+        novelCustomModel: st.novelCustomModel || '',
     };
 }
 
@@ -246,5 +248,6 @@ export function sourceIsCurrent(p, st) {
     if (!same(p.apiType, st.apiType) || !same(p.endpoint, st.endpoint) || !same(p.apiKey, st.apiKey)) return false;
     if (p.apiType === 'atlas') return !p.atlasModel || same(p.atlasModel, st.atlasModel);
     if (p.apiType === 'naistera') return !p.naisteraModel || same(p.naisteraModel, st.naisteraModel);
+    if (p.apiType === 'novelai') return !p.novelModel || (same(p.novelModel, st.novelModel) && same(p.novelCustomModel, st.novelCustomModel));
     return same(p.model, st.model);
 }

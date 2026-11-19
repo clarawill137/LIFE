@@ -597,7 +597,23 @@ function sources() {
     if (!Array.isArray(st.connectionProfiles)) st.connectionProfiles = [];
     return st.connectionProfiles;
 }
-const saveAll = () => { try { A.ctx().saveSettingsDebounced(); } catch { /* */ } };
+const saveAll = () => { try { A.ctx().saveSettingsDebounced(); } catch { /* */ } syncSlayProfiles(); };
+/** SLAY 5.x показывает те же профили подключений своим списком и собирает его один раз, при загрузке. Источник добавили
+ *  или убрали здесь — список в его панели обновляем сами, тем же видом (значение и подпись — имя профиля). */
+function syncSlayProfiles() {
+    try {
+        const sel = document.getElementById('slay_conn_profile');
+        const list = slay()?.connectionProfiles;
+        if (!sel || !Array.isArray(list)) return;
+        const names = list.map(p => String(p?.name || '')).filter(Boolean);
+        const have = [...sel.options].map(o => o.value).filter(Boolean);
+        if (names.length === have.length && names.every((n, i) => n === have[i])) return;
+        const cur = sel.value;
+        for (const o of [...sel.options]) if (o.value) o.remove();
+        for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.append(o); }
+        sel.value = names.includes(cur) ? cur : '';
+    } catch { /* панель SLAY не открыта или устроена иначе */ }
+}
 
 /** Что сейчас стоит в SLAY — запомнить сразу, чтобы первое же переключение ничего не потеряло. */
 function firstSource() {
@@ -628,7 +644,12 @@ function useSource(name) {
     if (!setCtl('slay_api_key', p.apiKey || '', 'input')) st.apiKey = p.apiKey || '';
     if (p.apiType === 'atlas') { if (p.atlasModel && st.atlasModel !== p.atlasModel && !setCtl('slay_atlas_model', p.atlasModel, 'change')) st.atlasModel = p.atlasModel; }
     else if (p.apiType === 'naistera') { if (p.naisteraModel && st.naisteraModel !== p.naisteraModel && !setCtl('slay_naistera_model', p.naisteraModel, 'change')) st.naisteraModel = p.naisteraModel; }
-    else if (!setCtl('slay_model', p.model || '', 'input')) st.model = p.model || '';
+    else if (p.apiType === 'novelai') {
+        // SLAY 5.x: модель NovelAI — список готовых или свой id; пишем в настройки, а список в панели просто показываем верно
+        if (p.novelModel) { st.novelModel = p.novelModel; st.novelCustomModel = p.novelCustomModel || ''; }
+        const sel = document.getElementById('slay_novel_model');
+        if (sel && p.novelModel) sel.value = [...sel.options].some(o => o.value === p.novelModel) ? p.novelModel : 'custom';
+    } else if (!setCtl('slay_model', p.model || '', 'input')) st.model = p.model || '';
     if (p.customBodyFormat && st.customBodyFormat !== undefined) st.customBodyFormat = p.customBodyFormat;
     saveAll();
     try { A.updatePrompt?.(); } catch { /* заметка о рисовалке — к следующему ответу */ }

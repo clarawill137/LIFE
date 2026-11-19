@@ -3545,6 +3545,8 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #chat .lf-pm-btn svg { width: 15px; height: 15px; pointer-events: none; }
 #chat .lf-pm-btn:active { opacity: 1; transform: scale(.94); }
 #chat .lf-pm-btn.card { left: 8px; }
+/* SLAY 5.x ставит рядом с ↻ кнопку «Скачать» — на то же место; тогда ✎ встаёт третьей */
+#chat .iig-img-wrap:has(> .iig-dl-btn) > .lf-pm-btn:not(.card):not(.err):not(.loose) { left: 92px; }
 #chat .lf-pm-btn.err { position: static; opacity: 1; width: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; margin-top: 8px; border-radius: 999px; }
 #chat .lf-pm-btn.err::after { content: 'промт'; font: 500 13px -apple-system, system-ui, sans-serif; }
 #chat .lf-pm-btn.loose { position: static; display: inline-grid; opacity: .8; vertical-align: top; margin: 4px 0 0 4px; }
