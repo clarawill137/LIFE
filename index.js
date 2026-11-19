@@ -93,6 +93,8 @@ import { initMend, mendWanted, mendPost, mendLast, setMesText } from './mend.js'
 import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar } from './taste.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
+import { initPrompts, paintPrompts, onPromptClick, pmPrompt, openPromptManager } from './prompts.js';
+import { sameButSrc } from './pmtags.js';
 import { initFight, fightPrompt, fightChron, fightAfterPost, fightSceneHtml, fightClick, fightRecs } from './fight.js';
 import { initDuel, duelPrompt, duelChron, duelAfterPost, duelSceneHtml, duelClick, duelRecs } from './duel.js';
 import { initBets, betsPrompt, betsChron, betsAfterPost, betsSceneHtml, betsClick, betsRecs } from './bets.js';
@@ -134,7 +136,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.0';
+const VERSION = '0.59.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -922,7 +924,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -1194,7 +1196,8 @@ async function runChron(i, { force = false } = {}) {
     const m = chat[i];
     if (!m) return;
     const store = chronStore();
-    const key = `${i}:${msgKey(m)}`;
+    let key = `${i}:${msgKey(m)}`;
+    const mes0 = m.mes, sw0 = m.swipe_id ?? 0;
     if (store[key] && !force) { if (ensureFix(i)) await ctx().saveChat(); return; }
     chronBusy.add(i);
     paintChips();
@@ -1225,7 +1228,13 @@ async function runChron(i, { force = false } = {}) {
         // ответ оборвался или пришёл битым — один переспрос с запасом токенов (ask.js), а не потерянный пост
         const j = await askJsonAs('Летописец', [{ role: 'system', content: chronSystem(askTitle, askDetail, { ...(so?.flags || {}), moodRule: MOOD_RULE, ext, shot: askShot }) }, { role: 'user', content: input }], (Number(s.chron.tokens) || 4000) + (askDetail ? 300 : 0) + (askShot ? 150 : 0) + (so?.tokens || 0) + ext.reduce((a, x) => a + (Number(x.tokens) || 0), 0) + 40);
         const res = normalizeResult(j);
-        if (chatArr()[i] !== m || msgKey(m) !== key.split(':').slice(1).join(':')) return; // пока думал — свайпнули
+        if (chatArr()[i] !== m) return; // чат сменился
+        if (msgKey(m) !== key.split(':').slice(1).join(':')) {
+            // 0.59: пока думал, SLAY дорисовал картинку — в тексте сменился только её путь, пост тот же:
+            // запись идёт под новым ключом (раньше ответ Летописца выбрасывался, как при свайпе)
+            if ((m.swipe_id ?? 0) !== sw0 || !sameButSrc(mes0, m.mes)) return; // свайпнули или поправили текст
+            key = `${i}:${msgKey(m)}`;
+        }
         m.horae_meta = m.horae_meta || emptyMeta();
         const { undo, kinds } = applyItemOps(m.horae_meta, worldState().items, res.items);
         reapplyManual(i);
@@ -1320,11 +1329,15 @@ async function drawDetail(key) {
     paintChips();
     try {
         await genIdle();
-        if (chatMeta() !== cm || !detailCurrent(key)) return;
+        // 0.59: запись могла переехать под новый ключ — SLAY дорисовал картинку поста, и в тексте сменился её путь.
+        // Пост тот же, запись та же (тот же объект) — деталь рисуем и кладём в неё, а не теряем.
+        const pi = Number(String(key).split(':')[0]);
+        const mine = () => detailCurrent(key) || chronOf(pi) === e;
+        if (chatMeta() !== cm || !mine()) return;
         const { refs, note } = e.det.motion === 'scan' ? { refs: [], note: '' } : await detailRefs(e.det.who);
         const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det', who: e.det.motion === 'scan' ? [] : (e.det.who || []) });
         if (chatMeta() !== cm) return; // чат сменился, пока рисовала
-        const e2 = chronStore()[key];
+        const e2 = chronStore()[key] || (chronOf(pi) === e ? e : null);
         if (e2) { e2.detImg = img; saveMeta(); }
     } catch (err) {
         console.warn('[Life] деталь', err);
@@ -1358,6 +1371,43 @@ function detailHtml(i) {
     </figure>`;
 }
 
+/** Перерисовать деталь сейчас (для окна промта): без очереди, ошибка — наружу. */
+async function redrawDetail(i) {
+    const cm = chatMeta();
+    const m = chatArr()[i];
+    const key = m ? `${i}:${msgKey(m)}` : '';
+    const e = chronStore()[key];
+    if (!e?.det) throw new Error('у поста нет детали');
+    detBusy.add(key);
+    paintChips();
+    try {
+        const { refs, note } = e.det.motion === 'scan' ? { refs: [], note: '' } : await detailRefs(e.det.who);
+        const img = await drawPicture(detailPrompt(e.det, e.detStyle, e.detFix, note), { aspect: '16:9', max: 1400, refs, prefix: 'life_det', who: e.det.motion === 'scan' ? [] : (e.det.who || []) });
+        if (chatMeta() !== cm) throw new Error('чат сменился, пока рисовалось');
+        const e2 = chronOf(i);
+        if (e2) { e2.detImg = img; saveMeta(); }
+        return img;
+    } finally {
+        detBusy.delete(key);
+        paintChips();
+    }
+}
+
+/** Деталь поста i — для окна промта (prompts.js): сам промт детали, перерисовка, версии. */
+function detailAdapter(i) {
+    const rec = () => chronOf(i);
+    return {
+        kind: 'detail', mes: i, title: `деталь · пост #${i}`, fixedAspect: true,
+        read() { const e = rec(); return e?.det ? { prompt: String(e.det.prompt || ''), aspect: '16:9', src: e.detImg || '', state: e.detImg ? 'ok' : 'wait', error: '' } : null; },
+        hid: () => `det:${i}:${chatArr()[i]?.swipe_id ?? 0}`,
+        engine: () => 'life',
+        extra() { const e = rec(); return `Life сам допишет к промту: «крупный план», стиль «${styleName(e?.detStyle || chatStyle()).toLowerCase()}»${e?.det?.who?.length ? `, рефы — ${e.det.who.join(', ')}` : ''}${e?.detFix ? `, поправку из ↻ «${e.detFix}»` : ''}.`; },
+        async save({ prompt }) { const e = rec(); if (!e?.det) throw new Error('деталь пропала'); e.det.prompt = String(prompt || '').slice(0, 900); saveMeta(); return true; },
+        async draw() { return { src: await redrawDetail(i) }; },
+        async setSrc(src) { const e = rec(); if (e) { e.detImg = src; saveMeta(); paintChips(); } },
+    };
+}
+
 /** Панель «перерисовать» под деталью — стиль, правка, другая деталь (как у кадров). */
 function detPickHtml(i) {
     const m = chatArr()[i];
@@ -1381,6 +1431,7 @@ function detPickHtml(i) {
         <div class="lf-shot-pick-b">
             <button data-det="pk-go" class="on">${icon('refresh')} Перерисовать</button>
             <button data-det="pk-new" title="Летописец выберет из поста другой момент">${icon('sparkles')} Другая деталь</button>
+            ${scan ? '' : `<button data-det="pk-pm" title="Промт детали: посмотреть, поправить словами, версии">${icon('pencil')}</button>`}
             <button data-det="pk-x" title="Закрыть">${icon('x')}</button>
         </div>
     </div>`;
@@ -1422,6 +1473,13 @@ async function onDetailClick(b, el) {
     if (!act.startsWith('pk-') || detPick?.key !== key) return;
     detPick.fix = el.querySelector('.lf-shot-fix')?.value?.trim() || detPick.fix || '';
     if (act === 'pk-x') { detPick = null; paintChips(); return; }
+    if (act === 'pk-pm') {
+        // стиль, правка и люди из панели — сначала в запись: окно промта рисует по ним же
+        e.detStyle = detPick.style; e.detFix = detPick.fix; if (e.det) e.det.who = detPick.who || [];
+        detPick = null; saveMeta(); paintChips();
+        openPromptManager(detailAdapter(Number(key.split(':')[0])));
+        return;
+    }
     if (act === 'pk-style') { if (b.dataset.v) detPick.style = b.dataset.v; paintChips(); return; }
     if (act === 'pk-who') {
         const n = b.dataset.v;
@@ -1827,7 +1885,7 @@ function decorate() {
         const s = settings();
         const mesEls = chatEl.querySelectorAll(':scope > .mes[mesid]');
         if (!s.enabled || !hasChat()) {
-            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelectorAll('.lf-pchips, .lf-shot, .lf-shot-sug, .lf-shot-btn').forEach(x => x.remove()); });
+            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelectorAll('.lf-pchips, .lf-shot, .lf-shot-sug, .lf-shot-btn, .lf-pm-btn').forEach(x => x.remove()); });
             return;
         }
         // чат остаётся сплошным: только прячем служебные отметки Life и (по желанию) ставим тонкую черту, где сменилось место
@@ -1868,6 +1926,7 @@ function hookChat() {
 }
 
 async function onChatClick(ev) {
+    try { if (onPromptClick(ev)) return; } catch (e) { console.warn('[Life] промты', e); }
     // режим правки поста: тап по абзацу
     try { if (fixTap(ev)) return; } catch (e) { console.warn('[Life] правка', e); }
     try { if (onArtPick(ev)) return; } catch (e) { console.warn('[Life] карточка', e); }
@@ -4191,7 +4250,7 @@ jQuery(async () => {
         // у кого своя карточка в ST — не NPC: из «Людей» вон
         try { const n = peopleDropCards(); if (n) console.info(`[Life] люди: убрала с карточками ${n}`); } catch (e) { console.warn('[Life] люди: карточки', e); }
     }, 3000);
-    initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, repaint: () => paintChips() });
+    initShots({ ...simApi, chronOf, hash, plainText, sameName, wardrobeWorn, faceRef, cutMusic, namesInText, openPrompt: (ad) => openPromptManager(ad), repaint: () => paintChips() });
     initPress({ ...simApi, faceRef });
     // для патча телефона (phone-draw): те же лица, что в кадрах и СМИ
     globalThis.LifeFaces = { face: faceRef, canon: canonName, inText: namesInText };
@@ -4293,6 +4352,11 @@ jQuery(async () => {
     hubInputs.push(oocInput, langInput);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 14000);
     painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
+    // «Промты» (0.59): ✎ у картинок — промт, правка словами, версии, источники SLAY
+    try {
+        initPrompts({ ...extApi, faceRef, namesInText });
+        painters.push((el, id) => paintPrompts(el, id));
+    } catch (e) { console.warn('[Life] промты: старт', e); }
     chatClicks.push((act, el) => fixClick(act, el));
     hubMods.push({ pre: 'fx-', click: fixClick, label: 'Правка' });
     hubMods.push({ pre: 'era-', click: eraClick, label: 'Эпоха' }, { pre: 'rt-', click: routeClick, label: 'Дорога' });
@@ -4398,6 +4462,10 @@ jQuery(async () => {
         globalThis.LifeBridge.register({
             id: 'life-see',
             prompt: (type) => seePrompt(type),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-pm',
+            prompt: (type) => pmPrompt(type),
         });
         globalThis.LifeBridge.register({
             id: 'life-steps',

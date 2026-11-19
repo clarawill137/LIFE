@@ -142,6 +142,7 @@ function pickHtml(c) {
         <div class="lf-shot-pick-b">
             <button data-sh="pk-go" class="on">${icon('refresh')} Перерисовать</button>
             <button data-sh="pk-new">${icon('camera')} Другой ракурс</button>
+            ${A.openPrompt ? `<button data-sh="pk-pm" title="Промт кадра: посмотреть, поправить словами, версии">${icon('pencil')}</button>` : ''}
             <button data-sh="pk-x" title="Закрыть">${icon('x')}</button>
         </div>
     </div>`;
@@ -299,6 +300,18 @@ function pickClick(box, act, b) {
     pick.fix = box.querySelector('.lf-shot-fix')?.value?.trim() || '';
     if (act === 'pk-x' || !c) { pick = null; A.repaint(); return; }
     if (act === 'pk-style') { if (b?.dataset.v) pick.style = b.dataset.v; A.repaint(); return; }
+    if (act === 'pk-pm') {
+        // стиль и поправка из панели — в кадр: окно промта рисует по ним же; у кат-сцены — тот кадр, что сейчас на экране
+        const fs = [...(box.parentNode?.querySelectorAll(`[data-shot="${CSS.escape(c.id)}"] .lf-shot-f`) || [])];
+        const k = Math.max(0, fs.findIndex(x => x.classList.contains('on')));
+        c.style = styleById(pick.style || c.style || chatStyle())[0];
+        c.fix = pick.fix;
+        pick = null;
+        A.saveMeta();
+        A.repaint();
+        A.openPrompt?.(shotAdapter(c.id, Math.min(k, c.frames.length - 1)));
+        return;
+    }
     const { style, fix } = pick;
     pick = null;
     if (act === 'pk-go') redraw(c, { style, fix });
@@ -490,6 +503,52 @@ async function redraw(c, { style = '', fix = '' } = {}) {
         A.saveMeta();
         A.repaint();
     }
+}
+
+/** Перерисовать один кадр по его промту (для окна промта): старая картинка стоит, пока рисуется новая; ошибка — наружу. */
+async function redrawFrame(c, k) {
+    const f = c.frames[k];
+    if ([...busy.values()].some(w => w.key === c.key && w.redo === c.id)) throw new Error('этот кадр уже перерисовывается');
+    const { loc } = stateAt(c.mes);
+    const sid = styleById(c.style || chatStyle())[0];
+    const { refs, note } = await refsFor(f.who || [], loc);
+    const img = await A.drawPicture(imagePrompt(f, note, sexNow(c.mes), sid, c.fix || ''), { aspect: '16:9', refs, prefix: c.kind === 'cut' ? 'life_cut' : 'life_shot', max: 1600, who: (f.who || []).map(A.canonName) });
+    if (!list().includes(c)) throw new Error('кадр убрали, пока рисовалось');
+    f.img = img;
+    c.style = sid;
+    A.saveMeta();
+    A.repaint();
+    return img;
+}
+
+/** Кадр (или один кадр кат-сцены) — для окна промта (prompts.js): сам промт кадра, перерисовка, версии. */
+export function shotAdapter(id, k = 0) {
+    const get = () => list().find(x => x.id === id) || null;
+    const fr = () => get()?.frames?.[k] || null;
+    const c0 = get();
+    return {
+        kind: 'shot', mes: c0?.mes, fixedAspect: true,
+        title: `${c0?.kind === 'cut' ? `кат-сцена, кадр ${k + 1}` : 'кадр'} · пост #${c0?.mes}`,
+        read() { const f = fr(); return f ? { prompt: String(f.prompt || ''), aspect: '16:9', src: f.img || '', state: f.img ? 'ok' : 'wait', error: '' } : null; },
+        hid: () => `shot:${id}:${k}`,
+        engine: () => 'life',
+        extra() {
+            const c = get(), f = fr();
+            if (!c || !f) return '';
+            return `Life сам допишет к промту: стиль «${styleName(c.style || chatStyle()).toLowerCase()}»${f.who?.length ? `, рефы — ${f.who.join(', ')}` : ''}${c.fix ? `, поправку из ↻ «${c.fix}»` : ''}.`;
+        },
+        async save({ prompt }) {
+            const f = fr();
+            if (!f) throw new Error('кадр пропал');
+            f.prompt = String(prompt || '').slice(0, 1800);
+            // кто в кадре — по именам в новом промте: «только он» убирает и её реф
+            try { const who = (A.namesInText?.(f.prompt) || []).map(A.canonName).filter(Boolean); if (who.length) f.who = who; } catch { /* как было */ }
+            A.saveMeta();
+            return true;
+        },
+        async draw() { const c = get(); if (!c || !fr()) throw new Error('кадр пропал'); return { src: await redrawFrame(c, k) }; },
+        async setSrc(src) { const f = fr(); if (f) { f.img = src; A.saveMeta(); A.repaint(); } },
+    };
 }
 
 export function shotsBusy() { return busy.size; }
