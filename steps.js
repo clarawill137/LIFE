@@ -56,6 +56,15 @@ function addStep(r, i, src) {
     return { L, st };
 }
 
+/** Мост: сколько ступеней прожито вдвоём (лестницы, где есть оба) — { n, themes }. */
+export function stepsBetween(a, b) {
+    try {
+        if (!A?.hasChat?.() || !stepsOn()) return { n: 0, themes: [] };
+        const both = M().list.filter(L => L.who.some(n => A.sameName(n, a)) && (!b || L.who.some(n => A.sameName(n, b)) || L.who.length === 1));
+        return { n: both.reduce((k, L) => k + L.steps.length, 0), themes: both.map(L => L.theme).slice(0, 12) };
+    } catch { return { n: 0, themes: [] }; }
+}
+
 // ───────────── Летописец ─────────────
 
 const RULE = `

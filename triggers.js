@@ -129,9 +129,13 @@ export function trigPrompt(type) {
         const st = stOf(h.who, h.tr);
         if (!st.lvl) continue;
         const mine = A.sameName(h.who, user);
+        // код-мозг: нервы сырые (недосып, боль, накопилось) — то же слово бьёт на ступень сильнее
+        let raw = false;
+        try { raw = !mine && !!globalThis.LifeBrain?.raw?.(h.who); } catch { /* */ }
+        const lvl = Math.min(3, st.lvl + (raw ? 1 : 0));
         parts.push(mine
             ? `в посте прозвучало «${h.word}» — триггер ${A.shortName(h.who)} (${h.tr.t}); её реакцию пишет она сама — персонажи замечают внешнее и реагируют`
-            : `в посте прозвучало «${h.word}» — триггер ${A.shortName(h.who)} (${h.tr.t}), сила сейчас: ${LVL[st.lvl]}. ${h.tr.how ? `Как это у него: ${h.tr.how}.` : ''} Сыграй реакцию по-настоящему, без мелодрамы и без мгновенного «всё в порядке»`);
+            : `в посте прозвучало «${h.word}» — триггер ${A.shortName(h.who)} (${h.tr.t}), сила сейчас: ${LVL[lvl]}${lvl > st.lvl ? ' — нервы сейчас сырые, бьёт сильнее обычного' : ''}. ${h.tr.how ? `Как это у него: ${h.tr.how}.` : ''} Сыграй реакцию по-настоящему, без мелодрамы и без мгновенного «всё в порядке»`);
     }
     const quiet = live.filter(([who, tr]) => stOf(who, tr).lvl > 0 && !A.sameName(who, user)).map(([who, tr]) => `${A.shortName(who)} — ${tr.t.toLowerCase()} (${LVL[stOf(who, tr).lvl]})`);
     if (!parts.length && !quiet.length) return '';

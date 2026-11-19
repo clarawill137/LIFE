@@ -118,7 +118,12 @@ import { initBicker, bickerPrompt, bickerChron, bickerAfterPost, bickerHtml, bic
 import { homeBroken, sleepDebtOf } from './home.js';
 // мост: органы чувств для соседних расширений (код-мозг)
 import { hurtCount } from './hurt.js';
-import { innerNeeds, innerStateOf, innerSetState } from './inner.js';
+import { innerNeeds, innerStateOf, innerSetState, innerWants } from './inner.js';
+import { underOf } from './under.js';
+import { knowKept } from './know.js';
+import { powersFx } from './powers.js';
+import { stepsBetween } from './steps.js';
+import { coreAdd } from './ooc.js';
 import { bickerPatience } from './bicker.js';
 import { trigAt } from './triggers.js';
 import { homeLoc as simHomeLoc, petsList as simPetsList } from './sim.js';
@@ -139,7 +144,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.1';
+const VERSION = '0.58.2';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4179,8 +4184,14 @@ globalThis.LifeBridge = {
             mood: () => moodNow(),
             state: (who) => innerStateOf(who),                                     // состояние из «Внутри»
             setState: (who, id, why, i, src) => innerSetState(who, id, why, i, src),
+            // 0.58.2
+            under: (who) => underOf(who),                                          // последний слой «под словами»: { th, sub, fear, mes }
+            kept: (who, from) => knowKept(who, from),                              // тайны, которые он держит от from: { n, list }
+            wants: (who) => innerWants(who),                                       // свои желания: [{ t, mes, voiced }]
+            fx: (who) => powersFx(who),                                            // действующие эффекты: [{ what, left }]
+            steps: (a, b) => stepsBetween(a, b),                                   // прожитое вдвоём: { n, themes }
         },
-        lore: { about: (who, o) => loreFor(who, o), card: (who, max) => cardText(who, max), core: (who) => coreOf(who), key: (who) => simLifeKey(who) },
+        lore: { about: (who, o) => loreFor(who, o), card: (who, max) => cardText(who, max), core: (who) => coreOf(who), key: (who) => simLifeKey(who), coreAdd: (who, line) => coreAdd(who, line) },
         // полки: свой трекер в Сцене, свой блок в «Персонаж → Жизнь → Психика», свои строки в «Что записал пост»
         shelf: {
             tracker: (t) => addTracker(t),

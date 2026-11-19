@@ -333,6 +333,14 @@ export function innerNeeds(who) {
     } catch { return null; }
 }
 
+/** Желания, которые он носит в себе: [{ t, mes, voiced }] — voiced: номер поста, где сказал вслух, или null. */
+export function innerWants(who) {
+    try {
+        if (!innerOn(who)) return [];
+        return I(who).wants.filter(w => w.status === 'on').map(w => ({ t: w.t, mes: w.mes, voiced: w.voiced ?? null }));
+    } catch { return []; }
+}
+
 /** Какое состояние стоит сейчас: { id, manual, src } или null. */
 export function innerStateOf(who) {
     try {

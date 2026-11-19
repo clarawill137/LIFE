@@ -30,6 +30,10 @@ function M() {
 const listOf = (who) => { const k = Object.keys(M().by).find(n => A.sameName(n, who)); return k ? M().by[k] : []; };
 function fxLeft(x) { const now = storyNow(A); const gone = x.ts && now !== null ? now - x.ts : Date.now() - (x.at || Date.now()); return x.hours * 3600000 - gone; }
 const fxLive = () => M().fx.filter(x => !x.off && fxLeft(x) > 0);
+/** Мост: что сейчас действует на человека — [{ what, left }] (left — мс). */
+export function powersFx(who) {
+    try { return A?.hasChat?.() && on() ? fxLive().filter(x => A.sameName(x.who, who)).map(x => ({ what: x.what, left: fxLeft(x) })) : []; } catch { return []; }
+}
 
 const RULE = `
 fx — действующие на человека вещества и эффекты, которые НАЧАЛИСЬ или КОНЧИЛИСЬ в этом посте (укол, сыворотка, седативное, яд, алкоголь, обезболивающее, наркотик, чары): [{"who":"на ком","what":"что и как действует, 2-8 слов","hours":4,"st":"on|off"}]. hours — на сколько примерно хватит. Нечего — [].`;

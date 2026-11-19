@@ -49,6 +49,18 @@ export async function oocCollect(who) {
     return list.length;
 }
 
+/** Мост: дописать строку в ядро характера (например, когда сломалось старое убеждение). */
+export function coreAdd(who, line) {
+    const t = String(line || '').replace(/^[•\-–—*\s]+/, '').trim().slice(0, 240);
+    if (!t) return false;
+    const k = keyOf(A.canonName(who));
+    const cur = String(cfg().prof[k]?.text || '').trim();
+    if (cur.includes(t)) return false;
+    cfg().prof[k] = { text: `${cur ? `${cur}\n` : ''}• ${t}`.slice(0, 3000), at: Date.now(), hand: true };
+    A.saveSettings();
+    return true;
+}
+
 let ensured = '';
 /** Фоном (открыли чат): у главных без ядра — собрать по одному. */
 export async function oocEnsure() {

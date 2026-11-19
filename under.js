@@ -67,6 +67,15 @@ function latest() {
     return [...out.values()];
 }
 
+/** Мост: последний слой «под словами» человека — { th, sub, fear, mes } или null. */
+export function underOf(who) {
+    try {
+        if (!A?.hasChat?.() || !on()) return null;
+        const r = latest().find(x => A.sameName(x.who, who));
+        return r ? { th: r.th, sub: r.sub, fear: r.fear, mes: r.mes } : null;
+    } catch { return null; }
+}
+
 export function underPrompt(type) {
     if (!A?.hasChat?.() || !on() || !cfg().feed || type === 'quiet' || type === 'impersonate') return '';
     const here = (A.worldState().scene?.characters_present || []).map(A.canonName);
