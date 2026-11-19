@@ -104,7 +104,14 @@ import { initBrew, brewPrompt, brewAfterPost, brewSceneHtml, brewClick } from '.
 import { initFactions, facPrompt, facChron, facAfterPost, facHtml, facClick, facRecs } from './factions.js';
 import { initArchive, archiveHtml } from './archive.js';
 import { handOf } from './hand.js';
-import { initKnow, knowPrompt, knowChron, knowAfterPost, paintKnow, knowSceneHtml, knowClick, knowRecs } from './know.js';
+import { initKnow, knowPrompt, knowChron, knowAfterPost, paintKnow, knowSceneHtml, knowClick, knowRecs, knowAdd } from './know.js';
+import { initPair, pairPrompt, pairHtml, pairClick } from './pair.js';
+import { initHome, homePrompt, homeChron, homeAfterPost, homeSceneHtml, homeClick, homeRecs } from './home.js';
+import { initPowers, powersPrompt, powersChron, powersAfterPost, powersHtml, powersSceneHtml, powersClick, powersRecs } from './powers.js';
+import { initPeek, peekSceneHtml, peekClick } from './peek.js';
+import { initStats, statsPrompt, statsChron, statsAfterPost, statsSceneHtml, statsAddHtml, statsClick } from './stats.js';
+import { initKin, kinHtml, kinClick } from './kin.js';
+import { initPanel, trackersBar, panelClick } from './panel.js';
 import { initTrace, paintTrace, traceClick } from './trace.js';
 import { initDice, dicePrompt, diceAfterPost, diceSceneHtml, diceClick } from './dice.js';
 import { initAide, aideSceneHtml, aideClick } from './aide.js';
@@ -112,7 +119,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.54.0';
+const VERSION = '0.55.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -900,7 +907,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники' };
+const BRIDGE_NAMES = { 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -1718,7 +1725,7 @@ const painters = [];
 const chatClicks = [];
 // модули со своими кнопками в хабе: префикс data-act → обработчик; и свои поля (change)
 const hubMods = [];
-const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac', 'know', 'trace', 'aide', 'city'];
+const HUD_KEYS = ['fight', 'duel', 'bets', 'under', 'scars', 'diary', 'heat', 'brew', 'fac', 'know', 'trace', 'aide', 'city', 'pair', 'home', 'powers', 'stats', 'peek'];
 const hubInputs = [];
 
 function paintChips() {
@@ -2048,6 +2055,7 @@ function renderScene() {
         const mood = moodOf(n, st);
         return `<button class="lf-pers" data-act="person" data-name="${esc(n)}">${ava(n, 'md')}<span class="lf-pers-n">${esc(shortName(n))}</span>${mood ? `<span class="lf-pers-m">${esc(cut(mood, 20))}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
+    ${isCur ? (() => { try { return trackersBar(); } catch (e) { console.warn('[Life] трекеры', e); return ''; } })() : ''}
     ${isCur ? (() => { try { return stageHtml(); } catch (e) { console.warn('[Life] мизансцена', e); return ''; } })() : ''}
     ${isCur ? (() => { try { return simSceneHtml(); } catch (e) { console.warn('[Life] Жизнь: сцена', e); return ''; } })() : ''}
     ${isCur ? bridgeEach(m => m.sceneHtml?.(), 'сцена').join('') : ''}
@@ -2656,6 +2664,8 @@ function renderWorld() {
         body = (() => { try { return facHtml(); } catch (e) { console.warn('[Life] фракции', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'city') {
         body = (() => { try { return cityHtml(); } catch (e) { console.warn('[Life] город', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'kin') {
+        body = (() => { try { return kinHtml(); } catch (e) { console.warn('[Life] семья', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'arch') {
         body = (() => { try { return archiveHtml(); } catch (e) { console.warn('[Life] архив', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'rules') {
@@ -2674,7 +2684,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['taste', 'Вкус'], ['rules', 'Правила'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['kin', 'Семья'], ['taste', 'Вкус'], ['rules', 'Правила'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2739,6 +2749,11 @@ function renderCfg() {
         ${sw('on', '📚 под ответом: что сработало из лорбуков', s.trace, 'trace.on')}
         ${sw('on', 'Город сегодня: афиша, службы, цены, что говорят люди', s.city, 'city.on')}
         ${sw('on', 'Кнопка «Спросить про сюжет» в Сцене', s.aide, 'aide.on')}
+        ${sw('on', 'Тропы, курс пары и хедканоны', s.pair, 'pair.on')}
+        ${sw('on', 'Быт: поломки, долги, недосып, «не по погоде»', s.home, 'home.on')}
+        ${sw('on', 'Способности с пределами и действующие эффекты', s.powers, 'powers.on')}
+        ${sw('on', 'Свои статы', s.stats, 'stats.on')}
+        ${sw('on', 'Подслушанное', s.peek, 'peek.on')}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
@@ -4472,6 +4487,38 @@ jQuery(async () => {
         B2.register({ id: 'life-city', prompt: (type) => cityPrompt(type), afterPost: () => cityAfterPost() });
         B2.register({ id: 'life-aide', sceneHtml: () => aideSceneHtml() });
     } catch (e) { console.warn('[Life] 0.53', e); }
+    // 0.55: полка трекеров, тропы и хедканоны, быт, способности, подслушанное, свои статы, семья
+    try {
+        initPair(extApi); initHome(extApi); initStats(extApi);
+        initPowers({ ...extApi, coreOf: (w) => coreOf(w) });
+        initPeek({ ...extApi, peopleList, daysBrief, promptParts: () => promptParts, knowAdd: (t, who) => knowAdd(t, who) });
+        initKin({ ...extApi, peopleList });
+        hubMods.push({ pre: 'pr-', click: pairClick, label: 'Тропы и хедканоны' }, { pre: 'hm-', click: homeClick, label: 'Быт' }, { pre: 'pw-', click: powersClick, label: 'Способности' },
+            { pre: 'ovh-', click: peekClick, label: 'Подслушанное' }, { pre: 'sv-', click: statsClick, label: 'Свои статы' }, { pre: 'kin-', click: kinClick, label: 'Семья' }, { pre: 'trk-', click: panelClick, label: 'Трекеры' });
+        mindParts.push((who) => pairHtml(who), (who) => powersHtml(who));
+        addRecs(homeRecs, powersRecs);
+        const B3 = globalThis.LifeBridge;
+        B3.register({ id: 'life-pair', prompt: (type) => pairPrompt(type) });
+        B3.register({ id: 'life-home', prompt: (type) => homePrompt(type), chron: () => homeChron(), afterPost: (i, j) => homeAfterPost(i, j), sceneHtml: () => homeSceneHtml() });
+        B3.register({ id: 'life-powers', prompt: (type) => powersPrompt(type), chron: () => powersChron(), afterPost: (i, j) => powersAfterPost(i, j), sceneHtml: () => powersSceneHtml() });
+        B3.register({ id: 'life-stats', prompt: (type) => statsPrompt(type), chron: () => statsChron(), afterPost: (i, j) => statsAfterPost(i, j), sceneHtml: () => statsSceneHtml() });
+        B3.register({ id: 'life-peek', sceneHtml: () => peekSceneHtml() });
+        const cmx = () => chatMeta();
+        const cnt = (n) => (n ? String(n) : '');
+        const sOn = (k) => () => settings()[k]?.on !== false;
+        initPanel(extApi, [
+            { id: 'brew', ico: '⏳', name: 'Назревает', on: sOn('brew'), hint: 'К чему идёт накопленное: недосып, раны, деньги, обещания. «Предложить модели» — на один ответ.', state: () => cnt((cmx().brew?.list || []).filter(x => x.st === 'new' || x.st === 'armed').length), html: () => brewSceneHtml() },
+            { id: 'know', ico: '👁', name: 'Кто что знает', on: sOn('know'), hint: 'Сведения не для всех и кто в курсе. Тому, кто пишет ответ, модель получает, чего он не знает.', state: () => cnt((cmx().know?.facts || []).filter(f => !f.pub).length), html: () => knowSceneHtml() },
+            { id: 'fight', ico: '⚔', name: 'Бой', on: sOn('fight'), hint: 'Оживает сам, когда в сцене драка, перестрелка или погоня: расстановка, адреналин, потом отходняк.', idle: 'Сейчас никто не дерётся.', state: () => (cmx().fight?.stage && cmx().fight.stage !== 'over' ? 'идёт' : ''), html: () => fightSceneHtml() },
+            { id: 'duel', ico: '🗣', name: 'Дуэль', on: sOn('duel'), hint: 'Оживает сама во время спора, ссоры, допроса: кто ведёт и кто что уступил.', idle: 'Сейчас никто не спорит.', state: () => (cmx().duel?.cur ? 'идёт' : ''), html: () => duelSceneHtml() },
+            { id: 'bets', ico: '🎲', name: 'Пари', on: sOn('bets'), hint: 'Летописец сам замечает пари: кто с кем, на что, что на кону. Проигравший должен, пока не тапнешь «отдал».', idle: 'Открытых пари нет.', state: () => cnt((cmx().bets?.list || []).filter(x => x.st === 'open' || (!x.paid && x.stake)).length), html: () => betsSceneHtml() },
+            { id: 'heat', ico: '🔥', name: 'Близость', on: sOn('heat'), hint: '18+. Ход сцены, часы и следы на теле — сами; кубик близости — по кнопке.', idle: 'Сцена не идёт, следов нет.', state: () => (cmx().heat?.cur ? 'идёт' : cnt((cmx().heat?.marks || []).length)), html: () => `${heatSceneHtml()}${diceSceneHtml()}`, extra: () => (cmx().dice?.cur ? '' : '<button class="lf-btn full" data-act="dc-roll">🎲 Бросить кубик близости</button>') },
+            { id: 'home', ico: '🔧', name: 'Быт', on: sOn('home'), hint: 'Что сломано и не починено, кто кому должен, недосып за неделю, кто одет не по погоде; действующие вещества и эффекты.', idle: 'Ничего не сломано, долгов нет.', state: () => cnt((cmx().home?.broken || []).filter(x => !x.fixed).length + (cmx().home?.debts || []).filter(x => !x.paid).length), html: () => `${homeSceneHtml()}${powersSceneHtml()}` },
+            { id: 'stats', ico: '📈', name: 'Свои статы', on: sOn('stats'), hint: 'Придумай показатель — «Ревность», «Подозрения Тони» — Летописец будет вести его после каждого поста.', idle: 'Пока ни одного.', state: () => cnt((cmx().stats?.defs || []).length), html: () => statsSceneHtml(), extra: () => ((cmx().stats?.defs || []).length ? '' : statsAddHtml()) },
+            { id: 'peek', ico: '👂', name: 'Подслушать', on: sOn('peek'), hint: 'Разговор за кадром, которого твоя героиня не слышала. Читаешь только ты.', state: () => cnt((cmx().peek?.list || []).length), html: () => peekSceneHtml() },
+            { id: 'aide', ico: '💬', name: 'Спросить', on: sOn('aide'), hint: 'Чат на полях про сюжет: почему он так, что дальше. В историю не попадает.', html: () => aideSceneHtml() },
+        ]);
+    } catch (e) { console.warn('[Life] 0.55', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }

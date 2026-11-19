@@ -172,3 +172,13 @@ export function knowRecs(i) {
     }
     return out;
 }
+
+/** Записать знание со стороны (например, из «Подслушанного»): что и кто знает. */
+export function knowAdd(t, who = []) {
+    const s = M();
+    const text = str(t, 140);
+    if (!text || s.facts.some(f => similar(A, f.t, text, 0.7))) return false;
+    s.facts.push({ id: `k${++s.seq}`, t: text, who: Object.fromEntries(who.map(n => [A.canonName(n), { how: 'saw', mes: -1 }])), mes: -1, src: 'me' });
+    A.saveMeta(); A.updatePrompt();
+    return true;
+}
