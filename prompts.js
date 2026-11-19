@@ -506,13 +506,19 @@ function tagAdapter(i, k0) {
         async draw(onStep) {
             return (await slayDraw(i, idx(), onStep)) || lifeDraw(i, cur, onStep);
         },
+        /** Вернуть в пост прежнюю картинку. Отдаёт путь, каким он записан. */
         async setSrc(src) {
             const m = msg(), t = cur();
             if (!m || !t) throw new Error('картинка пропала из поста');
             const node = nodeFor(i, idx());
-            swapTag(i, m, t, withSrc(t, src));
+            // SLAY 5.x помнит «старый путь → новый» и при каждой перерисовке поста «лечит» старые пути на новые. Прежняя
+            // картинка — как раз старый путь, и он вернул бы на её место последнюю. Метка в адресе делает путь для него
+            // незнакомым; файл тот же (сервер метку не читает).
+            const put = src.includes('/user/images/') ? `${src.split(/[?#]/)[0]}?lf=${String(A.uid()).slice(0, 6)}` : src;
+            swapTag(i, m, t, withSrc(t, put));
             await A.ctx().saveChat();
-            if (node?.tagName === 'IMG' && node.closest('.iig-img-wrap')) node.setAttribute('src', src); else await rerender(i);
+            if (node?.tagName === 'IMG' && node.closest('.iig-img-wrap')) node.setAttribute('src', put); else await rerender(i);
+            return put;
         },
     };
 }
@@ -1231,11 +1237,11 @@ async function backTo(v) {
     paint();
     try {
         await my.ad.save({ prompt: v.p, aspect: v.ar || my.aspect, style: my.ad.styled ? v.sn || '' : undefined });
-        await my.ad.setSrc(v.src);
+        const put = await my.ad.setSrc(v.src);
         my.prompt = my.base = v.p;
         my.pmStyle = my.basePm = my.ad.styled ? v.sn || '' : '';
         if (v.ar) my.aspect = my.baseAspect = v.ar;
-        my.src = v.src;
+        my.src = put || v.src;
         my.state = 'ok';
         my.err = null;
         my.note = '';
