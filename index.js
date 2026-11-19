@@ -26,7 +26,7 @@ import { initWeather, updateWeather, cycleWx, wxLevel, wxLabel } from './weather
 import { initZr } from './zr.js';
 import { initVoice, voicePrompt, voiceHtml, voiceRowHtml, voiceClick } from './voice.js';
 import { initSlip, slipChron, slipAfterPost, paintSlip, slipClick, slipCfgHtml, slipInput, slipAuto, locate } from './slip.js';
-import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick, eventsBetween as calBetween, today as calToday } from './cal.js';
+import { initCal, calPrompt, calChron, calAfterPost, calHtml, calClick, eventsBetween as calBetween, today as calToday, calAdd } from './cal.js';
 import { initSkip, skipHtml, skipClick, skipInput } from './skip.js';
 import { initStage, stagePrompt, stageChron, stageAfterPost, stageHtml, stageClick } from './stage.js';
 import { initWhois, whereAll, whoAtPin, whoisHtml } from './whois.js';
@@ -111,7 +111,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.53.1';
+const VERSION = '0.53.2';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -870,7 +870,7 @@ function pendingMarker() {
 
 // ───────────── мост для соседних расширений (Зёрнышко и др.) ─────────────
 // Соседнее расширение зовёт LifeBridge.register({ id, init(api), prompt(type), chron(), afterPost(i, json, msg), personRow(who), renderPerson(rest), sceneHtml(), calEvents(from, to) }).
-// calEvents — свои события в календарь Life: [{ key, d: 'ГГГГ-ММ-ДД', title, kind, who, time }]. Модулям в api: cal (today, between), season (now, holidays), tastes(who), brief(who).
+// calEvents — свои события в календарь Life: [{ key, d: 'ГГГГ-ММ-ДД', title, kind, who, time }]. Модулям в api: cal (today, between, add), season (now, holidays), tastes(who), brief(who).
 
 const bridgeMods = [];
 function bridgeEach(fn, label = '') {
@@ -4094,7 +4094,7 @@ const mindParts = [];
 globalThis.LifeBridge = {
     version: VERSION,
     api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon,
-        cal: { today: () => calToday(), between: (from, to) => calBetween(from, to) },
+        cal: { today: () => calToday(), between: (from, to) => calBetween(from, to), add: (e) => calAdd(e) },
         season: { now: () => seasonNow(), holidays: (y) => seasonHolidays(y) },
         tastes: (who) => tastesOf(who), brief: (who) => briefOf(who),
         rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },

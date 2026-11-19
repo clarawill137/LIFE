@@ -307,6 +307,23 @@ function dayCheck() {
 }
 
 /** Отметить события (перемотка): done/cancel. */
+/** Для соседних модулей (мост): записать событие, как если бы его добавили руками. Возвращает id; такое же уже есть — его id; не вышло — ''. */
+export function calAdd(e) {
+    const t = String(e?.t || e?.title || '').trim().slice(0, 80);
+    const d = String(e?.d || '');
+    if (!A?.hasChat?.() || !t || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+    const c = M();
+    const dup = c.list.find(x => x.d === d && x.st !== 'cancel' && A.norm(x.t) === A.norm(t));
+    if (dup) return dup.id;
+    const kind = KINDS[e.kind] && e.kind !== 'bill' ? e.kind : 'plan';
+    const id = `c${++c.seq}`;
+    c.list.push({ id, t, d, time: /^\d{1,2}:\d{2}$/.test(String(e.time || '')) ? String(e.time) : '', who: (Array.isArray(e.who) ? e.who : []).map(n => A.canonName(n)).filter(Boolean).slice(0, 8),
+        kind, src: 'me', mes: null, st: 'open', yearly: e.yearly != null ? !!e.yearly : YEARLY.includes(kind), at: Date.now() });
+    A.saveMeta();
+    try { A.updatePrompt?.(); } catch { /* */ }
+    return id;
+}
+
 export function calMark(ids, st = 'done') {
     const c = M();
     let n = 0;
