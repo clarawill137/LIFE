@@ -128,9 +128,9 @@ export async function ritualFill(a, b) {
     const have = r.list.filter(x => !x.off && who.every(n => has(x, n)));
     const days = Object.values(A.chatMeta().days?.sum || {}).map(x => x?.text).filter(Boolean).slice(-12).join('\n');
     const pair = who.map(n => A.shortName(n)).join(' и ');
-    const j = await A.askJson([{ role: 'system', content: FILL_SYSTEM(pair) }, {
+    const j = await (A.askFillJson || A.askJson)([{ role: 'system', content: FILL_SYSTEM(pair) }, {
         role: 'user', content: [`Кто: ${who.join(', ')}`, have.length ? `Уже записано:\n${have.map(x => `- ${x.t}`).join('\n')}` : '', days ? `Коротко по дням:\n${days}` : '', `Выдержки из истории:\n${hist}`].filter(Boolean).join('\n\n'),
-    }], 2600, { what: 'Своё', check: (x) => Array.isArray(x?.ritual) });
+    }], 2600, { what: 'Своё', check: (x) => Array.isArray(x?.ritual) }, { who, acts: false });
     let n = 0;
     for (const it of j.ritual.slice(0, 10)) {
         const t = str(it?.t).slice(0, 90);

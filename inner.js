@@ -475,7 +475,9 @@ async function innerFill(who, mode) {
         x.thoughts.some(t => t.status === 'on') ? `Уже на уме (не повторяй): ${x.thoughts.filter(t => t.status === 'on').map(t => t.t).join('; ')}` : '',
         x.wants.some(t => t.status === 'on') ? `Уже хочет (не повторяй): ${x.wants.filter(t => t.status === 'on').map(t => t.t).join('; ')}` : '',
     ].filter(Boolean).join('\n\n');
-    const out = await A.askModel([{ role: 'system', content: mode === 'fill' ? FILL_SYSTEM : THINK_SYSTEM }, { role: 'user', content: input }], mode === 'fill' ? 1400 : 700);
+    // «Своё» по всей истории — большим заполнением (свод + умная модель); «подумать сейчас» — как раньше, из последнего
+    const msgs = [{ role: 'system', content: mode === 'fill' ? FILL_SYSTEM : THINK_SYSTEM }, { role: 'user', content: input }];
+    const out = mode === 'fill' && A.askFill ? await A.askFill(msgs, 1400, 'Своё', { who }) : await A.askModel(msgs, mode === 'fill' ? 1400 : 700);
     const j = A.extractJson(out);
     if (!j) throw new Error('модель не прислала JSON');
     const str = (v) => typeof v === 'string' ? v.trim() : '';

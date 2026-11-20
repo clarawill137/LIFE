@@ -111,6 +111,7 @@ import { initPowers, powersPrompt, powersChron, powersAfterPost, powersHtml, pow
 import { initPeek, peekSceneHtml, peekClick } from './peek.js';
 import { initStats, statsPrompt, statsChron, statsAfterPost, statsSceneHtml, statsAddHtml, statsClick } from './stats.js';
 import { initKin, kinHtml, kinClick } from './kin.js';
+import { initCodex, codexHtml, codexClick, codexReady, codexBehind, codexText, codexFelt, codexPerson, codexPair, withStory } from './codex.js';
 import { initPanel, trackersBar, panelClick, openTracker, addTracker } from './panel.js';
 import { initHouse, housePrompt, houseChron, houseAfterPost, houseHtml, houseClick, houseRecs, houseState, houseIrritants } from './house.js';
 import { initBills, billsPrompt, billsChron, billsAfterPost, billsHtml, billsClick, billsRecs, billsSpend, billsSweep, billsCalEvents, billsIrritants, billsState } from './bills.js';
@@ -145,7 +146,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.4';
+const VERSION = '0.59.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1108,6 +1109,63 @@ async function askModel(messages, maxTokens, label = '') {
     if (b.text.trim()) return b.text;
     if (a.thought || b.thought) throw new Error('пустой ответ Летописца: всё ушло в размышления — прибавь токенов (Мир → ⚙)');
     throw new Error(alt !== p ? 'пустой ответ Летописца — и у запасного профиля' : 'пустой ответ Летописца дважды — похоже, фильтр модели; помогает запасной профиль (Мир → ⚙)');
+}
+
+/**
+ * Умная модель — для больших разовых заполнений (свод истории, ядро характера, темперамент): один раз дорого, зато
+ * с полной картиной. Профиль — свой (Мир → ⚙) или тот же, что у Летописца; модель можно подменить по имени
+ * в пределах профиля (тот же ключ). Ждёт дольше. Не задана — обычный Летописец.
+ */
+async function askDeep(messages, maxTokens, label = '') {
+    const c = ctx();
+    const s = settings();
+    const ch = s.chron;
+    if (!ch.deepProfile && !ch.deepModel) return askModel(messages, maxTokens, label);
+    const who = label || callerLabel();
+    if (!c.ConnectionManagerRequestService?.sendRequest) throw new Error('в таверне нет Connection Manager');
+    const find = (name) => (name ? profiles().find(x => x.name === name) || profiles().find(x => x.id === name) : null);
+    const p = find(ch.deepProfile) || find(chronProfile());
+    if (!p) throw new Error('Выбери профиль умной модели или Летописца: Мир → ⚙');
+    const override = { ...(ch.deepModel ? { model: String(ch.deepModel).trim() } : {}), ...(ch.deepEffort ? { reasoning_effort: ch.deepEffort } : {}) };
+    const wait = (Number(ch.deepTimeoutSec) || 420) * 1000;
+    const once = async (tokens) => {
+        const ac = typeof AbortController === 'function' ? new AbortController() : null;
+        let timer = null;
+        try {
+            const r = await Promise.race([
+                c.ConnectionManagerRequestService.sendRequest(p.id, messages, tokens, ac ? { signal: ac.signal } : {}, override),
+                new Promise((_, rej) => { timer = setTimeout(() => { try { ac?.abort(); } catch { /* */ } rej(new Error('умная модель не ответила вовремя')); }, wait); }),
+            ]);
+            const text = String(typeof r === 'string' ? r : (r?.content ?? ''));
+            countCall(`${who}*`, messages, text + String(r?.reasoning || ''));
+            return text;
+        } catch (e) { countCall(`${who}*`, messages, ''); throw e; } finally { clearTimeout(timer); }
+    };
+    const base = Math.min(Number(maxTokens) || 4000, 32000);
+    let text = '';
+    try { text = await once(base); } catch (e) {
+        throw new Error(`умная модель («${p.name}»${ch.deepModel ? `, ${ch.deepModel}` : ''}): ${String(e?.message || e)} — проверь имя модели и баланс (Мир → ⚙)`);
+    }
+    if (text.trim()) return text;
+    await new Promise(res => setTimeout(res, 1200));
+    text = await once(Math.min(Math.round(base * 1.5), 32000));
+    if (text.trim()) return text;
+    throw new Error('умная модель дважды ответила пусто — похоже, фильтр или мысли съели токены');
+}
+const askDeepJson = makeAskJson({ ask: (m, t, w) => askDeep(m, t, w), parse: (t) => extractJson(t), base: () => Number(settings().chron.tokens) || 4000 });
+
+/** Поставить шкалу from → to в значение v (точкой отсчёта; запертую не трогает). Для заполнения по истории. */
+function relSet(from, to, f, v) {
+    if (!SCALES.some(x => x[0] === f) || sameName(from, to)) return false;
+    const cm = chatMeta();
+    const dk = dirKey(from, to);
+    if (Number.isFinite(cm.relPin?.[dk]?.[f])) return false;
+    const raw = relationsState(true)[pairKey(from, to)];
+    const cur = raw ? relSide(raw, from)[f] : scaleBase()[f];
+    cm.relBase = cm.relBase || {};
+    const b0 = { ...scaleBase(), ...((cm.pairBase || {})[pairKey(from, to)] || {}), ...(cm.relBase[dk] || {}) };
+    cm.relBase[dk] = { ...b0, [f]: b0[f] + Math.max(0, Math.min(100, Math.round(v))) - cur };
+    return true;
 }
 
 // Летописцу — за JSON с переспросом на обрезанный/битый ответ (ask.js)
@@ -2734,6 +2792,8 @@ function renderWorld() {
         body = (() => { try { return cityHtml(); } catch (e) { console.warn('[Life] город', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'kin') {
         body = (() => { try { return kinHtml(); } catch (e) { console.warn('[Life] семья', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
+    } else if (tab === 'codex') {
+        body = (() => { try { return codexHtml(); } catch (e) { console.warn('[Life] свод', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'arch') {
         body = (() => { try { return archiveHtml(); } catch (e) { console.warn('[Life] архив', e); return `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } })();
     } else if (tab === 'rules') {
@@ -2752,7 +2812,7 @@ function renderWorld() {
         <div class="lf-hint">Простой скачок — новая глава со строчкой для модели, без прокрутки. Время дальше ведёт Horae.</div>`;
     } else body = renderCfg();
     return `<div class="lf-pagehead"><h1>Память мира</h1><span class="lf-subtitle">${icon('sparkles')} Хроника событий, состояние и течение времени</span></div>
-    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['kin', 'Семья'], ['taste', 'Вкус'], ['rules', 'Правила'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
+    ${seg([['days', 'Дни'], ['cal', 'Календарь'], ['events', 'События'], ['rumors', 'СМИ'], ['heroes', 'Герои'], ['fac', 'Фракции'], ['city', 'Город'], ['kin', 'Семья'], ['codex', 'Свод'], ['taste', 'Вкус'], ['rules', 'Правила'], ['arch', 'Архив'], ['gallery', 'Кадры'], ['state', 'Летописец'], ['time', 'Время'], ['cfg', icon('settings')]], tab, 'world-tab').replace('lf-seg', 'lf-seg cfg many')}
     ${body}`;
 }
 
@@ -2770,6 +2830,15 @@ function renderCfg() {
         ${sec('Летописец')}
         ${sw('on', 'Летописец после каждого поста', s.chron, 'chron.on')}
         <div class="lf-field"><label>Модель (профиль подключения)</label><select data-set="chron.profile">${profOpts(s.chron.profile)}</select></div>
+        <details class="lf-more"><summary><b>Умная модель</b> — для больших разовых заполнений${s.chron.deepModel || s.chron.deepProfile ? `: ${esc(s.chron.deepModel || s.chron.deepProfile)}` : ' (не выбрана)'}</summary>
+            <div class="lf-hint">Свод истории, ядро характера, привычки, «Своё», семья, фракции, ритуалы, темперамент в «Мозге» — то, что пишется один раз и должно опираться на всю историю. Лучше один раз дорого, чем много раз дёшево и мимо.</div>
+            <div class="lf-field"><label>Профиль <small>(пусто — тот же, что у Летописца; для Gemini бери прямой ключ Google AI Studio — через OpenRouter он режет ответы фильтром)</small></label><select data-set="chron.deepProfile"><option value="">— тот же, что у Летописца —</option>${profiles().map(p => `<option value="${esc(p.name)}" ${p.name === s.chron.deepProfile ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+            <div class="lf-field"><label>Модель по имени <small>(подменяет модель профиля, ключ тот же; пусто — модель профиля)</small></label><input type="text" data-set="chron.deepModel" value="${esc(s.chron.deepModel || '')}" placeholder="gemini-4-carbon"></div>
+            <div class="lf-chips wrap">${['gemini-4-carbon', 'gemini-4-neon', 'gemini-4-hydrogen'].map(m => `<button class="lf-chip${s.chron.deepModel === m ? ' on' : ''}" data-act="deep-model" data-v="${m}">${m}</button>`).join('')}<button class="lf-chip" data-act="deep-model" data-v="">модель профиля</button></div>
+            <div class="lf-field"><label>Reasoning effort</label><select data-set="chron.deepEffort">${['', 'low', 'medium', 'high'].map(v => `<option value="${v}" ${v === (s.chron.deepEffort || '') ? 'selected' : ''}>${v || 'из профиля'}</option>`).join('')}</select></div>
+            <div class="lf-field"><label>Ждать ответа, сек <small>(кусок истории читается долго)</small></label><input type="number" min="60" max="900" step="30" data-set="chron.deepTimeoutSec" value="${esc(s.chron.deepTimeoutSec || 420)}"></div>
+            <div class="lf-field"><label>Кусок истории за один запрос, знаков <small>(260 000 ≈ 100 тыс. токенов; больше — меньше запросов, но грубее выписки)</small></label><input type="number" min="60000" max="700000" step="20000" data-set="chron.codexChunk" value="${esc(s.chron.codexChunk || 260000)}"></div>
+        </details>
         <div class="lf-field"><label>Запасной профиль <small>(если ответ пустой, Летописец сам переспросит — этим профилем; без него — тем же)</small></label><select data-set="chron.backup"><option value="">— тот же —</option>${profiles().map(p => `<option value="${esc(p.name)}" ${p.name === s.chron.backup ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Reasoning effort</label><select data-set="chron.effort">${['', 'low', 'medium', 'high'].map(v => `<option value="${v}" ${v === s.chron.effort ? 'selected' : ''}>${v || 'из профиля'}</option>`).join('')}</select></div>
         <div class="lf-field"><label>Токенов на ответ <small>(думающим моделям — 4000–8000, иначе мысли съедят ответ)</small></label><input type="number" min="1000" max="32000" step="500" data-set="chron.tokens" value="${esc(s.chron.tokens)}"></div>
@@ -3720,6 +3789,7 @@ async function onClick(ev) {
             try { await ctx().executeSlashCommandsWithOptions?.('/wardrobe'); } catch { toast('info', 'Гардероб не найден'); }
             break;
         }
+        case 'deep-model': s.chron.deepModel = String(el.dataset.v || ''); saveSettings(); render(); break;
         case 'pair-pic': picSheet('pair', pairKey(ui.who, ui.pair)); break;
         case 'draw-pair': await withBusy(el, async () => {
             const refs = [await faceRef(ui.who), await faceRef(ui.pair)].filter(Boolean);
@@ -4179,6 +4249,12 @@ const simApi = {
     castNames, groupMembers, chatCards, cardOf, isOwn, worldState, parseDate, weekday, placeKey, locTop, locLeaf, locParts, placeName, getPlace, placeCover, knownLocations,
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, chronOf, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
+    // 0.59: умная модель и свод всей истории — для больших заполнений
+    askDeep, askDeepJson, relSet, withStory: (m, o) => withStory(m, o),
+    // большое заполнение: свод всей истории в запрос + умная модель (думающей — запас токенов)
+    askFill: (messages, tokens, label = '', opts = {}) => askDeep(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), label),
+    askFillJson: (messages, tokens, o = {}, opts = {}) => askDeepJson(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), o),
+    story: { ready: () => codexReady(), behind: () => codexBehind(), text: (o) => codexText(o), felt: (who, w) => codexFelt(who, w), person: (who) => codexPerson(who), pair: (a, b) => codexPair(a, b) },
     hasChat, rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); }, scrollTop: () => { const b = document.querySelector('#lf-app .lf-body'); if (b) b.scrollTop = 0; },
     mindHtml: (who) => mindHtml(who),
     skipFlare: (who, w) => stonesOwns(who, w),
@@ -4608,6 +4684,8 @@ jQuery(async () => {
         initPowers({ ...extApi, coreOf: (w) => coreOf(w) });
         initPeek({ ...extApi, peopleList, daysBrief, promptParts: () => promptParts, knowAdd: (t, who) => knowAdd(t, who) });
         initKin({ ...extApi, peopleList });
+        initCodex(extApi);
+        hubMods.push({ pre: 'cx-', click: codexClick, label: 'Свод' });
         hubMods.push({ pre: 'pr-', click: pairClick, label: 'Тропы и хедканоны' }, { pre: 'hm-', click: homeClick, label: 'Быт' }, { pre: 'pw-', click: powersClick, label: 'Способности' },
             { pre: 'ovh-', click: peekClick, label: 'Подслушанное' }, { pre: 'sv-', click: statsClick, label: 'Свои статы' }, { pre: 'kin-', click: kinClick, label: 'Семья' }, { pre: 'trk-', click: panelClick, label: 'Трекеры' });
         mindParts.push((who) => pairHtml(who), (who) => powersHtml(who));

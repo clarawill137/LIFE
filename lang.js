@@ -78,7 +78,7 @@ async function collect(who) {
     let lore = '';
     try { lore = await loreFor(name, { re: /язык|говор|акцент|русск|немец|румын|япон|франц|испан|language|accent|speaks/i, max: 9000 }); } catch { /* */ }
     if (!card && !lore) throw new Error('ни карточки, ни лорбука о нём не нашлось');
-    const out = await A.askModel([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${name}`, card ? `Карточка:\n${card}` : '', lore ? `Лорбук:\n${lore}` : ''].filter(Boolean).join('\n\n') }], 500);
+    const out = await (A.askFill || A.askModel)([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${name}`, card ? `Карточка:\n${card}` : '', lore ? `Лорбук:\n${lore}` : ''].filter(Boolean).join('\n\n') }], 500, 'Языки', { who: name, acts: false, pairs: false });
     const j = A.extractJson(out);
     const langs = String(j?.langs || '').trim().slice(0, 200);
     const when = String(j?.when || '').trim().slice(0, 300);
