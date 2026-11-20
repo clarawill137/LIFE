@@ -150,9 +150,10 @@ import { initAide, aideSceneHtml, aideClick } from './aide.js';
 import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
+import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle } from './nav.js';
 
 const MODULE = 'life';
-const VERSION = '0.66.0';
+const VERSION = '0.67.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2181,20 +2182,25 @@ function render() {
         b.classList.toggle('on', on);
         if (on) app.querySelector('.lf-tab-ink').style.transform = `translateX(${i * 100}%)`;
     });
+    // 0.67: навигация группами (nav.js). navK — «дом» группы вместо обычной вкладки; пусто — всё как раньше
+    const navK = navKey();
+    navSync(app);
     const me = app.querySelector('.lf-me');
     if (me) me.innerHTML = ava(ui.tab === 'person' && ui.who && !String(ui.who).startsWith('pet:') && !bridgeOf(ui.who) ? ui.who : ctx().name1, 'ring');
     const body = app.querySelector('.lf-body');
-    const same = body.dataset.tab === ui.tab;
+    const page = navK || ui.tab;
+    const same = body.dataset.tab === page;
     const keep = same ? body.scrollTop : 0;
     try {
-        body.innerHTML = ui.tab === 'map' ? renderMap() : ui.tab === 'person' ? renderPerson() : ui.tab === 'people' ? renderPeople() : ui.tab === 'world' ? renderWorld() : renderScene();
+        body.innerHTML = navK ? navHomeHtml() : ui.tab === 'map' ? renderMap() : ui.tab === 'person' ? renderPerson() : ui.tab === 'people' ? renderPeople() : ui.tab === 'world' ? renderWorld() : renderScene();
     } catch (e) {
         console.error('[Life] render', e);
         body.innerHTML = `<div class="lf-empty"><b>Ошибка Life</b><pre class="lf-pre">${esc(String(e?.stack || e).slice(0, 900))}</pre>Сделай скрин и кинь Claude.</div>`;
     }
     body.classList.toggle('lf-anim', !same);
-    body.dataset.tab = ui.tab;
+    body.dataset.tab = page;
     body.scrollTop = keep;
+    navAfter(app, body);
 }
 
 const seg = (items, cur, act) => `<div class="lf-seg">${items.map(([k, t]) => `<button class="${cur === k ? 'on' : ''}" data-act="${act}" data-v="${esc(k)}">${t}</button>`).join('')}</div>`;
@@ -2997,6 +3003,7 @@ function renderCfg() {
         ${sw('on', 'Перепалки: терпение, поводы, вечные темы', s.bicker, 'bicker.on')}
         ${(() => { try { return annexCfgHtml(s, sw); } catch (e) { console.warn('[Life] 0.62: настройки', e); return ''; } })()}
         ${sec('Прочее')}
+        ${(() => { try { return navCfgHtml(); } catch (e) { console.warn('[Life] навигация: настройка', e); return ''; } })()}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
         <div class="lf-field"><label>Новый район</label><select data-set="autoMaps">
@@ -4223,11 +4230,12 @@ function registerSlash() {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
             helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | nav | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
+                if (v === 'nav' || v === 'навигация') { const on = navToggle(); toast('info', on ? 'Навигация группами включена' : 'Вернула прежние пять вкладок', '✦ Life'); return ''; }
                 if (globalThis.LifeWin?.list?.().includes(v)) { globalThis.LifeWin.open(v); return ''; }   // personas | books | exts | link — окна вне хаба
                 if (v === 'theme' || v.startsWith('theme ')) {
                     const c = settings().cc;
@@ -4451,6 +4459,12 @@ jQuery(async () => {
     const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, openHub, paintSoon: () => decorateSoon(80) };
     // плашка выделения в посте (voice.js): кнопка пристройки — «🔒 в секрет»
     extApi.pillExtra = (sel) => annexPill(sel); extApi.pillAct = (id, sel) => annexPillAct(id, sel);
+    // 0.67: навигация группами — Сцена · Герои · Мир · История · Всё (nav.js); экраны и их id прежние
+    try {
+        initNav({ ...extApi, personNames, moodOf, weatherWord, peopleList, npcImg, chapterCard, chapterCover, focusChapter, openCC,
+            petsRow: (who) => { let h = ''; try { h = petsRowHtml(who); } catch (e) { console.warn('[Life] питомцы', e); } return h + bridgeEach(m => m.personRow?.(who), 'персонаж').join(''); } });
+        hubMods.push({ pre: 'nv-', click: navClick, label: 'Навигация' });
+    } catch (e) { console.warn('[Life] навигация', e); }
     initDays(extApi);
     initSeed(extApi);
     initCare({ ...extApi, version: VERSION, rekeySwipe: (i, cur) => rekeySwipe(i, cur) });
