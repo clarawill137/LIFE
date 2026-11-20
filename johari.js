@@ -9,12 +9,16 @@
 // модель получает, как он это примет. Принятое уходит в «Кто я теперь» (self-images, Conway) — модели по кругу.
 // Для персоны игрока — только чужой взгляд: что он в ней видит, заметил, сказал. Приняла ли — решает она, тапом.
 // Её пост разбирается перед ответом вместе с «Не пропусти» (johariJoin), ответ — Летописцем после (johariChron).
+// 0.65: подсказки игроку уведомлением (johariHint) — после его ответа Летописец замечает повод узнать о себе новое:
+// он увидел в ней то, чего она за собой не знает; с ней впервые то, чего ещё не было; он вернул ей её же слова
+// (самопересмотр, «self-overhearing» у Блума). Вопрос — без ответа за неё; в историю и модели не идёт.
 
 import { userIndexFor } from './reply.js';
 import { cardText, loreFor } from './lore.js';
 import { personaHidden } from './personas.js';
 import { CRAFT } from './craft.js';
 import { shardTold } from './shards.js';
+import { push } from './push.js';
 
 let A = null;
 export function initJohari(api) { A = api; cfg(); }
@@ -35,6 +39,13 @@ const KINDS_ME = {
     unknown: { ic: 'moon', name: 'Неизвестное в тебе', sub: 'может открыться впервые', steps: ['ещё не было', 'случилось', 'названо', 'приняла'] },
 };
 const PACE = { rare: [4, 'Редко'], mid: [3, 'Иногда'], often: [2, 'Часто'] };
+// подсказки игроку: не чаще, чем раз в столько его ответов (сильное — назвал вслух, случилось её «впервые» — сразу)
+const HINT = { off: [0, 'Выкл'], rare: [5, 'Редко'], mid: [3, 'Иногда'], often: [1, 'Часто'] };
+const HINT_KIND = {
+    seen: { ic: 'eye', title: (S) => `${S} видит в тебе`, ok: 'Это про неё — приняла' },
+    first: { ic: 'moon', title: () => 'Впервые', ok: 'В «Неизвестное в тебе»: случилось' },
+    mirror: { ic: 'sparkles', title: () => 'Твоими же словами', ok: 'Это про неё — приняла' },
+};
 
 function cfg() {
     const s = A.settings();
@@ -42,10 +53,12 @@ function cfg() {
     const c = s.johari;
     if (c.on === undefined) c.on = true;
     if (!PACE[c.pace]) c.pace = 'mid';
+    if (!HINT[c.hints]) c.hints = 'mid';
     c.blur = !!c.blur;
     return c;
 }
 export const johariOn = () => !!A && A.settings().enabled !== false && cfg().on !== false;
+const hintsOn = () => (HINT[cfg().hints]?.[0] || 0) > 0;
 
 function M() {
     const cm = A.chatMeta();
@@ -55,6 +68,8 @@ function M() {
     if (!Number.isFinite(j.seq)) j.seq = 0;
     if (!j.used || typeof j.used !== 'object') j.used = {};
     if (!j.pend || typeof j.pend !== 'object') j.pend = {};
+    if (!Array.isArray(j.hints)) j.hints = [];
+    if (!Number.isFinite(j.hseq)) j.hseq = 0;
     return j;
 }
 
@@ -75,6 +90,26 @@ export function johariOf(who) { return M().list.filter(x => live(x) && A.sameNam
 
 function here() { return (A.worldState().scene?.characters_present || []).map(A.canonName).filter(Boolean); }
 function inScene(n, h = here()) { return !h.length || h.some(x => A.sameName(x, n)); }
+
+// служебные слова и имена — не повод считать, что пост «про это»
+const STOP = new Set(['котор', 'когда', 'тольк', 'потом', 'очень', 'всегд', 'может', 'чтобы', 'этого', 'этому', 'всего', 'своей', 'своих', 'свою', 'ничег', 'сейча', 'будет', 'тебя', 'себя', 'меня', 'него', 'нему', 'если', 'даже', 'было', 'были', 'была', 'этот', 'этой', 'есть', 'тоже', 'того', 'тому', 'раньш', 'опять', 'снова', 'здесь', 'перед', 'после', 'какой', 'какая', 'какие']);
+/**
+ * Из длинного списка — то, что сейчас вероятнее в ходу: совпало словами с постом, взведено, недавно звучало,
+ * уже сдвинулось; остальное — по очереди из каждого вида, чтобы ни один вид не выпал целиком (раньше брались
+ * последние N — при большом посеве «видит она» и «знает он» не доходили до разбора вовсе).
+ */
+function rank(list, text, n) {
+    if (list.length <= n) return list;
+    const names = new Set([...words(user()), ...words(String(A.ctx().name2 || ''))]);
+    const w = new Set(words(text).filter(s => !STOP.has(s) && !names.has(s)));
+    const round = {};
+    return list.map((x, k) => {
+        const g = `${A.canonName(x.who)}:${x.kind}`;
+        round[g] = (round[g] ?? -1) + 1;
+        const hit = w.size ? new Set(words(`${x.t} ${x.tell || ''} ${x.when || ''}`).filter(s => w.has(s))).size : 0;
+        return { x, k, r: round[g], s: (x.armed ? 50 : 0) + Math.min(hit, 4) * 10 + (Number.isFinite(x.last) ? 4 : 0) + ((x.step || 0) > 0 ? 2 : 0) };
+    }).sort((a, b) => b.s - a.s || a.r - b.r || a.k - b.k).slice(0, n).sort((a, b) => a.k - b.k).map(o => o.x);
+}
 
 // ───────────── добавить / сдвинуть ─────────────
 
@@ -140,18 +175,19 @@ function move(x, mv, i, t = '', src = 'post') {
 
 // ───────────── разбор её поста перед ответом (вместе с «Не пропусти») ─────────────
 
-function joinList() {
+function joinList(u) {
     const h = here();
-    return M().list.filter(x => live(x) && !isUser(x.who) && inScene(x.who, h) && isUser(byOf(x)) && (
+    const pool = M().list.filter(x => live(x) && !isUser(x.who) && inScene(x.who, h) && isUser(byOf(x)) && (
         (x.kind === 'blind' && x.step < 2) || (x.kind === 'hidden' && x.step < 2) || (x.kind === 'past' && x.step < 2) || (x.kind === 'unknown' && x.step < 1 && x.when)
-    )).slice(-14);
+    ));
+    return rank(pool, A.plainText(A.chatArr()[u]?.mes || ''), 18);
 }
 const joinRow = (x) => `[${x.id}] ${KINDS[x.kind].sub} · ${short(x.who)}: ${A.cut(x.t, 110)}${x.tell ? ` · признак: ${A.cut(x.tell, 70)}` : ''}${x.kind === 'unknown' && x.when ? ` · когда: ${A.cut(x.when, 70)}` : ''}`;
 
 export function johariJoin(u) {
     try {
         if (!johariOn() || !A.hasChat() || u < 0) return null;
-        const act = joinList();
+        const act = joinList(u);
         const key = keyOf(u);
         if (!act.length || !key) return null;
         const cm = A.chatMeta();
@@ -196,9 +232,10 @@ function joinTake(u, key, list) {
 
 // ───────────── Летописец после ответа ─────────────
 
-function chronList() {
+function chronList(i, her = '') {
     const h = here();
-    return M().list.filter(x => live(x) && x.step < 3 && (inScene(x.who, h) || (byOf(x) && inScene(byOf(x), h)))).slice(-16);
+    const pool = M().list.filter(x => live(x) && x.step < 3 && (inScene(x.who, h) || (byOf(x) && inScene(byOf(x), h))));
+    return rank(pool, `${A.plainText(A.chatArr()[i]?.mes || '')} ${her}`, 22);
 }
 const chronRow = (x) => `[${x.id}] ${KINDS[x.kind].sub} · чьё: ${short(x.who)}${byOf(x) ? ` · кто видит: ${short(byOf(x))}` : ''} · ${A.cut(x.t, 100)}${x.tell ? ` · признак: ${A.cut(x.tell, 60)}` : ''}${x.kind === 'unknown' && x.when ? ` · когда: ${A.cut(x.when, 60)}` : ''} · сейчас: ${stepName(x)}`;
 
@@ -212,13 +249,21 @@ const RULE = `
 johari — УЗНАВАНИЕ: что из списка «Узнавание» сдвинулось в ЭТОМ посте (и в посте игрока перед ним, если он дан): [{"id":"u3","move":"seen|named|owned|slip|told|emerged|declined","t":"как именно, 4–12 слов"}]. seen — тот, «кто видит», заметил признак, но вслух не назвал; named — сказал вслух, назвал словами; owned — носитель сам признал это про себя (сказал «да, я такой», пошутил как над своим, сделал нарочно, вспомнил рассказанное); slip — о скрытом: проговорился краем; told — о скрытом или «помнит она»: рассказано прямо; emerged — о неизвестном: впервые проявилось в новой ситуации; declined — носитель отмахнулся от названного, не согласился. Только явное в тексте. Нечего — [].
 johariNew — только если в посте кто-то ЯВНО открыл в другом то, чего тот за собой не знал («ты всегда…, когда…», «знаешь, что ты…?»), или сам с удивлением узнал о себе новое («оказывается, я…»), и этого нет в списке: [{"who":"чьё","by":"кто увидел","kind":"blind|unknown","t":"что, 5–14 слов","tell":"как видно, 3–10 слов"}]. Обычно [].`;
 
+// подсказка игроку: только повод и открытый вопрос — что она почувствует и примет ли, решает она
+const HINT_RULE = (U, S) => `
+johariHint — подсказка игроку за ${U}: уйдёт ей уведомлением, в историю и модели не попадает. Только если в ЭТОМ посте есть ЯВНЫЙ повод для ${U} узнать о себе новое; нет — null. Один объект: {"kind":"seen|first|mirror","id":"uN или пусто","t":"что случилось, 6–18 слов: его слова, жест или деталь из поста","q":"вопрос ей, 3–12 слов"}. seen — ${S} заметил или сказал о ней то, чего она за собой не знает (если это пункт «чьё: ${U}» из списка — его id); first — сцена впервые поставила её туда, где она ещё не была (пункт с «когда: впервые…» — его id); mirror — он вернул ей её же слова или сделал для неё то, что она делает для других, а себе не позволяет. q — открытый вопрос без ответа за неё («Узнает в этом себя?», «Что она скажет?»). Не решай, что она чувствует; без психологии и слов «травма», «границы», «заслуживает».`;
+
 export function johariChron(i) {
     if (!A?.hasChat?.() || !johariOn()) return null;
-    const act = chronList();
     const u = Number.isFinite(i) ? userPostBefore(i) : -1;
     const her = u >= 0 ? A.cut(A.plainText(A.chatArr()[u]?.mes || ''), 1100) : '';
+    const act = chronList(i, her);
+    const U = user();
+    const S = A.canonName(String(A.chatArr()[i]?.name || '').trim());
+    const hint = hintsOn() && !!U && inScene(U) && !!S && !isUser(S);
+    const Sn = S && !NARR.test(S) ? short(S) : 'кто-то в сцене';
     return {
-        key: '"johari": [], "johariNew": []', rule: RULE, tokens: 150 + 25 * Math.min(act.length, 10),
+        key: `"johari": [], "johariNew": []${hint ? ', "johariHint": null' : ''}`, rule: RULE + (hint ? HINT_RULE(short(U), Sn) : ''), tokens: 150 + 25 * Math.min(act.length, 10) + (hint ? 90 : 0),
         input: `Узнавание (что уже есть):\n${act.length ? act.map(chronRow).join('\n') : 'пока ничего'}${her ? `\nПост игрока перед этим ответом (кратко): ${her}` : ''}`,
     };
 }
@@ -228,15 +273,20 @@ export function johariAfterPost(i, j) {
     const s = M();
     // перечитка того же поста — сначала откатить то, что он сам записал
     for (const x of s.list) {
-        const k = x.log.findIndex(l => l.mes === i && l.src === 'post');
-        if (k < 0) continue;
-        const l = x.log[k];
-        if (l.mv === 'declined') x.push = Math.max(0, (x.push || 0) - 1);
-        else if (Number.isFinite(l.from) && (x.step || 0) === MOVE_STEP[l.mv]) x.step = l.from;
-        if (l.mv === 'named') x.named = Math.max(0, (x.named || 0) - 1);
-        x.log.splice(k, 1);
+        // все записи этого поста, с последней — чтобы шаг вернулся туда, где был до него
+        for (let k = x.log.length - 1; k >= 0; k--) {
+            const l = x.log[k];
+            if (l.mes !== i || l.src !== 'post') continue;
+            if (l.mv === 'declined') x.push = Math.max(0, (x.push || 0) - 1);
+            else if (Number.isFinite(l.from) && (x.step || 0) === MOVE_STEP[l.mv]) x.step = l.from;
+            if (l.mv === 'named') x.named = Math.max(0, (x.named || 0) - 1);
+            x.log.splice(k, 1);
+        }
     }
     s.list = s.list.filter(x => !(x.src === 'post' && x.mes === i));
+    // и подсказку этого поста — заново (темп возвращается к прежнему)
+    for (const h of s.hints.filter(y => y.mes === i)) { if (s.hintTurn === h.turn) s.hintTurn = h.prevTurn; }
+    s.hints = s.hints.filter(y => y.mes !== i);
     const moved = [];
     const u = userPostBefore(i);
     for (const r of (Array.isArray(j?.johari) ? j.johari : []).slice(0, 6)) {
@@ -252,10 +302,68 @@ export function johariAfterPost(i, j) {
         const x = johariAdd({ ...r, step: str(r?.kind) === 'unknown' ? 1 : 2 }, 'post', i);
         if (x && x.src === 'post') moved.push([x, 'new']);
     }
+    let hint = null;
+    try { hint = hintTake(i, j?.johariHint, moved); } catch (e) { console.warn('[Life] подсказка', e); }
     A.saveMeta();
-    if (!moved.length) return;
-    const W = { seen: 'заметили', named: 'назвали вслух', owned: 'принял: «это я»', slip: 'проговорился краем', told: 'рассказано', emerged: 'впервые', declined: 'отмахнулся', new: 'новое' };
-    A.toast('info', moved.slice(0, 3).map(([x, mv]) => `<b>${esc(short(x.who))}</b> · ${esc(W[mv] || mv)}: ${esc(A.cut(x.t, 90))}`).join('<br>'), '✦ Узнавание', { timeOut: 5000, escapeHtml: false });
+    // о ней самой — подсказкой и в своём темпе, а не общим тостом
+    const show = moved.filter(([x]) => !(hintsOn() && isUser(x.who)));
+    if (show.length) {
+        const W = { seen: 'заметили', named: 'назвали вслух', owned: 'принял: «это я»', slip: 'проговорился краем', told: 'рассказано', emerged: 'впервые', declined: 'отмахнулся', new: 'новое' };
+        A.toast('info', show.slice(0, 3).map(([x, mv]) => `<b>${esc(short(x.who))}</b> · ${esc(W[mv] || mv)}: ${esc(A.cut(x.t, 90))}`).join('<br>'), '✦ Узнавание', { timeOut: 5000, escapeHtml: false });
+    }
+    if (hint) hintPush(hint);
+}
+
+// ───────────── подсказки игроку ─────────────
+
+function hintTake(i, r, moved) {
+    if (Array.isArray(r)) r = r[0];
+    if (!r || typeof r !== 'object' || !hintsOn()) return null;
+    const kind = HINT_KIND[str(r.kind)] ? str(r.kind) : '';
+    const t = str(r.t).slice(0, 220);
+    const q = str(r.q).slice(0, 120);
+    const U = user();
+    if (!kind || !t || !U || !inScene(U)) return null;
+    const s = M();
+    const S = A.canonName(String(A.chatArr()[i]?.name || '').trim());
+    const by = S && !isUser(S) && !NARR.test(S) ? S : '';
+    const x = s.list.find(y => y.id === str(r.id) && live(y) && isUser(y.who)) || null;
+    // её пункт сдвинулся этим постом: заметил — «заметил в посте», впервые — «случилось»
+    if (x && kind === 'seen' && x.kind === 'blind' && (x.step || 0) < 1 && move(x, 'seen', i, t, 'post')) moved.push([x, 'seen']);
+    if (x && kind === 'first' && x.kind === 'unknown' && (x.step || 0) < 1 && move(x, 'emerged', i, t, 'post')) moved.push([x, 'emerged']);
+    // то же самое второй раз не подсказывать (разве что шаг ушёл дальше)
+    if (s.hints.some(h => h.st !== 'no' && (x ? h.ref === x.id && h.kind === kind && (h.step || 0) >= (x.step || 0) : similar(h.t, t)))) return null;
+    const turn = Math.floor(i / 2);
+    const gap = HINT[cfg().hints][0];
+    // сильное — сразу: назвал её пункт вслух, случилось её «впервые»
+    const strong = !!x && moved.some(([y, mv]) => y === x && ['named', 'emerged'].includes(mv));
+    if (!strong && Number.isFinite(s.hintTurn) && turn - s.hintTurn < gap) return null;
+    const h = { id: `h${++s.hseq}`, mes: i, kind, t, q, ref: x?.id || '', by, step: x?.step || 0, at: Date.now(), turn, prevTurn: Number.isFinite(s.hintTurn) ? s.hintTurn : null, st: 'new' };
+    s.hintTurn = turn;
+    s.hints.push(h);
+    if (s.hints.length > 24) s.hints.splice(0, s.hints.length - 24);
+    return h;
+}
+
+function hintPush(h) {
+    const K = HINT_KIND[h.kind] || HINT_KIND.seen;
+    try {
+        push({
+            app: `Подсказка · ${short(user())}`, icon: K.ic, tint: '#c9b8f2', title: K.title(short(h.by) || 'Он'), text: `${h.t}${h.q ? ` — ${h.q}` : ''}`, ms: 9000,
+            onTap: () => { try { A.ui.who = user(); A.ui.pTab = 'life'; A.openHub?.('person'); } catch (e) { console.warn('[Life] подсказка', e); } },
+        });
+    } catch (e) { console.warn('[Life] подсказка', e); }
+}
+
+function hintRow(h) {
+    const K = HINT_KIND[h.kind] || HINT_KIND.seen;
+    const x = h.ref ? M().list.find(y => y.id === h.ref && live(y)) : null;
+    const done = h.st === 'ok' || (!!x && (x.step || 0) >= 3);
+    return `<div class="lf-idea lf-jo lf-jo-hint k-${h.kind}${done ? ' done' : ''}">
+        <span class="lf-idea-ic">${A.icon(K.ic)}</span>
+        <span class="lf-idea-t"><small>${esc(K.title(short(h.by) || 'Он'))} · #${h.mes}${done ? ' · взяла' : ''}</small><b>${esc(h.t)}</b>${h.q ? `<i class="lf-jo-sub">${esc(h.q)}</i>` : ''}</span>
+        ${done ? '' : `<button class="lf-iconbtn sm" data-act="jo-hok" data-id="${h.id}" title="${esc(K.ok)}">${A.icon('check')}</button>`}
+        <button class="lf-iconbtn sm" data-act="jo-hno" data-id="${h.id}" title="Убрать подсказку">${A.icon('x')}</button></div>`;
 }
 
 // ───────────── заметка модели ─────────────
@@ -469,13 +577,16 @@ export function johariHtml(who) {
         const by = ui.by && cast.some(n => A.sameName(n, ui.by)) ? ui.by : (obs[0] || cast[0] || '');
         const list = all.filter(x => !by || A.sameName(x.by, by) || !x.by);
         const owned = list.filter(x => (x.step || 0) >= 3);
+        const hs = M().hints.filter(h => h.st !== 'no').slice(-5).reverse();
         return `${A.sec('Узнавание', 'что в тебе видят')}
-        <div class="lf-hint">Чужими глазами: то, чего ты за собой не знаешь. Модель ведёт только его взгляд — заметил, сказал; приняла ли ты — решаешь ты (✓ или ✕). «Неизвестное» — подсказки тебе: ⚡ — модель только подведёт сцену к поводу.</div>
+        <div class="lf-hint">Чужими глазами: то, чего ты за собой не знаешь. Модель ведёт только его взгляд — заметил, сказал; приняла ли ты — решаешь ты (✓ или ✕). «Неизвестное» — подсказки тебе: ⚡ — модель только подведёт сцену к поводу. После его ответов прилетают уведомления-подсказки: что он в тебе увидел, что с тобой впервые, где он вернул тебе твои же слова.</div>
+        ${hs.length ? `<div class="lf-jo-g"><div class="lf-jo-h">${A.icon('sparkles')}<b>Подсказки</b><small>из его ответов — решаешь ты</small></div>${hs.map(hintRow).join('')}</div>` : ''}
         ${cast.length > 1 ? `<div class="lf-chips">${cast.map(n => `<button class="lf-chip${A.sameName(n, by) ? ' on' : ''}" data-act="jo-by" data-v="${esc(n)}">${A.ava(n, 'xs')} ${esc(short(n))}</button>`).join('')}</div>` : ''}
         ${group(list, 'blind', true, `Пока пусто. «✦ Собрать» — что ${esc(short(by || 'он'))} видит в тебе, по карточкам, лорбукам и своду.`)}
         ${group(list, 'unknown', true, '')}
         ${owned.length ? `<div class="lf-jo-g"><div class="lf-jo-h">${A.icon('sun')}<b>Ты это приняла</b></div><div class="lf-chips wrap">${owned.map(x => `<span class="lf-chip static">${esc(x.t)}</span>`).join('')}</div></div>` : ''}
         <div class="lf-actions"><button class="lf-btn" data-act="jo-fill" data-name="${N}" data-by="${esc(by)}">${A.icon('sparkles')} ${ui.busy === W ? 'Читаю…' : 'Собрать'}</button><button class="lf-btn ghost" data-act="jo-add" data-name="${N}" data-by="${esc(by)}">${A.icon('plus')} Своё</button></div>
+        <div class="lf-field"><label>Подсказки уведомлением</label><div class="lf-seg">${Object.entries(HINT).map(([k, v]) => `<button class="${c.hints === k ? 'on' : ''}" data-act="jo-hint" data-v="${k}">${v[1]}</button>`).join('')}</div></div>
         <label class="lf-switch"><input type="checkbox" data-act="jo-blur" ${c.blur ? 'checked' : ''}><span></span>Сюрприз: прятать то, что ещё не открылось</label>`;
     }
     const owned = all.filter(x => (x.step || 0) >= 3);
@@ -523,6 +634,23 @@ export async function johariClick(act, el) {
         case 'jo-del': if (x) x.off = true; return done();
         case 'jo-by': ui.by = el.dataset.v || ''; A.render(); return true;
         case 'jo-pace': cfg().pace = PACE[el.dataset.v] ? el.dataset.v : 'mid'; A.saveSettings(); A.updatePrompt(); A.render(); return true;
+        case 'jo-hint': cfg().hints = HINT[el.dataset.v] ? el.dataset.v : 'mid'; A.saveSettings(); A.render(); return true;
+        case 'jo-hok': {
+            const h = s.hints.find(y => y.id === el.dataset.id);
+            if (!h) return true;
+            const y = h.ref ? s.list.find(z => z.id === h.ref && live(z)) : null;
+            if (y) {
+                if (h.kind === 'first' && y.kind === 'unknown') { if ((y.step || 0) < 1) { y.prev = y.step || 0; y.step = 1; y.log.push({ mes: h.mes, mv: 'emerged', t: 'случилось', src: 'me' }); } }
+                else { y.prev = y.step || 0; y.step = 3; y.no = false; y.log.push({ mes: h.mes, mv: 'owned', t: 'приняла', src: 'me' }); }
+            } else {
+                const first = h.kind === 'first';
+                const z = johariAdd({ who: user(), by: h.by || undefined, kind: first ? 'unknown' : 'blind', t: h.t, step: first ? 1 : 3 }, 'me', h.mes);
+                if (z) { z.hand = true; h.ref = z.id; }
+            }
+            h.st = 'ok';
+            return done();
+        }
+        case 'jo-hno': { const h = s.hints.find(y => y.id === el.dataset.id); if (h) h.st = 'no'; return done(); }
         case 'jo-blur': cfg().blur = !!el.checked; ui.open.clear(); A.saveSettings(); A.render(); return true;
         case 'jo-edit': if (x) editSheet(x, x.who, x.by); return true;
         case 'jo-add': editSheet(null, el.dataset.name, el.dataset.by); return true;
@@ -567,5 +695,6 @@ export function johariRecs(i) {
         if (x.src === 'post' && x.mes === i) { out.push({ id: `jo:${x.id}`, g: 'Узнавание', icon: 'eye', t: `${short(x.who)} — новое: ${x.t}`, del: () => { x.off = true; } }); continue; }
         for (const l of x.log) if (l.mes === i && l.src === 'post') out.push({ id: `jo:${x.id}:${l.mv}`, g: 'Узнавание', icon: 'eye', t: `${short(x.who)} — ${l.mv}: ${A.cut(x.t, 80)}`, del: () => { x.log = x.log.filter(y => y !== l); if (Number.isFinite(l.from) && (x.step || 0) === MOVE_STEP[l.mv]) x.step = l.from; } });
     }
+    for (const h of s.hints) if (h.mes === i && h.st !== 'no') out.push({ id: `jo:${h.id}`, g: 'Узнавание', icon: 'sparkles', t: `подсказка ${short(user())}: ${A.cut(h.t, 80)}`, del: () => { h.st = 'no'; } });
     return out;
 }

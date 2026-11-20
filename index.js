@@ -151,7 +151,7 @@ import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extrac
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
 
 const MODULE = 'life';
-const VERSION = '0.64.0';
+const VERSION = '0.65.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4446,7 +4446,7 @@ jQuery(async () => {
     initModes({ chatMeta, saveMeta, hasChat, updatePrompt: () => updateMovePrompt() });
     initTwists({ ...simApi, plainText, peopleList, onArm: () => disarmOnce() });
     initHurt(simApi);
-    const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
+    const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, openHub, paintSoon: () => decorateSoon(80) };
     // плашка выделения в посте (voice.js): кнопка пристройки — «🔒 в секрет»
     extApi.pillExtra = (sel) => annexPill(sel); extApi.pillAct = (id, sel) => annexPillAct(id, sel);
     initDays(extApi);

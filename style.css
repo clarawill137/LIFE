@@ -4045,5 +4045,9 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 .lf-jo.k-unknown .lf-jo-dots i.on { background: #a9b8ef; box-shadow: 0 0 6px rgba(140, 160, 230, .45); }
 .lf-jo.k-past .lf-jo-dots i.on { background: #b4d6bd; box-shadow: 0 0 6px rgba(160, 200, 170, .45); }
 .lf-jo.done .lf-idea-ic { background: rgba(242, 200, 121, .16); color: #f2c879; }
+.lf-jo.k-first .lf-idea-ic { background: rgba(140, 160, 230, .14); color: #a9b8ef; }
+.lf-jo.k-mirror .lf-idea-ic { background: rgba(201, 184, 242, .15); color: #c9b8f2; }
+.lf-jo-hint .lf-idea-t { cursor: default; }
+.lf-jo-hint.done { opacity: .62; }
 .lf-sh.told { opacity: .85; border-style: dashed; }
 .lf-sh.told > i { font-size: 11px; color: var(--lf-dim); font-style: italic; margin-left: 4px; }
