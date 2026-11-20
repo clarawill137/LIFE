@@ -40,13 +40,25 @@ export async function oocCollect(who) {
     let lore = '';
     try { lore = await loreFor(name, { max: 12000 }); } catch { /* */ }
     if (!card && !lore) throw new Error('ни карточки, ни лорбука о нём не нашлось');
-    const out = await A.askModel([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${name}`, card ? `Карточка:\n${card}` : '', lore ? `Лорбук:\n${lore}` : ''].filter(Boolean).join('\n\n') }], 1300);
+    const out = await (A.askFill || A.askModel)([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${name}`, card ? `Карточка:\n${card}` : '', lore ? `Лорбук:\n${lore}` : ''].filter(Boolean).join('\n\n') }], 1300, 'Ядро характера', { who: name });
     const j = A.extractJson(out);
     const list = (Array.isArray(j?.core) ? j.core : []).map(x => String(x || '').replace(/^[•\-–—*\s]+/, '').trim()).filter(x => x.length > 5).slice(0, 18);
     if (!list.length) throw new Error('модель не выписала ядро');
     cfg().prof[keyOf(name)] = { text: list.map(x => `• ${x}`).join('\n'), at: Date.now(), hand: false };
     A.saveSettings();
     return list.length;
+}
+
+/** Мост: дописать строку в ядро характера (например, когда сломалось старое убеждение). */
+export function coreAdd(who, line) {
+    const t = String(line || '').replace(/^[•\-–—*\s]+/, '').trim().slice(0, 240);
+    if (!t) return false;
+    const k = keyOf(A.canonName(who));
+    const cur = String(cfg().prof[k]?.text || '').trim();
+    if (cur.includes(t)) return false;
+    cfg().prof[k] = { text: `${cur ? `${cur}\n` : ''}• ${t}`.slice(0, 3000), at: Date.now(), hand: true };
+    A.saveSettings();
+    return true;
 }
 
 let ensured = '';

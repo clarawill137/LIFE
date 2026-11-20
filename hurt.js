@@ -617,7 +617,7 @@ async function findOld(who) {
         have.list.filter(w => w.status === 'on' && isOld(w)).length ? `Уже записано: ${have.list.filter(w => w.status === 'on' && isOld(w)).map(w => w.t).join('; ')}` : '',
         have.scars.length ? `Шрамы уже записаны: ${have.scars.map(s => s.t).join('; ')}` : ''].filter(Boolean).join('\n\n');
     if (!card && !lore) throw new Error('не нашла про это ни карточки, ни записей в лорбуках');
-    const out = await A.askModel([{ role: 'system', content: OLD_SYSTEM }, { role: 'user', content: input }], 1500);
+    const out = await (A.askFill || A.askModel)([{ role: 'system', content: OLD_SYSTEM }, { role: 'user', content: input }], 1500, 'Старые раны', { who, acts: false, pairs: false });
     const j = A.extractJson(out);
     if (!j) throw new Error('модель не прислала JSON — попробуй ещё раз');
     const now = rpNow();

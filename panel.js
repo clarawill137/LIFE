@@ -4,7 +4,15 @@
 
 let A = null;
 let list = [];
-export function initPanel(api, trackers) { A = api; list = trackers || []; }
+const added = [];
+export function initPanel(api, trackers) { A = api; list = [...(trackers || []), ...added.filter(t => !(trackers || []).some(x => x.id === t.id))]; }
+/** Мост: трекер соседнего расширения — { id, ico, name, hint, on, state, html, idle, extra }. */
+export function addTracker(t) {
+    if (!t?.id || !t.name || added.some(x => x.id === t.id)) return false;
+    added.push(t);
+    if (!list.some(x => x.id === t.id)) list.push(t);
+    return true;
+}
 const esc = (v) => A.esc(v);
 
 const safe = (f, d = '') => { try { return f?.() ?? d; } catch { return d; } };

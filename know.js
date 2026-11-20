@@ -39,6 +39,15 @@ facts — значимые сведения из этого поста, кото
 learned — кто в этом посте УЗНАЛ то, что уже есть в «Что знают не все»: [{"id":"k4","who":"имя","how":"told|overheard|rumor|guessed|saw"}]. Нечего — [].
 leaks — персонаж в этом посте говорит или действует так, будто знает то, чего по списку «Что знают не все» знать НЕ может (его нет среди знающих, и в самом посте ему этого не сообщили и он этого не увидел): [{"who":"имя","id":"k4","quote":"точная фраза из поста, 3-12 слов","why":"что именно он не мог знать, 3-10 слов"}]. Только явные случаи, не догадки по видимым признакам. Нечего — [].`;
 
+/** Мост: тайны, которые who держит от from, — то, что он знает, а тот нет: { n, list }. */
+export function knowKept(who, from) {
+    try {
+        if (!A?.hasChat?.() || !on()) return { n: 0, list: [] };
+        const list = M().facts.filter(f => !f.pub && knows(f, who) && !knows(f, from)).map(f => f.t);
+        return { n: list.length, list: list.slice(-6) };
+    } catch { return { n: 0, list: [] }; }
+}
+
 export function knowChron() {
     if (!A?.hasChat?.() || !on()) return null;
     const rows = live().slice(-14).map(f => `[${f.id}] ${f.t} — знают: ${Object.keys(f.who).map(A.shortName).join(', ') || 'никто из героев'}`);

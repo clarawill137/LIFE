@@ -188,7 +188,7 @@ export async function fameCollect({ force = false } = {}) {
         const { text, lore } = await collectInput(names);
         if (!lore) throw new Error('в подключённых лорбуках про это ничего не нашлось — впиши руками');
         tried = A.hash(text);
-        const j = await A.askJson([{ role: 'system', content: SYSTEM }, { role: 'user', content: text }], 3000, { what: 'Кого как узнают', check: (x) => Array.isArray(x?.heroes) && x.heroes.length });
+        const j = await (A.askFillJson || A.askJson)([{ role: 'system', content: SYSTEM }, { role: 'user', content: text }], 3000, { what: 'Кого как узнают', check: (x) => Array.isArray(x?.heroes) && x.heroes.length }, { world: true, pairs: false });
         const c = cfg();
         let n = 0;
         for (const h of j.heroes) {

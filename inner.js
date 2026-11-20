@@ -297,7 +297,9 @@ export function innerPrompt(type) {
         out.push(`[${W} — живой человек со своей жизнью, а не только ответ на ${U}: свои мысли, желания, дела, тело.${hob ? ` Увлечения: ${hob}.` : ''}${turn ? ` Сексуально ${g(f, 'его', 'её')} заводит: ${turn} — если такое сейчас случилось или ${U} это делает, пусть желание прорвётся.` : ''}${rom}]`);
         if (intim && p.bed.length) out.push(`[${W} в постели: ${p.bed.slice(0, 8).join('; ')}. Играй это телом, руками и голосом, в ${his} характере.]`);
         const st = stateById(x.state?.id);
-        if (st && !(intim && st[0] === 'aroused')) out.push(`[Состояние ${W}: ${st[4]}${x.state.why ? ` — ${x.state.why}` : ''}. Играй в поведении, не называя.]`);
+        // состояние поставил код-мозг и он на связи — играть его будет его заметка (кассета), вторую не шлём
+        const byBrain = x.state?.src === 'brain' && !!globalThis.LifeBrain?.owns?.(who);
+        if (st && !byBrain && !(intim && st[0] === 'aroused')) out.push(`[Состояние ${W}: ${st[4]}${x.state.why ? ` — ${x.state.why}` : ''}. Играй в поведении, не называя.]`);
         const sl = !intim && !mn.bondOn ? nowSlot(who) : null;
         if (sl && !SLEEP_RE.test(sl.what)) out.push(`[По распорядку у ${W} сейчас: ${sl.what}${sl.from ? ` (${sl.from}–${sl.to})` : ''}. ${g(f, 'Он', 'Она')} живёт своим днём: может заняться этим, позвать ${U} с собой или отложить ради того, что происходит, — но помнит.]`);
         const b = bodyState(who);
@@ -317,6 +319,51 @@ export function innerPrompt(type) {
         }
     }
     return out.join('\n');
+}
+
+// ───────────── мост: органы чувств для соседних расширений (код-мозг) ─────────────
+
+/** Потребности тела сейчас — { food, energy, clean, health } (0–100) или null, если «Внутри» у него выключено. */
+export function innerNeeds(who) {
+    try {
+        if (!innerOn(who)) return null;
+        const o = {};
+        for (const n of bodyState(who).needs) o[n.k] = n.v;
+        return o;
+    } catch { return null; }
+}
+
+/** Желания, которые он носит в себе: [{ t, mes, voiced }] — voiced: номер поста, где сказал вслух, или null. */
+export function innerWants(who) {
+    try {
+        if (!innerOn(who)) return [];
+        return I(who).wants.filter(w => w.status === 'on').map(w => ({ t: w.t, mes: w.mes, voiced: w.voiced ?? null }));
+    } catch { return []; }
+}
+
+/** Какое состояние стоит сейчас: { id, manual, src } или null. */
+export function innerStateOf(who) {
+    try {
+        if (!innerOn(who)) return null;
+        const st = I(who).state;
+        return st?.id ? { id: st.id, manual: !!st.manual, src: st.src || '' } : null;
+    } catch { return null; }
+}
+
+/**
+ * Состояние ставит соседнее расширение. Поставленное руками не трогает. id пуст — снять своё (и только своё).
+ * src — подпись автора ('brain'): по ней «Внутри» знает, что играть это состояние будет его заметка.
+ */
+export function innerSetState(who, id, why = '', i = 0, src = 'ext') {
+    try {
+        if (!innerOn(who)) return false;
+        const x = I(who);
+        if (x.state?.manual) return false;
+        if (!id) { if (x.state?.src === src) { x.state = null; return true; } return false; }
+        if (!stateById(id)) return false;
+        x.state = { id, why: String(why || '').slice(0, 120), mes: Number(i) || 0, src };
+        return true;
+    } catch { return false; }
 }
 
 /** Строчка для генератора задумок и распорядка: увлечения, желания, ухаживания. */
@@ -428,7 +475,9 @@ async function innerFill(who, mode) {
         x.thoughts.some(t => t.status === 'on') ? `Уже на уме (не повторяй): ${x.thoughts.filter(t => t.status === 'on').map(t => t.t).join('; ')}` : '',
         x.wants.some(t => t.status === 'on') ? `Уже хочет (не повторяй): ${x.wants.filter(t => t.status === 'on').map(t => t.t).join('; ')}` : '',
     ].filter(Boolean).join('\n\n');
-    const out = await A.askModel([{ role: 'system', content: mode === 'fill' ? FILL_SYSTEM : THINK_SYSTEM }, { role: 'user', content: input }], mode === 'fill' ? 1400 : 700);
+    // «Своё» по всей истории — большим заполнением (свод + умная модель); «подумать сейчас» — как раньше, из последнего
+    const msgs = [{ role: 'system', content: mode === 'fill' ? FILL_SYSTEM : THINK_SYSTEM }, { role: 'user', content: input }];
+    const out = mode === 'fill' && A.askFill ? await A.askFill(msgs, 1400, 'Своё', { who }) : await A.askModel(msgs, mode === 'fill' ? 1400 : 700);
     const j = A.extractJson(out);
     if (!j) throw new Error('модель не прислала JSON');
     const str = (v) => typeof v === 'string' ? v.trim() : '';

@@ -55,6 +55,22 @@ export function emoAfterPost(i, j) {
     A.refreshAvatars?.();
 }
 
+/** Мост: подсказать лицо поста i (код-мозг). Ставится, только если Летописец лица не назвал или назвал «спокоен». */
+export function emoHint(i, who, k) {
+    try {
+        if (!emoOn() || !emoById(String(k))) return false;
+        const e = A.chronOf(i);
+        if (!e) return false;
+        const name = A.canonName(who);
+        const cur = e.emo ? (e.emo[name] || e.emo[Object.keys(e.emo).find(n => A.sameName(n, name)) || '']) : '';
+        if (cur && cur !== 'calm') return false;
+        e.emo = { ...(e.emo || {}), [name]: String(k) };
+        A.saveMeta();
+        A.refreshAvatars?.();
+        return true;
+    } catch { return false; }
+}
+
 /** Картинка эмоции для аватарки поста (или ''). */
 /** Лицо с эмоцией поста id. who — чьё (в посте на двоих, в звонке); по умолчанию — автор поста. */
 export function emoSrc(id, whoArg = '') {

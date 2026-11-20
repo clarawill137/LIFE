@@ -29,7 +29,8 @@ async function ask(q) {
     const sys = `Ты — помощник автора ролевой истории, разговор «на полях»: это не часть истории и в неё не попадёт. Собеседница играет за ${user}. Отвечай по-русски, по делу и коротко (до 8 предложений, без списков, если не просят): почему персонаж так себя ведёт, что он может скрывать, что вытекает из уже случившегося, какие есть варианты хода. Опирайся только на данное ниже; чего там нет — так и скажи, не выдумывай фактов. Не пиши пост за персонажей. Если вы о чём-то условились для следующего ответа модели — закончи отдельной строкой «ДОГОВОРИЛИСЬ: …» (одна фраза-указание рассказчику), иначе такой строки не пиши.`;
     const ctx = `Сейчас: ${A.worldState()?.timestamp?.story_date || '—'} ${A.worldState()?.timestamp?.story_time || ''}, ${A.worldState()?.scene?.location || ''}.${days ? `\nПоследние дни:\n${A.cut(days, 3000)}` : ''}${state ? `\nЧто знает Life:\n${A.cut(state, 7000)}` : ''}\nПоследние посты:\n${posts.join('\n\n')}`;
     const hist = s.log.slice(-10).map(x => ({ role: x.r === 'u' ? 'user' : 'assistant', content: x.t }));
-    const out = await A.askModel([{ role: 'system', content: sys }, { role: 'user', content: ctx }, { role: 'assistant', content: 'Историю вижу. Спрашивай.' }, ...hist, { role: 'user', content: q }], 900, 'Ассистент сюжета');
+    const msgs = [{ role: 'system', content: sys }, { role: 'user', content: ctx }, { role: 'assistant', content: 'Историю вижу. Спрашивай.' }, ...hist, { role: 'user', content: q }];
+    const out = await A.askModel(A.withStory ? A.withStory(msgs, { world: true, max: 12000 }) : msgs, 900, 'Ассистент сюжета');
     const text = String(out || '').replace(/```[\s\S]*?```/g, '').trim();
     if (!text) throw new Error('ассистент ответил пусто — попробуй ещё раз');
     s.log.push({ r: 'u', t: q.slice(0, 1200) }, { r: 'a', t: text.slice(0, 4000) });

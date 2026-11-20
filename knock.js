@@ -67,6 +67,15 @@ export function knocks() {
         if (!e.push && /позже/i.test(e.when || '') && i - (e.mes || 0) < 4) continue;
         out.push({ id: e.id, who, how, why: e.what });
     }
+    // код-мозг: кого давно не было рядом и кто близок — соскучился и стучится сам
+    try {
+        for (const e of globalThis.LifeBrain?.miss?.() || []) {
+            const who = cardOf(e.who);
+            if (!who || (pr.length && isHere(who, pr)) || out.some(x => A.sameName(x.who, who))) continue;
+            if ((k.snooze[e.id] || -1) > i) continue;
+            out.push({ id: e.id, who, how: HOW[e.how] ? e.how : 'text', why: e.why });
+        }
+    } catch { /* */ }
     return out;
 }
 

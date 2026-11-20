@@ -30,6 +30,10 @@ function M() {
 const listOf = (who) => { const k = Object.keys(M().by).find(n => A.sameName(n, who)); return k ? M().by[k] : []; };
 function fxLeft(x) { const now = storyNow(A); const gone = x.ts && now !== null ? now - x.ts : Date.now() - (x.at || Date.now()); return x.hours * 3600000 - gone; }
 const fxLive = () => M().fx.filter(x => !x.off && fxLeft(x) > 0);
+/** Мост: что сейчас действует на человека — [{ what, left }] (left — мс). */
+export function powersFx(who) {
+    try { return A?.hasChat?.() && on() ? fxLive().filter(x => A.sameName(x.who, who)).map(x => ({ what: x.what, left: fxLeft(x) })) : []; } catch { return []; }
+}
 
 const RULE = `
 fx — действующие на человека вещества и эффекты, которые НАЧАЛИСЬ или КОНЧИЛИСЬ в этом посте (укол, сыворотка, седативное, яд, алкоголь, обезболивающее, наркотик, чары): [{"who":"на ком","what":"что и как действует, 2-8 слов","hours":4,"st":"on|off"}]. hours — на сколько примерно хватит. Нечего — [].`;
@@ -66,7 +70,7 @@ async function collect(who) {
     try { core = A.coreOf?.(who) || ''; } catch { /* */ }
     if (!desc && !core) throw new Error(`не нашла описание ${who} — впиши способности руками`);
     const sys = `Ты помощник автора ролевой истории. По описанию персонажа выпиши его особые способности и усиления (суперсила, сыворотка, магия, протез, выучка сверх нормы, гениальность). Ответ — строго один JSON по-русски: {"powers":[{"name":"название, 1-4 слова","can":"что умеет с КОНКРЕТНЫМ масштабом (поднимает ~400 кг, щит на одну комнату, не пьянеет)","limit":"где предел и что не может, 4-14 слов","cost":"чем платит: отдача, боль, истощение, риск срыва, 3-12 слов, или пусто"}]}. От 2 до 6, только то, что следует из описания; не усиливай и не выдумывай. Обычный человек без особых сил — {"powers":[]}.`;
-    const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: `Персонаж: ${who}.\n${desc}${core ? `\nЯдро: ${A.cut(core, 800)}` : ''}` }], 1100, { check: (x) => Array.isArray(x?.powers), what: `Способности — ${A.shortName(who)}` });
+    const j = await (A.askFillJson || A.askJson)([{ role: 'system', content: sys }, { role: 'user', content: `Персонаж: ${who}.\n${desc}${core ? `\nЯдро: ${A.cut(core, 800)}` : ''}` }], 1100, { check: (x) => Array.isArray(x?.powers), what: `Способности — ${A.shortName(who)}` }, { who, pairs: false });
     const list = arr(j.powers).slice(0, 6).map(p => ({ name: str(p?.name, 40), can: str(p?.can, 160), limit: str(p?.limit, 140), cost: str(p?.cost, 120) })).filter(p => p.name);
     const s = M();
     const k = Object.keys(s.by).find(n => A.sameName(n, who)) || who;

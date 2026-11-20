@@ -83,7 +83,8 @@ function mkArc(j, title, by) {
 }
 
 export async function planArc(title) {
-    const out = await A.askModel([{ role: 'system', content: PLAN_SYSTEM }, { role: 'user', content: `Сюжетка: ${title}\n\n${context()}` }], 1400);
+    const wrap = (m) => (A.withStory ? A.withStory(m, { world: true, max: 9000 }) : m);
+    const out = await A.askModel(wrap([{ role: 'system', content: PLAN_SYSTEM }, { role: 'user', content: `Сюжетка: ${title}\n\n${context()}` }]), 1400);
     const j = A.extractJson(out);
     const a = M();
     if (a.cur) closeArc(false);
@@ -106,7 +107,7 @@ function closeArc(withNext = true) {
 }
 
 export async function suggestNext() {
-    const out = await A.askModel([{ role: 'system', content: NEXT_SYSTEM }, { role: 'user', content: context() }], 900);
+    const out = await A.askModel(A.withStory ? A.withStory([{ role: 'system', content: NEXT_SYSTEM }, { role: 'user', content: context() }], { world: true, max: 9000 }) : [{ role: 'system', content: NEXT_SYSTEM }, { role: 'user', content: context() }], 900);
     const j = A.extractJson(out);
     const list = (Array.isArray(j?.next) ? j.next : []).map(x => ({ title: String(x?.title || '').trim().slice(0, 60), why: String(x?.why || '').trim().slice(0, 200) })).filter(x => x.title).slice(0, 3);
     M().next = list;

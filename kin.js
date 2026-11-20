@@ -36,7 +36,7 @@ async function collect() {
     const have = M().links.map(l => `${l.a} ${l.rel} ${l.b}`).join('; ');
     const sys = `Ты помощник автора ролевой истории. Выпиши РОДСТВО между людьми истории — только то, что прямо следует из описаний. Ответ — строго один JSON по-русски: {"kin":[{"a":"имя","b":"имя","rel":"parent|spouse|sibling","note":"приёмный, покойный, бывшие — 1-3 слова или пусто"}]}. parent — a родитель b (включая приёмных и опекунов); spouse — муж и жена, жених и невеста; sibling — братья и сёстры. Имена — как в списках. Дружбу, команду и романы без брака не пиши. Не уверен — не пиши.`;
     const usr = `${user}: ${persona || '(описания нет)'}\n${cards.join('\n')}${people ? `\nЛюди вокруг: ${people}` : ''}${have ? `\nУже записано (не повторяй): ${have}` : ''}`;
-    const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: usr }], 1200, { check: (x) => Array.isArray(x?.kin), what: 'Семья' });
+    const j = await (A.askFillJson || A.askJson)([{ role: 'system', content: sys }, { role: 'user', content: usr }], 1200, { check: (x) => Array.isArray(x?.kin), what: 'Семья' }, { acts: false });
     let n = 0;
     for (const r of arr(j.kin).slice(0, 40)) if (add(r?.a, r?.b, str(r?.rel), r?.note)) n++;
     A.saveMeta();

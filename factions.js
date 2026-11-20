@@ -79,7 +79,7 @@ async function collect() {
     const have = M().list.map(f => f.name);
     const sys = `Ты помощник автора ролевой истории. Составь список ФРАКЦИЙ мира — групп людей, чьё отношение к героям важно для сюжета (организации, команды, власти, банды, пресса, семья как клан, заведения). Ответ — строго один JSON по-русски: {"factions":[{"name":"название","note":"кто это, 4-12 слов","to":[{"who":"имя героя из списка","v":-20,"word":"отношение, 1-2 слова","why":"за что, 3-10 слов"}]}]}. v от −100 до 100 — как группа сейчас относится к герою, по событиям истории и канону мира. От 4 до 9 фракций, только реально значимые; у каждой — отношение к тем героям, к кому оно есть.`;
     const usr = `Герои: ${cast.join(', ')}.${people ? `\nЛюди и их круги: ${people}` : ''}${days ? `\nПоследние дни:\n${A.cut(days, 3500)}` : ''}${have.length ? `\nУже есть (уточни их, новые — добавь): ${have.join(', ')}` : ''}`;
-    const j = await A.askJson([{ role: 'system', content: sys }, { role: 'user', content: usr }], 1600, { check: (x) => Array.isArray(x?.factions), what: 'Фракции' });
+    const j = await (A.askFillJson || A.askJson)([{ role: 'system', content: sys }, { role: 'user', content: usr }], 1600, { check: (x) => Array.isArray(x?.factions), what: 'Фракции' }, { world: true });
     let n = 0;
     for (const r of arr(j.factions).slice(0, 10)) {
         const name = str(r?.name, 60);

@@ -106,7 +106,7 @@ async function collect(who) {
     const lore = await loreAbout(who);
     const card = [A.cardOf?.(who)?.description, A.cardOf?.(who)?.personality].filter(Boolean).join('\n');
     if (!lore && !card) throw new Error('в лорбуках ничего о его привычках не нашлось');
-    const out = await A.askModel([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${A.canonName(who)}`, lore ? `Лорбук:\n${lore}` : '', card ? `Карточка:\n${A.cut(card, 4000)}` : ''].filter(Boolean).join('\n\n') }], 1500);
+    const out = await (A.askFill || A.askModel)([{ role: 'system', content: SYSTEM }, { role: 'user', content: [`Персонаж: ${A.canonName(who)}`, lore ? `Лорбук:\n${lore}` : '', card ? `Карточка:\n${A.cut(card, 4000)}` : ''].filter(Boolean).join('\n\n') }], 1500, 'Привычки', { who, acts: false });
     const j = A.extractJson(out);
     const list = (Array.isArray(j?.habits) ? j.habits : []).map(x => String(x || '').trim()).filter(x => x.length > 6).slice(0, 40);
     if (!list.length) throw new Error('модель не нашла привычек');

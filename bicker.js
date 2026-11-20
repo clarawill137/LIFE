@@ -99,7 +99,11 @@ function patNow() {
 function mult(P) {
     let m = STYLE[cfg().style][1];
     if (grumpy()) m *= 1.5;
-    try { const d = A.sleepDebt?.(P); if (d && d.debt >= 6) m *= 1.3; } catch { /* */ }
+    // код-мозг знает состояние целиком (недосып уже в нём): раздражён, на нервах, без сил — терпение тает быстрее; в тепле — медленнее
+    let edge = 0;
+    try { edge = Number(globalThis.LifeBrain?.edge?.(P)) || 0; } catch { /* */ }
+    if (edge) m *= edge;
+    else { try { const d = A.sleepDebt?.(P); if (d && d.debt >= 6) m *= 1.3; } catch { /* */ } }
     return angel() ? 0 : m;
 }
 function bandOf(pat) {
@@ -316,6 +320,15 @@ export function bickerHtml() {
     <div class="lf-chips wrap">${Object.entries(FREQ).map(([k, [l]]) => `<button class="lf-chip${c.freq === k ? ' on' : ''}" data-act="bk-freq" data-k="${k}">${l}</button>`).join('')}</div>
     ${A.sec('Как он ссорится')}
     <div class="lf-chips wrap">${Object.entries(STYLE).map(([k, [l]]) => `<button class="lf-chip${c.style === k ? ' on' : ''}" data-act="bk-style" data-k="${k}">${l}</button>`).join('')}</div>`;
+}
+
+/** Мост: терпение сейчас — { who, pat, cur } или null (перепалки выключены или пары нет). */
+export function bickerPatience() {
+    try {
+        if (!A?.hasChat?.() || !on()) return null;
+        const P = partner();
+        return P ? { who: P, pat: patNow(), cur: !!M().cur } : null;
+    } catch { return null; }
 }
 
 export const bickerState = () => { const s = M(); return s.cur ? 'идёт' : patNow() < 65 ? `${patNow()}` : ''; };

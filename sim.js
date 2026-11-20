@@ -180,6 +180,7 @@ function doneIdea(x, i) {
     x.status = 'done';
     x.doneMes = i;
     m.initLast[x.who] = i;
+    try { globalThis.LifeBrain?.spend?.(x.who, x.kind, i); } catch { /* */ }
     if (m.armed?.id === x.id) { m.lastInit = { id: x.id, mes: i }; m.armed = null; }
 }
 
@@ -648,7 +649,13 @@ export function simPrompt(type) {
     const L = A.chatArr().length;
     const regen = (type === 'swipe' && m.lastInit && L - 1 === m.lastInit.mes) || (type === 'regenerate' && m.lastInit && L === m.lastInit.mes);
     const a = m.armed ? ideaById(m.armed.id) : regen ? ideaById(m.lastInit.id) : null;
-    if (c.on && a) out.push(`[Инициатива: если в этом ответе действует ${a.who} — по собственной инициативе, без подсказки игрока: ${a.text}. Естественно, из характера персонажа и того, что сейчас происходит; не ломай сцену и не объявляй это заранее.]`);
+    if (c.on && a) {
+        // код-мозг: шаг стоит воли. Не хватает сил или держит страх — хочет, но мнётся и подменяет безопасным
+        let g = null;
+        try { g = globalThis.LifeBrain?.afford?.(a.who, a.kind) || null; } catch { /* */ }
+        if (g && g.ok === false) out.push(`[Инициатива: ${a.who} хочет сам, без подсказки игрока: ${a.text} — но ${g.why}. Пусть это будет видно: начинает и обрывает, мнётся, откладывает или подменяет шаг безопасным${g.safe ? ` (${g.safe})` : ''}; если ${u} заметит и поможет — решится. Не объявляй это заранее.]`);
+        else out.push(`[Инициатива: если в этом ответе действует ${a.who} — по собственной инициативе, без подсказки игрока: ${a.text}. Естественно, из характера персонажа и того, что сейчас происходит; не ломай сцену и не объявляй это заранее.${g?.bold ? ' Сил и смелости на это сейчас хватает с запасом.' : ''}]`);
+    }
     const offs = m.offscreen.filter(e => !e.seen && A.lastAiIndex() - e.mes < 40).slice(-2);
     for (const e of offs) out.push(`[За кадром, пока ${u} не было рядом, ${e.who}: ${e.t}${e.where ? ` (${A.placeName(e.where)})` : ''}. Это уже случилось. Если ${u} сейчас там или придёт туда — это можно обнаружить.]`);
     if (c.traces && loc) {
