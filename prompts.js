@@ -29,6 +29,7 @@ export function initPrompts(api) {
     hookToasts();
     hookSlayButtons();
     hookPictureTap();
+    hookPencilTap();
     setInterval(() => { try { sweep(); } catch (e) { console.warn('[Life] промты: сверка постов', e); } }, 3000);
     for (const ms of [1500, 7000]) setTimeout(() => { try { styleUnstick(true); } catch { /* настройки SLAY ещё не подняты */ } }, ms);
     setTimeout(() => { try { firstSource(); } catch (e) { console.warn('[Life] промты: источник', e); } }, 7000);
@@ -561,19 +562,64 @@ export function paintPrompts(el, id) {
     el.querySelectorAll('.lf-pm-btn').forEach(x => { if (!live.has(x)) x.remove(); });
 }
 
-/** Клик в чате. true — клик наш. */
+/** Открыть окно промта по кнопке ✎. Что бы ни пошло не так — сказать об этом, а не промолчать. */
+let pencilAt = 0;   // когда ✎ сработала в последний раз
+function openFromButton(b) {
+    pencilAt = Date.now();
+    try {
+        const i = Number(b.dataset.mes);
+        // номер тега — по самой картинке: пост мог перерисоваться с тех пор, как кнопку поставили
+        const node = b.classList.contains('err') ? b.closest('.iig-error-placeholder') : b.closest('.iig-img-wrap, .gca-slot')?.querySelector('img[data-iig-instruction]') || b.previousElementSibling;
+        let k = node ? tagIndexOf(i, node) : -1;
+        if (k < 0) k = Number(b.dataset.k);
+        openPromptManager(tagAdapter(i, k));
+    } catch (e) {
+        console.warn('[Life] промты: ✎', e);
+        A.toast('error', `Окно промта не открылось: ${String(e?.message || e).slice(0, 160)}`, '✎ Промт');
+    }
+}
+
+/** Клик в чате. true — клик наш. Запасной путь: обычно тап по ✎ ловится раньше, в hookPencilTap. */
 export function onPromptClick(ev) {
     const b = ev.target.closest?.('.lf-pm-btn');
     if (!b) return false;
     ev.preventDefault();
     ev.stopPropagation();
-    const i = Number(b.dataset.mes);
-    // номер тега — по самой картинке: пост мог перерисоваться с тех пор, как кнопку поставили
-    const node = b.classList.contains('err') ? b.closest('.iig-error-placeholder') : b.closest('.iig-img-wrap, .gca-slot')?.querySelector('img[data-iig-instruction]') || b.previousElementSibling;
-    let k = node ? tagIndexOf(i, node) : -1;
-    if (k < 0) k = Number(b.dataset.k);
-    openPromptManager(tagAdapter(i, k));
+    if (Date.now() - pencilAt > 500) openFromButton(b);
     return true;
+}
+
+/**
+ * Тап по ✎ ловится на window в фазе перехвата — раньше любых слушателей чата: до кнопки в посте клик доходит через
+ * таверну, SLAY, карточки GC и чужие расширения, и любой из них может его остановить. И второй путь, для телефона:
+ * если палец коснулся ✎ и отпустил, а клика так и не случилось (его съели по дороге или не выдал браузер) — окно
+ * открывается по самому касанию.
+ */
+function hookPencilTap() {
+    const live = (b) => !!b && !!b.closest('#chat') && !!A && A.settings().enabled !== false;
+    window.addEventListener('click', (ev) => {
+        const b = ev.target?.closest?.('.lf-pm-btn');
+        if (!live(b)) return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        if (Date.now() - pencilAt > 500) openFromButton(b);
+    }, true);
+    let down = null;
+    window.addEventListener('pointerdown', (ev) => {
+        const b = ev.pointerType === 'mouse' ? null : ev.target?.closest?.('.lf-pm-btn');
+        down = live(b) ? { b, id: ev.pointerId, x: ev.clientX, y: ev.clientY, at: Date.now() } : null;
+    }, true);
+    window.addEventListener('pointercancel', () => { down = null; }, true);   // палец повёл страницу — это прокрутка
+    window.addEventListener('pointerup', (ev) => {
+        const d = down;
+        down = null;
+        if (!d || ev.pointerId !== d.id || Date.now() - d.at > 700 || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 12) return;
+        setTimeout(() => {
+            if (Date.now() - pencilAt < 900 || !d.b.isConnected) return;   // клик пришёл и сработал — или кнопки уже нет
+            openFromButton(d.b);
+            if (S) S.ghost = Date.now();   // запоздалый клик того же касания попадёт уже в окно — его пропустить
+        }, 380);
+    }, true);
 }
 
 // ───────────── открыть окно с самой картинки ─────────────
@@ -928,8 +974,21 @@ export function openPromptManager(ad) {
     box.addEventListener('change', onBoxInput);   // список стилей: не всякий браузер шлёт input на <select>
     box.addEventListener('keydown', onBoxKey);
     (topDialog() || document.body).append(box);
-    paint();
-    requestAnimationFrame(() => box?.classList.add('on'));
+    try { paint(); } catch (e) {
+        // пустое окно осталось бы невидимым поверх всей таверны и глотало бы тапы
+        console.warn('[Life] промты: окно', e);
+        closeManager();
+        A.toast('error', `Окно промта не нарисовалось: ${String(e?.message || e).slice(0, 160)}`, '✎ Промт');
+        return;
+    }
+    const mine = box;
+    requestAnimationFrame(() => mine.classList.add('on'));
+    setTimeout(() => {
+        if (box !== mine) return;
+        mine.classList.add('on');   // вкладка была не на экране — кадр анимации мог не прийти
+        // оформление окна лежит в style.css Life: без него окно — голый текст в самом низу страницы
+        if (getComputedStyle(mine).position !== 'fixed') A.toast('warning', 'Окно промта открылось, но стили Life не загрузились — обнови страницу.', '✎ Промт');
+    }, 500);
 }
 
 function closeManager() {
@@ -1112,6 +1171,7 @@ function onBoxKey(ev) {
 async function onBoxClick(ev) {
     const b = ev.target.closest('[data-pm]');
     if (!b || !S) return;
+    if (S.ghost && Date.now() - S.ghost < 450) return;
     const act = b.dataset.pm;
     if (b.tagName === 'BUTTON' && b.disabled) return;
     ev.preventDefault();
