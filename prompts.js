@@ -14,6 +14,10 @@
 // Оператор (0.63, dp.js): в окне — «Переснять» и «три дубля» (кадр по посту: мысль, мгновение, взгляды, свет), строка
 // «Плёнка» (вид картинки — поле style тега). Новый кадр оператор переснимает и сам, до отрисовки, — если SLAY зовёт
 // соседей перед запросом (порт 5.1.1: window.slayHooks.beforeGenerate). Новый промт вписывается в пост, когда SLAY дорисует.
+// 0.67.1: ✎ сама возвращается на место (движок карточек GC выбрасывает её вместе со старой карточкой после любой генерации,
+// даже фоновой); у фото в карточке — своя ↻ (SLAY свою там не держит); на картинке во весь экран — свой ряд кнопок поверх
+// окна SLAY («Промт», «Перерисовать»); окно промта проверяет, видно ли его, и поднимается над чужим слоем; без кнопок —
+// «/life pm», «/life redraw», «/life reshoot»; «/life pm log» — журнал того, что происходило.
 
 import { icon } from './icons.js';
 import { artBlocks } from './art.js';
@@ -26,6 +30,13 @@ import { LOOKS, LOOK_OWN, lookText, lookOfText, lookById, shotOf, shotLabelRu } 
 
 let A = null;
 const esc = (v) => A.esc(v);
+// журнал последних шагов (тапы, окно, рисование) — для «/life pm log»: в телефоне консоли нет
+const LOG = [];
+function pmLog(...a) {
+    const d = new Date(), two = (n) => String(n).padStart(2, '0');
+    LOG.push(`${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())} ${a.filter(x => x !== '' && x != null).join(' ')}`);
+    if (LOG.length > 70) LOG.shift();
+}
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const DRAW_MS = 6 * 60 * 1000; // дольше SLAY сам не ждёт
 
@@ -35,6 +46,7 @@ export function initPrompts(api) {
     hookSlayButtons();
     hookPictureTap();
     hookPencilTap();
+    try { hookHeal(); } catch (e) { console.warn('[Life] промты: присмотр за ✎', e); }
     try { hookSlayDraw(); } catch (e) { console.warn('[Life] оператор: крючок SLAY', e); }
     setInterval(() => { try { sweep(); } catch (e) { console.warn('[Life] промты: сверка постов', e); } }, 3000);
     for (const ms of [1500, 7000]) setTimeout(() => { try { styleUnstick(true); } catch { /* настройки SLAY ещё не подняты */ } }, ms);
@@ -218,6 +230,41 @@ function sweep() {
         k++;
         watch(i, m);
     }
+    heal();
+}
+
+// ───────────── присмотр: ✎ на месте ─────────────
+// Движок карточек GC собирает карточку заново после любой генерации (и фоновой: Летописец, реплики, мозг) — старую он
+// выбрасывает вместе с нашей ✎, а картинку уносит из обёртки SLAY в свою рамку. Событий об этом нет, оформление постов
+// Life в этот момент не зовётся — так ✎ и пропадала с фото в карточке. Посты с картинками сверяем сами: по изменениям
+// в чате и раз в три секунды (sweep).
+let healT = 0;
+function heal() {
+    if (!A?.hasChat?.() || A.settings().enabled === false) return;
+    const chat = A.chatArr();
+    for (const el of [...document.querySelectorAll('#chat > .mes[mesid]')].slice(-40)) {
+        if (!el.querySelector('.mes_text [data-iig-instruction], .lf-pm-btn, .lf-pm-re')) continue;
+        const id = Number(el.getAttribute('mesid'));
+        if (!Number.isInteger(id) || !chat[id]) continue;
+        const was = el.querySelectorAll('.lf-pm-btn').length;
+        try { paintPrompts(el, id); } catch (e) { console.warn('[Life] промты: ✎', e); }
+        const now = el.querySelectorAll('.lf-pm-btn').length;
+        if (now > was) pmLog(`✎ вернула на место: пост ${id} (${was} → ${now})`);
+    }
+}
+function hookHeal() {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) { setTimeout(() => { try { hookHeal(); } catch { /* чата ещё нет */ } }, 1500); return; }
+    if (chatEl.dataset.lfPmHeal) return;
+    chatEl.dataset.lfPmHeal = '1';
+    const ours = (n) => n.nodeType !== 1 || n.classList?.contains('lf-pm-btn') || n.classList?.contains('lf-pm-re');
+    new MutationObserver((list) => {
+        if (healT) return;
+        // свои же кнопки — не повод (иначе сверка будила бы сама себя); посты без картинок — тоже
+        const hit = list.some(r => [...r.addedNodes, ...r.removedNodes].some(n => !ours(n)) && !!r.target.closest?.('.mes')?.querySelector('[data-iig-instruction]'));
+        if (!hit) return;
+        healT = setTimeout(() => { healT = 0; try { heal(); } catch (e) { console.warn('[Life] промты: присмотр за ✎', e); } }, 350);
+    }).observe(chatEl, { childList: true, subtree: true });
 }
 
 // ───────────── картинка в тексте ↔ картинка на экране ─────────────
@@ -552,13 +599,15 @@ function tagAdapter(i, k0) {
 // ───────────── ✎ на картинках ─────────────
 
 const BTN = (i, k, cls = '') => `<button type="button" class="lf-pm-btn${cls}" data-mes="${i}" data-k="${k}" title="Промт картинки: посмотреть, поправить, перерисовать" contenteditable="false">${icon('pencil')}</button>`;
+// своя ↻ — там, где у картинки нет ↻ самого SLAY (фото в карточке GC: движок унёс его из обёртки SLAY). Рисует тот же SLAY.
+const RE = (i, k, cls = '') => `<button type="button" class="lf-pm-re${cls}" data-mes="${i}" data-k="${k}" title="Перерисовать по этому же промту" contenteditable="false">${icon('refresh')}</button>`;
 
 /** У каждой картинки SLAY в посте — ✎ рядом с его ↻. Зовётся из отрисовки постов. */
 export function paintPrompts(el, id) {
     const m = A.chatArr()[id];
     const has = !!m && !m.is_user && typeof m.mes === 'string' && m.mes.includes('data-iig-instruction');
     if (has && id >= A.chatArr().length - 14) watch(id, m);
-    if (!has || !A.settings().enabled || !cfg().on) { el.querySelectorAll('.lf-pm-btn').forEach(x => x.remove()); return; }
+    if (!has || !A.settings().enabled || !cfg().on) { el.querySelectorAll('.lf-pm-btn, .lf-pm-re').forEach(x => x.remove()); return; }
     const live = new Set();
     for (const node of nodesOf(id)) {
         if (node.tagName === 'VIDEO') continue; // видео Naistera — не картинка, промтом его не перерисовать
@@ -574,8 +623,18 @@ export function paintPrompts(el, id) {
             if (wrap) { if (wrap.classList.contains('gca-slot') && !wrap.style.position) wrap.style.position = 'relative'; wrap.append(b); } else node.after(b);
         } else if (b.dataset.k !== String(k)) b.dataset.k = String(k);
         live.add(b);
+        if (err || node.tagName !== 'IMG' || slayCtl(node)) continue;
+        let r = wrap ? wrap.querySelector(':scope > .lf-pm-re') : (b.nextElementSibling?.classList?.contains('lf-pm-re') ? b.nextElementSibling : null);
+        if (!r) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = RE(id, k, wrap ? '' : ' loose');
+            r = tmp.firstElementChild;
+            b.after(r);
+        } else if (r.dataset.k !== String(k)) r.dataset.k = String(k);
+        r.classList.toggle('busy', quick.has(`${id}:${k}`));
+        live.add(r);
     }
-    el.querySelectorAll('.lf-pm-btn').forEach(x => { if (!live.has(x)) x.remove(); });
+    el.querySelectorAll('.lf-pm-btn, .lf-pm-re').forEach(x => { if (!live.has(x)) x.remove(); });
 }
 
 /** Открыть окно промта по кнопке ✎. Что бы ни пошло не так — сказать об этом, а не промолчать. */
@@ -584,6 +643,7 @@ function openFromButton(b) {
     pencilAt = Date.now();
     try {
         const i = Number(b.dataset.mes);
+        pmLog(`тап ✎: пост ${i}`);
         // номер тега — по самой картинке: пост мог перерисоваться с тех пор, как кнопку поставили
         const node = b.classList.contains('err') ? b.closest('.iig-error-placeholder') : b.closest('.iig-img-wrap, .gca-slot')?.querySelector('img[data-iig-instruction]') || b.previousElementSibling;
         let k = node ? tagIndexOf(i, node) : -1;
@@ -595,13 +655,38 @@ function openFromButton(b) {
     }
 }
 
+/** ↻ Life у фото в карточке: перерисовать по тому же промту, окна не открывая. */
+function redrawFromButton(b) {
+    pencilAt = Date.now();
+    const i = Number(b.dataset.mes);
+    const node = b.closest('.iig-img-wrap, .gca-slot')?.querySelector('img[data-iig-instruction]') || null;
+    let k = node ? tagIndexOf(i, node) : -1;
+    if (k < 0) k = Number(b.dataset.k);
+    pmLog(`тап ↻: пост ${i}, картинка ${k}`);
+    quickDraw(i, k);
+}
+
+const TAP_SEL = '.lf-pm-btn, .lf-pm-re, #lf-pm-lbx button';
+/** Нажата наша кнопка: ✎, ↻ или одна из двух на картинке во весь экран. Что бы ни пошло не так — сказать. */
+function press(b) {
+    try {
+        if (b.closest('#lf-pm-lbx')) { pencilAt = Date.now(); lightboxPress(b); }
+        else if (b.classList.contains('lf-pm-re')) redrawFromButton(b);
+        else openFromButton(b);
+    } catch (e) {
+        console.warn('[Life] промты: кнопка', e);
+        pmLog('кнопка: ошибка —', String(e?.message || e));
+        A.toast('error', `Кнопка не сработала: ${String(e?.message || e).slice(0, 160)}`, '✎ Промт');
+    }
+}
+
 /** Клик в чате. true — клик наш. Запасной путь: обычно тап по ✎ ловится раньше, в hookPencilTap. */
 export function onPromptClick(ev) {
-    const b = ev.target.closest?.('.lf-pm-btn');
+    const b = ev.target.closest?.('.lf-pm-btn, .lf-pm-re');
     if (!b) return false;
     ev.preventDefault();
     ev.stopPropagation();
-    if (Date.now() - pencilAt > 500) openFromButton(b);
+    if (Date.now() - pencilAt > 700) press(b);
     return true;
 }
 
@@ -612,7 +697,7 @@ export function onPromptClick(ev) {
  * открывается по самому касанию.
  */
 function hookPencilTap() {
-    const live = (b) => !!b && !!b.closest('#chat') && !!A && A.settings().enabled !== false;
+    const live = (b) => !!b && (!!b.closest('#chat') || !!b.closest('#lf-pm-lbx')) && !!A && A.settings().enabled !== false;
     // ✎ под пальцем, но тап достался тому, что лежит поверх неё: прозрачной накладке или кнопке SLAY из пустой обёртки
     // (картинку из неё унёс движок карточек). Чужую живую кнопку не трогаем — это её тап.
     const under = (ev) => {
@@ -621,18 +706,18 @@ function hookPencilTap() {
         const ctl = t.closest('button, a, input, textarea, select, summary, label, [role="button"], [contenteditable="true"]');
         const wrap = ctl?.closest('.iig-img-wrap');
         if (ctl && !(wrap && !wrap.querySelector('img, video'))) return null;
-        return document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.classList?.contains('lf-pm-btn')) || null;
+        return document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.classList?.contains('lf-pm-btn') || e.classList?.contains('lf-pm-re')) || null;
     };
     window.addEventListener('click', (ev) => {
-        const b = ev.target?.closest?.('.lf-pm-btn') || under(ev);
+        const b = ev.target?.closest?.(TAP_SEL) || under(ev);
         if (!live(b)) return;
         ev.preventDefault();
         ev.stopImmediatePropagation();
-        if (Date.now() - pencilAt > 500) openFromButton(b);
+        if (Date.now() - pencilAt > 700) press(b);
     }, true);
     let down = null;
     window.addEventListener('pointerdown', (ev) => {
-        const b = ev.pointerType === 'mouse' ? null : ev.target?.closest?.('.lf-pm-btn');
+        const b = ev.pointerType === 'mouse' ? null : ev.target?.closest?.(TAP_SEL);
         down = live(b) ? { b, id: ev.pointerId, x: ev.clientX, y: ev.clientY, at: Date.now() } : null;
     }, true);
     window.addEventListener('pointercancel', () => { down = null; }, true);   // палец повёл страницу — это прокрутка
@@ -642,7 +727,8 @@ function hookPencilTap() {
         if (!d || ev.pointerId !== d.id || Date.now() - d.at > 700 || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 12) return;
         setTimeout(() => {
             if (Date.now() - pencilAt < 900 || !d.b.isConnected) return;   // клик пришёл и сработал — или кнопки уже нет
-            openFromButton(d.b);
+            pmLog('тап без клика — открываю по касанию');
+            press(d.b);
             if (S) S.ghost = Date.now();   // запоздалый клик того же касания попадёт уже в окно — его пропустить
         }, 380);
     }, true);
@@ -673,35 +759,48 @@ function hookPictureTap() {
             return;
         }
         lastTap = { i, k, at: Date.now() };
-        for (const ms of [0, 120, 400]) setTimeout(lightboxButton, ms);   // SLAY откроет картинку сам — кнопку ставим следом
+        pmLog(`тап по картинке: пост ${i}, картинка ${k}`);
+        for (const ms of [0, 120, 400]) setTimeout(lightboxBar, ms);   // SLAY откроет картинку сам — кнопки ставим следом
     }, true);
 }
 
-/** Кнопка «Промт» в окне SLAY «картинка на весь экран». Только когда его открыл тап по картинке поста. */
-function lightboxButton() {
+/**
+ * Кнопки «Промт» и «Перерисовать» у картинки во весь экран. Стоят не в окне SLAY, а своим рядом поверх него (в <body>).
+ * Прежняя кнопка жила в его ряду под картинкой (четвёртой — на телефоне уходила на вторую строку); в живой таверне в
+ * Safari на iPhone «Промт» там не срабатывал. Почему — не установлено: на стенде в Chrome срабатывает. Свой ряд от
+ * вёрстки SLAY не зависит. Только когда окно SLAY открыл тап по картинке поста.
+ */
+function lightboxBar() {
     const lb = document.getElementById('slay_lightbox');
     if (!lb) return;
-    let b = lb.querySelector('.lf-pm-lb');
+    lb.querySelector('.lf-pm-lb')?.remove();   // кнопка прежних версий, в ряду SLAY
     if (!(lastTap && Date.now() - lastTap.at < 2500 && lb.classList.contains('open'))) return;
-    if (!b) {
-        b = document.createElement('button');
-        b.type = 'button';
-        b.innerHTML = `${icon('pencil')}<span>Промт</span>`;
-        const bar = lb.querySelector('.iig-lightbox-bar');   // SLAY 5.x: ряд кнопок под картинкой — встаём в него
-        b.className = bar ? 'lf-pm-lb bar' : 'lf-pm-lb';
-        (bar || lb).append(b);
-        b.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();   // как и у кнопок самого SLAY: тап не должен дойти до таверны и закрыть её панели
-            const t = b._tap;
-            lb.querySelector('.iig-lightbox-close')?.click();
-            if (t && A.chatArr()[t.i]) openPromptManager(tagAdapter(t.i, t.k));
-        });
-        // закрыли — кнопку убрать: в следующий раз это окно может открыть галерея стилей, а не картинка поста
-        new MutationObserver(() => { if (!lb.classList.contains('open')) b.hidden = true; }).observe(lb, { attributes: true, attributeFilter: ['class'] });
+    let bar = document.getElementById('lf-pm-lbx');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'lf-pm-lbx';
+        bar.innerHTML = `<button type="button" data-lb="open">${icon('pencil')}<span>Промт</span></button><button type="button" data-lb="redraw">${icon('refresh')}<span>Перерисовать</span></button>`;
+        document.body.append(bar);
     }
-    b._tap = lastTap;
-    b.hidden = false;
+    if (!lb.dataset.lfPm) {
+        lb.dataset.lfPm = '1';
+        // закрыли — кнопки убрать: в следующий раз это окно может открыть галерея стилей, а не картинка поста
+        new MutationObserver(() => { if (!lb.classList.contains('open')) { const x = document.getElementById('lf-pm-lbx'); if (x) x.hidden = true; } }).observe(lb, { attributes: true, attributeFilter: ['class'] });
+    }
+    bar._tap = lastTap;
+    bar.hidden = false;
+}
+
+function lightboxPress(b) {
+    const bar = document.getElementById('lf-pm-lbx');
+    const t = bar?._tap;
+    const act = b.dataset.lb;
+    pmLog(`картинка во весь экран: «${act === 'redraw' ? 'Перерисовать' : 'Промт'}»`, t ? `пост ${t.i}, картинка ${t.k}` : '— картинка неизвестна');
+    document.querySelector('#slay_lightbox .iig-lightbox-close')?.click();
+    if (bar) bar.hidden = true;
+    if (!t || !A.chatArr()[t.i]) { A.toast('warning', 'Не поняла, какая это картинка, — тапни её в посте ещё раз.', '✎ Промт'); return; }
+    if (act === 'redraw') quickDraw(t.i, t.k);
+    else openPromptManager(tagAdapter(t.i, t.k));
 }
 
 // ───────────── версии ─────────────
@@ -969,6 +1068,123 @@ async function autoFallback(i, k, rec) {
     }
 }
 
+// ───────────── без окна: перерисовать, переснять ─────────────
+
+const quick = new Set();   // «пост:картинка» — что сейчас рисуется без окна
+
+/** Перерисовать картинку поста, не открывая окна: тем же промтом или (shoot) — сперва оператор переснимет кадр по посту. */
+async function quickDraw(i, k, { shoot = false } = {}) {
+    const T = shoot ? '✎ Оператор' : '✎ Перерисовать';
+    const key = `${i}:${k}`;
+    if (quick.has(key) || (S && S.busy && S.ad.kind === 'post' && S.ad.mes === i)) { A.toast('info', 'Эта картинка уже рисуется — появится на своём месте.', T); return false; }
+    const ad = tagAdapter(i, k);
+    let cur = null;
+    try { cur = ad.read(); } catch (e) { console.warn('[Life] промты: чтение', e); }
+    if (!cur) { pmLog(`без окна: промт не найден (пост ${i}, картинка ${k})`); A.toast('warning', 'Не нашла промт этой картинки в посте.', T); return false; }
+    if (!cur.prompt.trim()) { A.toast('info', 'У картинки пустой промт — открой ✎ и впиши кадр.', T); return false; }
+    quick.add(key);
+    busyMark(i, k, true);
+    try { const el = mesEl(i); if (el) paintPrompts(el, i); } catch { /* */ }
+    pmLog(`без окна: ${shoot ? 'переснять' : 'перерисовать'} — пост ${i}, картинка ${k}, рисует ${ad.engine() === 'slay' ? 'SLAY' : 'Гардероб'}`);
+    const first = { p: cur.prompt, ar: cur.aspect, src: cur.src, note: '', at: Date.now(), by: '', sn: cur.pmStyle || '' };
+    const by = imageModel().name;
+    const tr = globalThis.toastr;
+    const hold = (text) => { try { return tr?.info?.(text, T, { timeOut: 0, extendedTimeOut: 0 }) || null; } catch { return null; } };
+    const drop = (t) => { try { if (t) tr?.clear?.(t); } catch { /* */ } };
+    let prompt = cur.prompt, aspect = cur.aspect, note = 'перерисовка', tw = null;
+    try {
+        if (shoot) {
+            tw = hold('Оператор ставит кадр по посту…');
+            const [t] = await reshoot({ i, t: ad.tag(), prompt, aspect, error: cur.state === 'error' && explainError(cur.error)?.kind === 'filter' ? cur.error : '' });
+            prompt = t.prompt;
+            if (t.aspect) aspect = t.aspect;
+            note = `оператор: ${t.note || t.shot || 'кадр переснят'}`;
+            drop(tw);
+        }
+        tw = hold('Рисую — картинка сменится на своём месте.');
+        await ad.save({ prompt, aspect });
+        const r = await ad.draw();
+        histPush({ ad, first }, { p: prompt, ar: aspect, src: r.src, note, at: Date.now(), by, sn: cur.pmStyle || '' });
+        pmLog(`без окна: готово — пост ${i}`);
+        drop(tw);
+        A.toast('success', 'Готово. Прежняя картинка — в ✎ → «Версии».', T, { timeOut: 3500 });
+        return true;
+    } catch (e) {
+        const msg = String(e?.message || e);
+        console.warn('[Life] промты: без окна', e);
+        pmLog('без окна: не вышло —', msg.slice(0, 200));
+        drop(tw);
+        A.toast('warning', esc(explainError(msg)?.text || A.cut(msg, 220)), `${T}: не вышло`, { timeOut: 8000 });
+        return false;
+    } finally {
+        quick.delete(key);
+        busyMark(i, k, false);
+        A.paintSoon?.();
+        setTimeout(() => { try { heal(); } catch { /* */ } }, 600);
+    }
+}
+
+/** Последняя картинка чата (не видео): { i, k }. */
+function lastPicture() {
+    const chat = A.chatArr();
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const m = chat[i];
+        if (!m || m.is_user || typeof m.mes !== 'string' || !m.mes.includes('data-iig-instruction')) continue;
+        const ts = scanTags(m.mes);
+        for (let k = ts.length - 1; k >= 0; k--) if (!ts[k].video && ts[k].data?.prompt) return { i, k };
+    }
+    return null;
+}
+
+/** Как картинка стоит в посте и какие кнопки при ней — для журнала. */
+function domOf(i, k) {
+    const node = nodeFor(i, k);
+    if (!node) return 'на экране не найдена';
+    const mt = mesEl(i)?.querySelector('.mes_text');
+    const chain = [];
+    for (let e = node; e && e !== mt && chain.length < 6; e = e.parentElement) chain.push(e.tagName.toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/)[0] : ''));
+    const seenBtn = (b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? 'видна' : 'скрыта'; };
+    const btns = [...(mt?.querySelectorAll('.lf-pm-btn, .lf-pm-re, .iig-regen-btn') || [])].map(b => `${b.classList.contains('lf-pm-btn') ? '✎' : b.classList.contains('lf-pm-re') ? '↻ Life' : '↻ SLAY'} ${seenBtn(b)}`);
+    return `${chain.join(' < ')}; кнопки: ${btns.join(', ') || 'нет'}`;
+}
+
+function showLog() {
+    const last = lastPicture();
+    const head = [
+        `Life ${A.version || ''} · SLAY ${slayOn() ? 'включён' : 'выключен'}${hookAlive() ? ', зовёт соседей' : ', соседей не зовёт'} · ✎ ${cfg().on ? 'вкл' : 'выкл'}`,
+        `экран ${window.innerWidth}×${window.innerHeight} · ${String(navigator.userAgent || '').replace(/^Mozilla\/5\.0 /, '').slice(0, 110)}`,
+        last ? `последняя картинка: пост ${last.i}, №${last.k} — ${domOf(last.i, last.k)}` : 'картинок в чате нет',
+        '—',
+    ];
+    const text = [...head, ...(LOG.length ? LOG : ['журнал пуст: с загрузки страницы кнопки картинок не трогали'])].join('\n');
+    const c = A.ctx();
+    const html = `<div style="text-align:left;font:12px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word">${esc(text)}</div>`;
+    try {
+        if (typeof c.callGenericPopup === 'function') { c.callGenericPopup(html, c.POPUP_TYPE?.TEXT ?? 1, '', { wide: true, allowVerticalScrolling: true }); return text; }
+    } catch (e) { console.warn('[Life] промты: журнал', e); }
+    A.toast('info', esc(text).replace(/\n/g, '<br>'), '✎ Журнал', { timeOut: 0, extendedTimeOut: 0, escapeHtml: false });
+    return text;
+}
+
+/**
+ * Команды без кнопок: «/life pm» — окно промта последней картинки чата; «/life pm log» — журнал;
+ * «/life redraw» — перерисовать её по тому же промту; «/life reshoot» — оператор переснимет кадр по посту и нарисует.
+ * true — команда наша.
+ */
+export function pmCommand(word) {
+    const m = /^(pm|промт|redraw|перерисовать|reshoot|переснять)(?:\s+(\S+))?$/.exec(String(word || '').trim().toLowerCase());
+    if (!m || !A) return false;
+    const act = /^(pm|промт)$/.test(m[1]) ? 'pm' : /^(redraw|перерисовать)$/.test(m[1]) ? 'redraw' : 'reshoot';
+    if (act === 'pm' && /^(log|лог|журнал)$/.test(m[2] || '')) { showLog(); return true; }
+    if (!A.hasChat?.()) { A.toast('info', 'Сначала открой чат.', '✎ Промт'); return true; }
+    const last = lastPicture();
+    if (!last) { A.toast('info', 'В чате нет картинок SLAY.', '✎ Промт'); return true; }
+    pmLog(`команда /life ${m[1]}: пост ${last.i}, картинка ${last.k}`);
+    if (act === 'pm') openPromptManager(tagAdapter(last.i, last.k));
+    else quickDraw(last.i, last.k, { shoot: act === 'reshoot' });
+    return true;
+}
+
 // ───────────── окно ─────────────
 
 let S = null;   // состояние открытого окна
@@ -992,7 +1208,8 @@ export function openPromptManager(ad) {
     closeManager();
     let cur = null;
     try { cur = ad?.read(); } catch (e) { console.warn('[Life] промты: чтение', e); }
-    if (!cur) { A.toast('warning', 'Не нашла промт этой картинки в посте.', '✎ Промт'); return; }
+    if (!cur) { pmLog('окно: промт картинки в посте не найден'); A.toast('warning', 'Не нашла промт этой картинки в посте.', '✎ Промт'); return; }
+    pmLog('окно: открываю —', (() => { try { return ad.title || ''; } catch { return ''; } })());
     S = {
         ad, prompt: cur.prompt, aspect: cur.aspect, base: cur.prompt, baseAspect: cur.aspect, src: cur.src, state: cur.state,
         err: cur.error ? { msg: cur.error, ...(explainError(cur.error) || {}) } : null,
@@ -1012,6 +1229,7 @@ export function openPromptManager(ad) {
     try { paint(); } catch (e) {
         // пустое окно осталось бы невидимым поверх всей таверны и глотало бы тапы
         console.warn('[Life] промты: окно', e);
+        pmLog('окно: не нарисовалось —', String(e?.message || e));
         closeManager();
         A.toast('error', `Окно промта не нарисовалось: ${String(e?.message || e).slice(0, 160)}`, '✎ Промт');
         return;
@@ -1022,8 +1240,35 @@ export function openPromptManager(ad) {
         if (box !== mine) return;
         mine.classList.add('on');   // вкладка была не на экране — кадр анимации мог не прийти
         // оформление окна лежит в style.css Life: без него окно — голый текст в самом низу страницы
-        if (getComputedStyle(mine).position !== 'fixed') A.toast('warning', 'Окно промта открылось, но стили Life не загрузились — обнови страницу.', '✎ Промт');
+        if (getComputedStyle(mine).position !== 'fixed') { pmLog('окно: стили Life не загрузились'); A.toast('warning', 'Окно промта открылось, но стили Life не загрузились — обнови страницу.', '✎ Промт'); }
+        else windowSeen(mine);
     }, 500);
+}
+
+const whoIs = (el) => { const out = []; for (let e = el, n = 0; e && e.nodeType === 1 && n < 3; e = e.parentElement, n++) out.push(e.tagName.toLowerCase() + (e.id ? `#${e.id}` : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '')); return out.join(' < '); };
+
+/** Окно открыто — а видно ли его? Поверх лежит чужой слой — поднять окно над всем; не помогло — сказать, что мешает. */
+function windowSeen(mine, lifted = false) {
+    const card = mine.querySelector('.lf-pm-card');
+    if (!card || !mine.isConnected) return;
+    const r = card.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const x = Math.min(vw - 2, Math.max(2, r.left + r.width / 2)), y = Math.min(vh - 2, Math.max(2, r.top + Math.min(60, r.height / 2)));
+    const top = document.elementFromPoint(x, y);
+    const cs = getComputedStyle(mine);
+    const ok = r.width > 80 && r.height > 120 && r.top < vh - 40 && r.bottom > 40 && !!top && mine.contains(top) && cs.display !== 'none' && cs.visibility !== 'hidden';
+    if (ok) { pmLog(`окно: видно (${Math.round(r.width)}×${Math.round(r.height)}${lifted ? ', поднято над чужим слоем' : ''})`); return; }
+    const why = top && !mine.contains(top)
+        ? `поверх лежит ${whoIs(top)}`
+        : `карточка ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)} на экране ${vw}×${vh}, ${cs.display}/${cs.visibility}/${cs.opacity}`;
+    pmLog(lifted ? 'окно: не видно и после подъёма —' : 'окно: не видно —', why);
+    if (lifted || mine.parentElement !== document.body) {
+        A.toast('warning', `Окно промта открылось, но его не видно: ${esc(why)}. Картинку можно перерисовать и без окна: ↻ на ней или «/life redraw».`, '✎ Промт', { timeOut: 10000 });
+        return;
+    }
+    mine.classList.add('top');   // самый верхний слой, без анимации
+    document.documentElement.append(mine);
+    setTimeout(() => { if (box === mine) windowSeen(mine, true); }, 250);
 }
 
 function closeManager() {

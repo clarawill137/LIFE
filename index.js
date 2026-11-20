@@ -95,7 +95,7 @@ import { initMend, mendWanted, mendPost, mendLast, setMesText } from './mend.js'
 import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar } from './taste.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
-import { initPrompts, paintPrompts, onPromptClick, pmPrompt, openPromptManager } from './prompts.js';
+import { initPrompts, paintPrompts, onPromptClick, pmPrompt, openPromptManager, pmCommand } from './prompts.js';
 import { sameButSrc } from './pmtags.js';
 import { initDp, dpPrompt } from './dp.js';
 import { initFight, fightPrompt, fightChron, fightAfterPost, fightSceneHtml, fightClick, fightRecs } from './fight.js';
@@ -153,7 +153,7 @@ import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml
 import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle } from './nav.js';
 
 const MODULE = 'life';
-const VERSION = '0.67.0';
+const VERSION = '0.67.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2007,7 +2007,7 @@ function decorate() {
         const s = settings();
         const mesEls = chatEl.querySelectorAll(':scope > .mes[mesid]');
         if (!s.enabled || !hasChat()) {
-            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelectorAll('.lf-pchips, .lf-shot, .lf-shot-sug, .lf-shot-btn, .lf-pm-btn').forEach(x => x.remove()); });
+            mesEls.forEach(el => { el.classList.remove('lf-out', 'lf-marker'); el.querySelectorAll('.lf-pchips, .lf-shot, .lf-shot-sug, .lf-shot-btn, .lf-pm-btn, .lf-pm-re').forEach(x => x.remove()); });
             return;
         }
         // чат остаётся сплошным: только прячем служебные отметки Life и (по желанию) ставим тонкую черту, где сменилось место
@@ -4229,12 +4229,14 @@ function registerSlash() {
         const { SlashCommandParser, SlashCommand, SlashCommandArgument, ARGUMENT_TYPE } = ctx();
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
-            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | nav | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; pm — окно промта последней картинки (pm log — журнал кнопок картинок); redraw — перерисовать её; reshoot — оператор переснимет её кадр и нарисует; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | nav | pm | redraw | reshoot | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
+                // картинки без кнопок: pm — окно промта последней картинки (pm log — журнал), redraw — перерисовать, reshoot — переснять оператором
+                try { if (pmCommand(v)) return ''; } catch (e) { console.warn('[Life] промты: команда', e); toast('error', `Команда не сработала: ${String(e?.message || e).slice(0, 160)}`, '✎ Промт'); return ''; }
                 if (v === 'nav' || v === 'навигация') { const on = navToggle(); toast('info', on ? 'Навигация группами включена' : 'Вернула прежние пять вкладок', '✦ Life'); return ''; }
                 if (globalThis.LifeWin?.list?.().includes(v)) { globalThis.LifeWin.open(v); return ''; }   // personas | books | exts | link — окна вне хаба
                 if (v === 'theme' || v.startsWith('theme ')) {
@@ -4564,7 +4566,7 @@ jQuery(async () => {
     // «Промты» (0.59): ✎ у картинок — промт, правка словами, версии, источники SLAY
     try {
         initDp({ ...extApi });   // «Оператор» (0.63): кадр как у фотографа — до окна промта, оно им пользуется
-        initPrompts({ ...extApi, faceRef, namesInText });
+        initPrompts({ ...extApi, faceRef, namesInText, version: VERSION });
         painters.push((el, id) => paintPrompts(el, id));
     } catch (e) { console.warn('[Life] промты: старт', e); }
     chatClicks.push((act, el) => fixClick(act, el));

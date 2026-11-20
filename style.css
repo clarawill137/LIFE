@@ -3664,7 +3664,7 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 .lf-ar-rep b { color: var(--lf-rose2); font-weight: 600; }
 
 /* ───── «Промты» (0.59): ✎ на картинках и окно промта ───── */
-#chat .lf-pm-btn { position: absolute; top: 8px; left: 50px; z-index: 3; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; margin: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .6); color: #fff; cursor: pointer; opacity: .9; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity .2s, transform .15s; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#chat .lf-pm-btn { position: absolute; top: 8px; left: 50px; z-index: 3; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; margin: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .62); color: #fff; cursor: pointer; opacity: .9; transition: opacity .2s, transform .15s; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 #chat .lf-pm-btn svg { width: 15px; height: 15px; pointer-events: none; }
 #chat .lf-pm-btn:active { opacity: 1; transform: scale(.94); }
 #chat .lf-pm-btn.card { left: 8px; }
@@ -3676,14 +3676,26 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #chat .lf-pm-btn.err { position: static; opacity: 1; width: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; margin-top: 8px; border-radius: 999px; }
 #chat .lf-pm-btn.err::after { content: 'промт'; font: 500 13px -apple-system, system-ui, sans-serif; }
 #chat .lf-pm-btn.loose { position: static; display: inline-grid; opacity: .8; vertical-align: top; margin: 4px 0 0 4px; }
+/* своя ↻ (0.67.1) — у картинки, при которой нет ↻ самого SLAY: фото в карточке GC (движок уносит его из обёртки SLAY) */
+#chat .lf-pm-re { position: absolute; top: 8px; left: 50px; z-index: 3; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; margin: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .62); color: #fff; cursor: pointer; opacity: .9; transition: opacity .2s, transform .15s; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#chat .lf-pm-re svg { width: 15px; height: 15px; pointer-events: none; }
+#chat .lf-pm-re:active { opacity: 1; transform: scale(.94); }
+#chat .iig-img-wrap > .lf-pm-re { left: 8px; }
+#chat .lf-pm-re.loose { position: static; display: inline-grid; opacity: .8; vertical-align: top; margin: 4px 0 0 4px; }
+#chat .lf-pm-re.busy { pointer-events: none; opacity: .75; }
+#chat .lf-pm-re.busy svg { animation: lf-pm-spin .9s linear infinite; }
 @media (hover: hover) and (pointer: fine) {
-    #chat .lf-pm-btn:not(.err):not(.loose) { opacity: 0; }
-    #chat .iig-img-wrap:hover > .lf-pm-btn, #chat .gca-slot:hover > .lf-pm-btn, #chat .lf-pm-btn:focus-visible { opacity: 1; }
+    #chat .lf-pm-btn:not(.err):not(.loose), #chat .lf-pm-re:not(.loose):not(.busy) { opacity: 0; }
+    #chat .iig-img-wrap:hover > .lf-pm-btn, #chat .gca-slot:hover > .lf-pm-btn, #chat .lf-pm-btn:focus-visible,
+    #chat .iig-img-wrap:hover > .lf-pm-re, #chat .gca-slot:hover > .lf-pm-re, #chat .lf-pm-re:focus-visible { opacity: 1; }
 }
 #chat .lf-shot-pick-b button[data-sh="pk-pm"], #chat .lf-detpick .lf-shot-pick-b button[data-det="pk-pm"] { flex: none; width: 34px; padding: 0; }
 
-#lf-pm { position: fixed; inset: 0; z-index: 10050; display: flex; align-items: flex-end; justify-content: center; font: 14.5px/1.42 var(--lf-sans, -apple-system, system-ui, sans-serif); color: var(--lf-text, #ede4df); opacity: 0; transition: opacity .22s; -webkit-font-smoothing: antialiased; }
+#lf-pm { position: fixed; inset: 0; z-index: 900000; display: flex; align-items: flex-end; justify-content: center; font: 14.5px/1.42 var(--lf-sans, -apple-system, system-ui, sans-serif); color: var(--lf-text, #ede4df); opacity: 0; transition: opacity .22s; -webkit-font-smoothing: antialiased; }
 #lf-pm.on { opacity: 1; }
+/* окно не видно под чужим слоем (0.67.1, windowSeen) — самый верх, без анимации */
+#lf-pm.top { z-index: 2147483600 !important; opacity: 1 !important; transition: none !important; }
+#lf-pm.top .lf-pm-card { transform: none !important; transition: none !important; }
 #lf-pm *, #lf-pm *::before, #lf-pm *::after { box-sizing: border-box; }
 #lf-pm button { font: inherit; color: inherit; margin: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #lf-pm button:disabled { opacity: .4; cursor: default; }
@@ -3810,7 +3822,15 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 @keyframes lf-pm-draw { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { #chat .lf-pm-drawing { animation: none; opacity: .6; } }
 
-/* открыть окно с самой картинки (0.59.5): кнопка «Промт» в окне SLAY «картинка на весь экран» */
+/* картинка во весь экран (0.67.1): «Промт» и «Перерисовать» — своим рядом поверх окна SLAY, слева сверху (в <body>).
+   Прежняя кнопка в ряду SLAY под картинкой в Safari на iPhone не срабатывала (почему — не установлено). */
+#lf-pm-lbx { position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 1000000; display: flex; gap: 8px; }
+#lf-pm-lbx[hidden] { display: none !important; }
+#lf-pm-lbx button { display: inline-flex; align-items: center; gap: 7px; height: 40px; margin: 0; padding: 0 16px; border-radius: 20px; border: 1px solid rgba(244, 114, 182, .38); background: rgba(46, 22, 36, .92); color: #f9a8d4; font: 500 15px/1 -apple-system, system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#lf-pm-lbx button svg { width: 16px; height: 16px; pointer-events: none; }
+#lf-pm-lbx button span { pointer-events: none; }
+#lf-pm-lbx button:active { transform: scale(.96); }
+/* прежняя кнопка «Промт» в ряду SLAY (0.59.5) — больше не ставится */
 #slay_lightbox .lf-pm-lb { position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 3; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 24px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .3); background: rgba(24, 18, 21, .86); color: #fff; font: 600 16px -apple-system, system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 #slay_lightbox .lf-pm-lb svg { width: 18px; height: 18px; pointer-events: none; }
 #slay_lightbox .lf-pm-lb:active { transform: translateX(-50%) scale(.97); }
