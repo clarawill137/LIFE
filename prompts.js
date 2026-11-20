@@ -28,6 +28,7 @@ export function initPrompts(api) {
     A = api;
     hookToasts();
     hookSlayButtons();
+    hookPictureTap();
     setInterval(() => { try { sweep(); } catch (e) { console.warn('[Life] промты: сверка постов', e); } }, 3000);
     for (const ms of [1500, 7000]) setTimeout(() => { try { styleUnstick(true); } catch { /* настройки SLAY ещё не подняты */ } }, ms);
     setTimeout(() => { try { firstSource(); } catch (e) { console.warn('[Life] промты: источник', e); } }, 7000);
@@ -38,6 +39,7 @@ function cfg() {
     if (!s.pm || typeof s.pm !== 'object') s.pm = {};
     const c = s.pm;
     if (c.on === undefined) c.on = true;           // ✎ на картинках
+    if (c.tap === undefined) c.tap = false;        // тап по картинке открывает не её на весь экран, а сразу окно промта
     if (c.auto === undefined) c.auto = true;       // после «поправить» сразу рисовать
     if (c.dialect === undefined) c.dialect = true; // подсказка основной модели: под какую рисовалку писать промт
     if (!Array.isArray(c.quick)) c.quick = [];     // свои быстрые правки
@@ -266,17 +268,24 @@ let lastSlayErr = null;
 function hookToasts() {
     const t = globalThis.toastr;
     if (!t || t.__lifePm || typeof t.error !== 'function') return;
-    const fn = t.error;
-    t.error = function (message, title, ...rest) {
-        try {
-            if (/slay/i.test(String(title || ''))) {
-                lastSlayErr = { msg: String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, ''), at: Date.now() };
-                // фильтр — через пару секунд (SLAY дорисует плашку ошибки) посмотреть, не перерисовать ли в запасном стиле
-                if (explainError(lastSlayErr.msg)?.kind === 'filter') setTimeout(() => { try { scanFiltered(); } catch (e) { console.warn('[Life] промты: запасной стиль', e); } }, 1500);
-            }
-        } catch { /* */ }
-        return fn.call(this, message, title, ...rest);
-    };
+    // SLAY 5.x часть отказов (фильтр, например) показывает не ошибкой, а предупреждением — слушаем оба вида
+    for (const kind of ['error', 'warning']) {
+        const fn = t[kind];
+        if (typeof fn !== 'function') continue;
+        t[kind] = function (message, title, ...rest) {
+            try {
+                if (/slay/i.test(String(title || ''))) {
+                    const msg = String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, '');
+                    const filter = explainError(msg)?.kind === 'filter';
+                    // предупреждения у SLAY бывают и не про рисование («каталог не загрузился») — из них берём только отказ фильтра
+                    if (kind === 'error' || filter) lastSlayErr = { msg, at: Date.now() };
+                    // фильтр — через пару секунд (SLAY дорисует плашку ошибки) посмотреть, не перерисовать ли в запасном стиле
+                    if (filter) setTimeout(() => { try { scanFiltered(); } catch (e) { console.warn('[Life] промты: запасной стиль', e); } }, 1500);
+                }
+            } catch { /* */ }
+            return fn.call(this, message, title, ...rest);
+        };
+    }
     t.__lifePm = true;
 }
 
@@ -565,6 +574,62 @@ export function onPromptClick(ev) {
     if (k < 0) k = Number(b.dataset.k);
     openPromptManager(tagAdapter(i, k));
     return true;
+}
+
+// ───────────── открыть окно с самой картинки ─────────────
+// Тап по картинке SLAY открывает её на весь экран. Туда и ставится кнопка «Промт»: один тап по картинке, второй —
+// по большой кнопке под ней. По настройке тап открывает окно промта сразу (на весь экран тогда — тапом по картинке
+// уже в окне).
+
+let lastTap = null;   // какую картинку поста тапнули последней: { i, k, at }
+
+function hookPictureTap() {
+    // на window, а не на document: SLAY 5.x открывает картинку своим слушателем на document в той же фазе — и он старше
+    window.addEventListener('click', (ev) => {
+        const img = ev.target;
+        if (img?.tagName !== 'IMG' || !img.hasAttribute('data-iig-instruction') || !img.closest('#chat')) return;
+        if (img.closest('.lf-pm-proxy, .iig-error-placeholder, .lf-shot, .lf-detail')) return;
+        if (!A?.hasChat?.() || A.settings().enabled === false || !cfg().on || !isPicture(img.getAttribute('src') || '')) return;
+        const i = Number(img.closest('.mes')?.getAttribute('mesid'));
+        if (!Number.isInteger(i) || !A.chatArr()[i]) return;
+        const k = tagIndexOf(i, img);
+        if (k < 0) return;
+        if (cfg().tap) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            openPromptManager(tagAdapter(i, k));
+            return;
+        }
+        lastTap = { i, k, at: Date.now() };
+        for (const ms of [0, 120, 400]) setTimeout(lightboxButton, ms);   // SLAY откроет картинку сам — кнопку ставим следом
+    }, true);
+}
+
+/** Кнопка «Промт» в окне SLAY «картинка на весь экран». Только когда его открыл тап по картинке поста. */
+function lightboxButton() {
+    const lb = document.getElementById('slay_lightbox');
+    if (!lb) return;
+    let b = lb.querySelector('.lf-pm-lb');
+    if (!(lastTap && Date.now() - lastTap.at < 2500 && lb.classList.contains('open'))) return;
+    if (!b) {
+        b = document.createElement('button');
+        b.type = 'button';
+        b.innerHTML = `${icon('pencil')}<span>Промт</span>`;
+        const bar = lb.querySelector('.iig-lightbox-bar');   // SLAY 5.x: ряд кнопок под картинкой — встаём в него
+        b.className = bar ? 'lf-pm-lb bar' : 'lf-pm-lb';
+        (bar || lb).append(b);
+        b.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();   // как и у кнопок самого SLAY: тап не должен дойти до таверны и закрыть её панели
+            const t = b._tap;
+            lb.querySelector('.iig-lightbox-close')?.click();
+            if (t && A.chatArr()[t.i]) openPromptManager(tagAdapter(t.i, t.k));
+        });
+        // закрыли — кнопку убрать: в следующий раз это окно может открыть галерея стилей, а не картинка поста
+        new MutationObserver(() => { if (!lb.classList.contains('open')) b.hidden = true; }).observe(lb, { attributes: true, attributeFilter: ['class'] });
+    }
+    b._tap = lastTap;
+    b.hidden = false;
 }
 
 // ───────────── версии ─────────────
@@ -957,6 +1022,7 @@ function setHtml() {
         ${tg('auto', 'После «поправить» сразу рисовать')}
         ${tg('dialect', 'Подсказывать модели, под какую рисовалку писать промт в посте')}
         ${tg('on', '✎ на картинках в постах')}
+        ${tg('tap', 'Тап по картинке — сразу окно промта (а не на весь экран)')}
         ${fbSetHtml()}
         <label class="lf-pm-l"><span>Приметы</span><small>для NovelAI — рефов у неё нет</small></label>
         <textarea class="lf-pm-ta small" data-in="looks" rows="3" placeholder="По-английски, коротко: Hedy — …; Bucky — … Пусто — возьму описания персонажей из настроек SLAY.">${esc(c.looks)}</textarea>
