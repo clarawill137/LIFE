@@ -3,6 +3,8 @@
 // С ядром «Священный таймлайн» — только то, что видно из эпохи и даты этого чата (записи других лет, чужие тайны
 // и куски записей «до/после» ядро отрезает само), облик людей на дату — из его Реестра, персона — с правками эпохи.
 
+import { crossSame } from './names.js';
+
 let A = null;
 export function initLore(api) { A = api; }
 
@@ -107,6 +109,8 @@ export async function loreFor(who, { re = null, max = 14000, all = false } = {})
     if (!W) return '';
     const first = A.norm(A.shortName(A.canonName(who)));
     const stem = first.slice(0, Math.max(3, first.length - 1));
+    // имя на другом алфавите тоже считается: «Hedy» найдёт «★ Хеди — ядро», «Bucky» — «Баки — …» (только имена с большой буквы)
+    const named = (s) => A.norm(s).includes(stem) || (String(s).match(/[A-ZА-ЯЁ][a-zа-яё]{2,}/g) || []).some(w => crossSame(w, first));
     const out = [];
     let total = 0;
     for (const b of books) {
@@ -118,7 +122,7 @@ export async function loreFor(who, { re = null, max = 14000, all = false } = {})
             if (e?.disable || !t.trim()) continue;
             const head = `${e.comment || ''} ${(e.key || []).join(' ')} ${(e.characterFilter?.names || []).join(' ')}`;
             if (re && !re.test(`${head} ${t.slice(0, 500)}`)) continue;
-            if (!A.norm(`${head} ${t.slice(0, 1500)}`).includes(stem)) continue;
+            if (!named(`${head} ${t.slice(0, 1500)}`)) continue;
             const piece = `### ${e.comment || (e.key || []).join(', ')}\n${t.slice(0, 4000)}`;
             if (total + piece.length > max) break;
             out.push(piece);

@@ -42,6 +42,7 @@ import { initSeason, seasonPrompt, applySeason, seasonHtml, seasonClick, seasonN
 import { initTriggers, trigPrompt, trigChron, trigAfterPost, trigHtml, trigClick } from './triggers.js';
 import { initShards, shardsPrompt, shardsChron, shardsAfterPost, shardsHtml, shardsClick } from './shards.js';
 import { initJohari, johariPrompt, johariChron, johariAfterPost, johariHtml, johariClick, johariJoin, johariRecs } from './johari.js';
+import { initCowriter, cowriterAfterPost, cowriterHtml, cowriterClick } from './cowriter.js';
 import { initHabits, habitsPrompt, habitsHtml, habitsClick } from './habits.js';
 import { initCrowd, crowdPrompt, crowdSceneHtml, crowdClick } from './crowd.js';
 import { initStones, stonesNow, stonesPrompt, stonesChron, stonesAfterPost, stonesHtml, stonesClick, stonesOwns } from './stones.js';
@@ -151,7 +152,7 @@ import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extrac
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
 
 const MODULE = 'life';
-const VERSION = '0.65.0';
+const VERSION = '0.66.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -939,7 +940,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { brain: 'код-мозг', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были' };
+const BRIDGE_NAMES = { brain: 'код-мозг', 'life-cowriter': 'соавтор', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -2984,6 +2985,7 @@ function renderCfg() {
         ${sw('on', 'Кнопка «Спросить про сюжет» в Сцене', s.aide, 'aide.on')}
         ${sw('on', 'Тропы, курс пары и хедканоны', s.pair, 'pair.on')}
         ${sw('on', 'Узнавание: она узнаёт его — и он себя (слепые пятна, скрытое, «впервые», что помнит она)', s.johari || { on: true }, 'johari.on')}
+        ${sw('on', 'Соавтор: письма тебе — как она могла бы поступить (не правило, нигде не записывается)', s.cowriter || { on: true }, 'cowriter.on')}
         ${sw('on', 'Быт: поломки, долги, недосып, «не по погоде»', s.home, 'home.on')}
         ${sw('on', 'Способности с пределами и действующие эффекты', s.powers, 'powers.on')}
         ${sw('on', 'Свои статы', s.stats, 'stats.on')}
@@ -4501,6 +4503,8 @@ jQuery(async () => {
     // 0.64: Узнавание — она узнаёт его, он через это узнаёт себя (и что он видит в ней)
     initJohari(extApi);
     hubMods.push({ pre: 'jo-', click: johariClick, label: 'Узнавание' });
+    initCowriter(extApi);
+    hubMods.push({ pre: 'cw-', click: cowriterClick, label: 'Соавтор' });
     initHabits(extApi);
     initHero(extApi);
     initCrowd(extApi);
@@ -4552,7 +4556,7 @@ jQuery(async () => {
     chatClicks.push((act, el) => fixClick(act, el));
     hubMods.push({ pre: 'fx-', click: fixClick, label: 'Правка' });
     hubMods.push({ pre: 'era-', click: eraClick, label: 'Эпоха' }, { pre: 'rt-', click: routeClick, label: 'Дорога' });
-    mindParts.push((who) => johariHtml(who), (who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who), (who) => langHtml(who), (who) => handHtml(who), (who) => oocHtml(who));
+    mindParts.push((who) => johariHtml(who), (who) => cowriterHtml(who), (who) => stonesHtml(who), (who) => trigHtml(who), (who) => shardsHtml(who), (who) => habitsHtml(who), (who) => voiceHtml(who), (who) => langHtml(who), (who) => handHtml(who), (who) => oocHtml(who));
     hubMods.push({ pre: 'sea-', click: seasonClick, label: 'Сезон' });
     painters.push((el, id) => paintSee(el, id));
     chatClicks.push((act, el) => seeClick(act, el));
@@ -4653,6 +4657,7 @@ jQuery(async () => {
             chron: (i) => johariChron(i),
             afterPost: (i, j) => johariAfterPost(i, j),
         });
+        globalThis.LifeBridge.register({ id: 'life-cowriter', afterPost: (i) => cowriterAfterPost(i) });
         globalThis.LifeBridge.register({
             id: 'life-season',
             prompt: (type) => seasonPrompt(type),

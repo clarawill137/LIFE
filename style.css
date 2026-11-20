@@ -4045,9 +4045,31 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 .lf-jo.k-unknown .lf-jo-dots i.on { background: #a9b8ef; box-shadow: 0 0 6px rgba(140, 160, 230, .45); }
 .lf-jo.k-past .lf-jo-dots i.on { background: #b4d6bd; box-shadow: 0 0 6px rgba(160, 200, 170, .45); }
 .lf-jo.done .lf-idea-ic { background: rgba(242, 200, 121, .16); color: #f2c879; }
-.lf-jo.k-first .lf-idea-ic { background: rgba(140, 160, 230, .14); color: #a9b8ef; }
-.lf-jo.k-mirror .lf-idea-ic { background: rgba(201, 184, 242, .15); color: #c9b8f2; }
-.lf-jo-hint .lf-idea-t { cursor: default; }
-.lf-jo-hint.done { opacity: .62; }
+/* Соавтор (0.66): письмо игроку — бумага поверх всего, не часть чата */
+.lf-letter-wrap { position: fixed; inset: 0; z-index: 1000001; display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px); background: rgba(10, 8, 9, .5); opacity: 0; transition: opacity .25s ease; }
+.lf-letter-wrap.in { opacity: 1; }
+.lf-letter { position: relative; width: min(94vw, 460px); max-height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; padding: 20px 20px 16px; border-radius: 18px; background: #f5ede1; color: #2c2420; box-shadow: 0 24px 60px rgba(0, 0, 0, .5); font: 15.5px/1.5 Georgia, 'Times New Roman', serif; transform: translateY(14px); transition: transform .3s cubic-bezier(.2, .9, .25, 1.05); }
+.lf-letter-wrap.in .lf-letter { transform: none; }
+.lf-letter-x { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(44, 36, 32, .08); color: #2c2420; display: grid; place-items: center; padding: 0; }
+.lf-letter-x .lf-i { width: 16px; height: 16px; }
+.lf-letter-head { display: flex; gap: 10px; align-items: center; margin: 0 36px 10px 0; }
+.lf-letter-head > .lf-i { width: 22px; height: 22px; flex: none; color: #9a6b3c; }
+.lf-letter-head b { display: block; font-size: 16px; }
+.lf-letter-head small { display: block; color: #8a7a6c; font: italic 12.5px/1.3 Georgia, serif; }
+.lf-letter-hi { margin: 4px 0 10px; font-style: italic; }
+.lf-letter-ideas { margin: 0; padding-left: 20px; }
+.lf-letter-ideas li { margin: 0 0 14px; }
+.lf-letter-ideas b { display: block; font-size: 15.5px; }
+.lf-letter-ideas p { margin: 3px 0; }
+.lf-letter-ideas i { display: block; color: #7a6656; font-size: 14px; }
+.lf-letter-ideas blockquote { margin: 6px 0; padding: 6px 10px; border-left: 3px solid #c99a63; background: rgba(201, 154, 99, .12); border-radius: 0 8px 8px 0; }
+.lf-letter-take { border: 1px solid rgba(44, 36, 32, .18); background: transparent; color: #5a3e26; border-radius: 999px; padding: 4px 11px; font: 13px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: inline-flex; gap: 6px; align-items: center; }
+.lf-letter-take .lf-i { width: 13px; height: 13px; }
+.lf-letter-ps { margin: 6px 0 10px; color: #6a5848; }
+.lf-letter-note { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: rgba(201, 99, 99, .12); color: #7a3b2e; font-size: 13.5px; }
+.lf-letter-foot { display: flex; gap: 8px; margin-top: 6px; }
+.lf-letter-foot button { flex: 1; border: 0; border-radius: 12px; padding: 10px 12px; font: 600 14px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #2c2420; color: #f5ede1; }
+.lf-letter-foot button + button { background: rgba(44, 36, 32, .08); color: #2c2420; }
+.lf-letter-sign { margin-top: 10px; text-align: right; color: #8a7a6c; font: italic 12.5px/1.3 Georgia, serif; }
 .lf-sh.told { opacity: .85; border-style: dashed; }
 .lf-sh.told > i { font-size: 11px; color: var(--lf-dim); font-style: italic; margin-left: 4px; }
