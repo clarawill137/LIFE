@@ -1,17 +1,26 @@
 // Навигация хаба (0.66): группы → подгруппы → экраны, с обложками.
 // Внизу пять групп: Сцена · Герои · Мир · История · Всё. У группы — «дом» с картинками (портреты, кадры, карта),
-// у подгруппы — обложка и её экраны. Сами экраны прежние: старые id вкладок (ui.tab, ui.worldTab, ui.pTab…) не
-// переименованы, поэтому прямые переходы модулей и соседних расширений (openHub('world'), ui.worldTab = 'cal') работают
-// как раньше — навигация только решает, под какой группой их показать. Новая вкладка «Мира», о которой здесь не знают,
-// сама попадает во «Всё → Механика». Упала навигация — хаб возвращается к старым пяти вкладкам, выключатель — там же
-// («Всё» внизу, Мир → ⚙, /life nav).
-// В index.js только крючки: navSync/navKey/navHomeHtml/navAfter в render, hubMods «nv-», выключатель в Мир → ⚙, /life nav.
+// у подгруппы — обложка и её экраны. «Дом» — своя вкладка: ui.tab = 'nv:<группа>'. Поэтому любой переход модуля или
+// соседнего расширения (openHub('person'), ui.tab = 'world') сам уводит с «дома» — даже на тот же экран, что был до него.
+// Сами экраны прежние: старые id (ui.tab, ui.worldTab, ui.pTab…) не переименованы — навигация только решает, под какой
+// группой их показать. Новая вкладка «Мира», о которой дерево не знает, сама встаёт во «Всё → Механика»; новая вкладка
+// внизу хаба (TABS в index.js) — чипом во «Всё». Упала навигация — хаб возвращается к прежним пяти вкладкам.
+// Выключатель: «Всё» внизу, Мир → ⚙ → «Прочее», /life nav.
+// В index.js только крючки: navKey/navSync/navHomeHtml/navAfter в render, hubMods «nv-», выключатель, команда.
 
 let A = null;
-let broken = false;          // навигация упала — до перезагрузки работаем по-старому
-let oldBar = null;           // стоковая панель вкладок, пока вместо неё стоит наша
+let broken = false;           // навигация упала — до перезагрузки работаем по-старому
+let oldBar = null;            // стоковая панель вкладок, пока вместо неё стоит наша
 let listening = null;
 const extraWorld = new Map(); // вкладки «Мира», которых нет в дереве (их добавили позже): id → подпись
+const extraTabs = new Map();  // вкладки нижней панели, которых нет в дереве: id → { t, svg }
+
+const HOME = 'nv:';
+const STOCK = ['scene', 'map', 'person', 'people', 'world'];
+/** Куда ведёт чужая кнопка на «доме» (питомец, малыш соседнего модуля) и куда уходим с «дома», если навигацию выключили. */
+const BASE = { heroes: 'person', world: 'world', story: 'scene', all: 'world' };
+/** Кнопки на «доме», после которых «дом» остаётся: лист поверх, просмотр картинки. */
+const KEEP = ['lightbox', 'cut-play', 'chapter', 'sheet-close'];
 
 const ICON = { scene: 'scene', heroes: 'users', world: 'globe', story: 'book', all: 'layers' };
 const w = (id, t, ic, kw = '') => ({ t, ic, kw, go: { tab: 'world', wt: id } });
@@ -88,51 +97,56 @@ const group = (id) => TREE.find(g => g.id === id);
 const esc = (v) => A.esc(v);
 const icon = (n, c) => A.icon(n, c);
 
-export function initNav(api) {
-    A = api;
+function cfg() {
     const s = A.settings();
     if (!s.nav || typeof s.nav !== 'object') s.nav = { on: true };
+    return s.nav;
+}
+
+export function initNav(api) {
+    A = api;
+    cfg();
 }
 
 /** Новая навигация включена и жива. */
 export function navOn() {
     if (!A || broken) return false;
-    const s = A.settings();
-    if (!s.nav || typeof s.nav !== 'object') s.nav = { on: true };
-    return s.nav.on !== false;
+    return cfg().on !== false;
 }
+
+/** Открыт «дом» какой группы ('' — обычный экран). */
+const homeOf = () => { const t = String(A?.ui?.tab || ''); return t.startsWith(HOME) ? t.slice(HOME.length) : ''; };
+
+/** Уйти с «дома» на прежний экран группы (навигацию выключили или она упала). */
+function leaveHome() { const h = homeOf(); if (h) A.ui.tab = BASE[h] || 'scene'; }
 
 /** Что-то сломалось внутри навигации: хаб не роняем, возвращаем старые вкладки. */
 function fail(where, e) {
     console.error(`[Life] навигация: ${where}`, e);
     if (broken) return;
     broken = true;
-    try { A.ui.nvHome = ''; swapBar(document.getElementById('lf-app')); } catch { /* */ }
+    try { leaveHome(); swapBar(document.getElementById('lf-app')); } catch { /* */ }
     try { A.toast('warning', 'Навигация группами споткнулась — вернула старые вкладки. Сделай скрин консоли и кинь Claude.', '✦ Life', { timeOut: 7000 }); } catch { /* */ }
+    setTimeout(() => { try { if (A.ui.open) A.render(); } catch { /* */ } }, 0);
 }
 
 /** Выключатель в Мир → ⚙ (и на «Всё»). */
 export function navCfgHtml() {
-    const s = A.settings();
-    if (!s.nav || typeof s.nav !== 'object') s.nav = { on: true };
-    return `<label class="lf-switch"><input type="checkbox" data-set="nav.on" ${s.nav.on !== false ? 'checked' : ''}><span></span>Навигация группами: Сцена · Герои · Мир · История · Всё</label>`;
+    return `<label class="lf-switch"><input type="checkbox" data-set="nav.on" ${cfg().on !== false ? 'checked' : ''}><span></span>Навигация группами: Сцена · Герои · Мир · История · Всё</label>`;
 }
 
 /** /life nav — переключить. */
 export function navToggle() {
-    const s = A.settings();
-    if (!s.nav || typeof s.nav !== 'object') s.nav = { on: true };
-    s.nav.on = s.nav.on === false;
+    const c = cfg();
+    c.on = c.on === false;
     broken = false;
     A.saveSettings();
-    A.ui.nvHome = '';
+    if (!c.on) leaveHome();
     if (A.ui.open) A.render();
-    return s.nav.on;
+    return c.on;
 }
 
 // ───────────── где мы ─────────────
-
-const pageKey = () => { const u = A.ui; return [u.tab, u.pTab, u.worldTab, u.who, u.npc || '', u.focus].join('|'); };
 
 /** Экран «Мира» → [группа, подгруппа]. Незнакомая вкладка — во «Всё → Механика». */
 function worldPlace(wt) {
@@ -144,10 +158,13 @@ function worldPlace(wt) {
 /** Группа и подгруппа открытого сейчас экрана. */
 function here() {
     const u = A.ui;
+    const h = homeOf();
+    if (h) return [group(h) || group('scene'), null];
     if (u.tab === 'person') return [group('heroes'), null];
     if (u.tab === 'people') return [group('heroes'), group('heroes').subs[1]];
     if (u.tab === 'map') return [group('world'), group('world').subs[0]];
     if (u.tab === 'world') return worldPlace(u.worldTab);
+    if (extraTabs.has(u.tab)) return [group('all'), null];
     return [group('scene'), null];
 }
 
@@ -157,18 +174,14 @@ function worldTabsOf(sb) {
     return sb.id === 'mech' ? [...own, ...extraWorld.keys()] : own;
 }
 
-/** Ключ «дома» группы для render(): '' — обычный экран. Кто-то перешёл напрямую (модуль, пуш) — дом снимается сам. */
+/** Для render(): ключ страницы «дома» ('nv:<группа>') или '' — обычный экран. */
 export function navKey() {
     try {
         if (!A) return '';
-        const u = A.ui;
-        if (!navOn()) { u.nvHome = ''; return ''; }
-        if (!u.nvHome) return '';
-        // хаб только открывается (openHub рисует до класса «on») — начинаем с экрана, а не с «дома», оставшегося с прошлого раза
-        const dlg = document.getElementById('lf-dialog');
-        if (dlg && !dlg.classList.contains('on')) { u.nvHome = ''; return ''; }
-        if (u.nvSnap !== pageKey() || !group(u.nvHome)?.subs) { u.nvHome = ''; return ''; }
-        return `nv:${u.nvHome}`;
+        const h = homeOf();
+        if (!h) return '';
+        if (!navOn() || !group(h)?.subs) { leaveHome(); return ''; }
+        return HOME + h;
     } catch (e) { fail('ключ', e); return ''; }
 }
 
@@ -186,6 +199,12 @@ function swapBar(app) {
     const mine = cur.classList.contains('lf-nv');
     const want = navOn();
     if (want && !mine) {
+        // вкладки, которые добавили в хаб после нас, — не прячем: они уйдут чипами во «Всё»
+        extraTabs.clear();
+        for (const b of cur.querySelectorAll('.lf-tab[data-tab]')) {
+            const id = b.dataset.tab;
+            if (id && !STOCK.includes(id)) extraTabs.set(id, { t: b.textContent.trim() || id, svg: b.querySelector('svg.lf-i')?.outerHTML || '' });
+        }
         const nav = document.createElement('nav');
         nav.className = 'lf-tabs lf-nv';
         nav.innerHTML = barHtml();
@@ -212,15 +231,17 @@ function mount(app) {
         if (listening === app) return;
         listening = app;
         app.addEventListener('input', onInput);
-        // Чужая кнопка на «доме» (портрет, питомец, малыш соседнего модуля) ведёт на экран — дом снимаем до её обработчика.
+        // Чужая кнопка на «доме» (питомец, малыш соседнего модуля) ведёт на свой экран, но не всегда сама меняет вкладку —
+        // до её обработчика ставим вкладку группы, чтобы экран не остался под «домом».
         app.addEventListener('click', (ev) => {
             try {
-                if (!A.ui.nvHome) return;
+                const h = homeOf();
+                if (!h) return;
                 const el = ev.target.closest('[data-act]');
                 if (!el || !el.closest('.lf-nv-home') || el.closest('.lf-sheet')) return;
                 const act = el.dataset.act || '';
-                if (act.startsWith('nv-') || ['lightbox', 'cut-play', 'chapter', 'sheet-close'].includes(act)) return;
-                A.ui.nvHome = '';
+                if (act.startsWith('nv-') || KEEP.includes(act)) return;
+                A.ui.tab = BASE[h] || 'scene';
             } catch { /* */ }
         }, true);
     } catch (e) { fail('панель', e); }
@@ -231,7 +252,7 @@ export function navSync(app) {
     try {
         mount(app);
         if (!navOn()) return;
-        const cur = A.ui.nvHome || here()[0].id;
+        const cur = homeOf() || here()[0].id;
         const tabs = [...app.querySelectorAll('nav.lf-nv .lf-tab')];
         tabs.forEach((b, i) => {
             const on = b.dataset.g === cur;
@@ -244,7 +265,6 @@ export function navSync(app) {
 // ───────────── обложки ─────────────
 
 const bg = (src) => (src ? ` style="background-image:url('${esc(src)}')"` : '');
-const lastImg = () => { try { const l = A.imgs(); return l[l.length - 1]?.src || ''; } catch { return ''; } };
 function pressImg() {
     try { for (const it of [...(A.chatMeta().press || [])].reverse()) { const p = (it.data?.photos || []).find(x => x?.img); if (p) return p.img; } } catch { /* */ }
     return '';
@@ -373,23 +393,32 @@ function allItems() {
             if (sb.id === 'mech') for (const [id, t] of extraWorld) out.push({ t, ic: 'puzzle', kw: '', go: { tab: 'world', wt: id }, path: `${g.t} · ${sb.t}` });
         }
     }
+    for (const [id, x] of extraTabs) out.push({ t: x.t, ic: 'puzzle', kw: '', go: { tab: id }, path: 'Всё' });
     return out;
 }
 
-const rowHtml = (it) => `<button class="lf-row lf-nv-row" ${goAttrs(it.go)} data-find="${esc(A.norm(`${it.t} ${it.path} ${it.kw || ''}`))}">${icon(it.ic || 'chevR')}<span><b>${esc(it.t)}</b><small>${esc(it.path)}</small></span>${icon('chevR', 'dim')}</button>`;
+const findText = (it) => A.norm(`${it.t} ${it.path} ${it.kw || ''}`);
+const matches = (text, q) => { const words = A.norm(q).split(' ').filter(Boolean); return words.every(wd => text.includes(wd)); };
+const rowHtml = (it, hide = false) => `<button class="lf-row lf-nv-row" ${goAttrs(it.go)} data-find="${esc(findText(it))}"${hide ? ' hidden' : ''}>${icon(it.ic || 'chevR')}<span><b>${esc(it.t)}</b><small>${esc(it.path)}</small></span>${icon('chevR', 'dim')}</button>`;
 
 function allHome() {
     const g = group('all');
     const q = A.ui.nvQ || '';
+    const has = !!A.norm(q);
+    // фильтр — и при отрисовке: хаб перерисовывается сам (пост, Horae), а набранное в поиске должно остаться
+    const items = allItems();
+    const ok = items.map(it => !has || matches(findText(it), q));
     let wins = [];
     try { wins = globalThis.LifeWin?.list?.() || []; } catch { /* */ }
     const winChips = wins.map(id => `<button class="lf-chip" data-act="nv-win" data-id="${esc(id)}">${icon(WINS[id]?.[1] || 'layers')} ${esc(WINS[id]?.[0] || id)}</button>`).join('');
+    const tabChips = [...extraTabs].map(([id, x]) => `<button class="lf-chip" ${goAttrs({ tab: id })}>${x.svg || icon('puzzle')} ${esc(x.t)}</button>`).join('');
     const groups = TREE.filter(x => x.subs && x.id !== 'all');
     return `<div class="lf-pagehead"><h1>Всё</h1></div>
     <label class="lf-nv-search">${icon('search')}<input type="search" data-in="nv-q" placeholder="Найти экран: календарь, гардероб, штампы…" value="${esc(q)}" autocomplete="off" enterkeyhint="search"></label>
-    <div class="lf-list lf-nv-found"${q ? '' : ' hidden'}>${allItems().map(rowHtml).join('')}<div class="lf-empty small lf-nv-none" hidden>Такого экрана нет. Попробуй другое слово.</div></div>
-    <div class="lf-nv-rest"${q ? ' hidden' : ''}>
+    <div class="lf-list lf-nv-found"${has ? '' : ' hidden'}>${items.map((it, i) => rowHtml(it, !ok[i])).join('')}<div class="lf-empty small lf-nv-none"${has && !ok.some(Boolean) ? '' : ' hidden'}>Такого экрана нет. Попробуй другое слово.</div></div>
+    <div class="lf-nv-rest"${has ? ' hidden' : ''}>
         ${subCard(g, g.subs[0], { line: 'Летописец, вкус, правила, выключатели', extra: [...extraWorld].map(([id, t]) => `<button class="lf-chip" ${goAttrs({ tab: 'world', wt: id })}>${icon('puzzle')} ${esc(t)}</button>`).join('') })}
+        ${tabChips ? `${A.sec('Ещё вкладки')}<div class="lf-chips wrap">${tabChips}</div>` : ''}
         ${A.sec('Окна и вид')}
         <div class="lf-chips wrap">${winChips}<button class="lf-chip" data-act="nv-cc">${icon('sliders')} Пульт и темы</button></div>
         ${groups.map(x => `<details class="lf-nv-day"><summary>${icon(ICON[x.id])}<span><b>${esc(x.t)}</b><small>${x.subs.reduce((n, sb) => n + sb.items.length, 0)} экранов</small></span>${icon('chevD', 'dim')}</summary>
@@ -402,7 +431,7 @@ function allHome() {
 
 /** Зовёт render(): страница «дома» группы. */
 export function navHomeHtml() {
-    const id = A.ui.nvHome;
+    const id = homeOf();
     try {
         const html = id === 'heroes' ? heroesHome() : id === 'world' ? worldHome() : id === 'story' ? storyHome() : allHome();
         return `<div class="lf-nv-home" data-g="${esc(id)}">${html}</div>`;
@@ -417,7 +446,7 @@ export function navHomeHtml() {
 /** Зовёт render() после страницы. */
 export function navAfter(app, body) {
     try {
-        if (!navOn() || !body || A.ui.nvHome) return;
+        if (!navOn() || !body || homeOf()) return;
         const u = A.ui;
         const [g, sb0] = here();
         if (g.id === 'scene') return;
@@ -462,16 +491,14 @@ export function navAfter(app, body) {
 
 function goTo(d) {
     const u = A.ui;
-    u.nvHome = '';
     u.editPins = false; u.atlas = !!d.atlas; u.room = ''; u.tracePin = '';
-    if (d.tab) u.tab = d.tab;
+    u.tab = d.tab || 'scene';
     if (d.wt) u.worldTab = d.wt;
     if (d.who) { u.who = d.who; u.item = ''; u.pair = ''; u.wset = ''; }
     if (d.tab === 'people') u.npc = '';
     if (d.pt) u.pTab = d.pt;
     if (d.lt) u.lifeTab = d.lt;
     if (d.rt) u.relTab = d.rt;
-    if (d.tab === 'scene') u.focus = 'last';
     A.closeSheet();
     A.render();
     A.scrollTop?.();
@@ -484,8 +511,8 @@ export async function navClick(act, el) {
         const g = group(el.dataset.g);
         if (!g) return;
         if (!g.subs) { goTo({ tab: 'scene' }); return; }
-        u.nvHome = g.id;
-        u.nvSnap = pageKey();
+        u.tab = HOME + g.id;
+        u.editPins = false; u.atlas = false; u.room = ''; u.tracePin = '';
         if (g.id !== 'all') u.nvQ = '';
         A.closeSheet();
         A.render();
@@ -504,17 +531,16 @@ function onInput(ev) {
         if (el?.dataset?.in !== 'nv-q') return;
         const home = el.closest('.lf-nv-home');
         if (!home) return;
-        const q = A.norm(el.value);
         A.ui.nvQ = el.value;
+        const has = !!A.norm(el.value);
         const found = home.querySelector('.lf-nv-found');
         const rest = home.querySelector('.lf-nv-rest');
-        if (found) found.hidden = !q;
-        if (rest) rest.hidden = !!q;
-        if (!found || !q) return;
-        const words = q.split(' ').filter(Boolean);
+        if (found) found.hidden = !has;
+        if (rest) rest.hidden = has;
+        if (!found || !has) return;
         let n = 0;
         for (const r of found.querySelectorAll('.lf-nv-row')) {
-            const ok = words.every(wd => (r.dataset.find || '').includes(wd));
+            const ok = matches(r.dataset.find || '', el.value);
             r.hidden = !ok;
             if (ok) n++;
         }
@@ -524,4 +550,4 @@ function onInput(ev) {
 }
 
 /** Для тестов: дерево и разбор «где мы». */
-export const _nav = { TREE, here, worldPlace, worldTabsOf, allItems, pageKey, extraWorld, reset: () => { broken = false; oldBar = null; listening = null; extraWorld.clear(); } };
+export const _nav = { TREE, here, worldPlace, worldTabsOf, allItems, extraWorld, extraTabs, reset: () => { broken = false; oldBar = null; listening = null; extraWorld.clear(); extraTabs.clear(); } };
