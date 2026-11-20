@@ -95,6 +95,7 @@ import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
 import { initPrompts, paintPrompts, onPromptClick, pmPrompt, openPromptManager } from './prompts.js';
 import { sameButSrc } from './pmtags.js';
+import { initDp, dpPrompt } from './dp.js';
 import { initFight, fightPrompt, fightChron, fightAfterPost, fightSceneHtml, fightClick, fightRecs } from './fight.js';
 import { initDuel, duelPrompt, duelChron, duelAfterPost, duelSceneHtml, duelClick, duelRecs } from './duel.js';
 import { initBets, betsPrompt, betsChron, betsAfterPost, betsSceneHtml, betsClick, betsRecs } from './bets.js';
@@ -148,7 +149,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.60.2';
+const VERSION = '0.61.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -936,7 +937,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { brain: 'код-мозг', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт' };
+const BRIDGE_NAMES = { brain: 'код-мозг', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -4517,6 +4518,7 @@ jQuery(async () => {
     painters.push((el, id) => paintFix(el, id), (el, id) => paintArt(el, id));
     // «Промты» (0.59): ✎ у картинок — промт, правка словами, версии, источники SLAY
     try {
+        initDp({ ...extApi });   // «Оператор» (0.61): кадр как у фотографа — до окна промта, оно им пользуется
         initPrompts({ ...extApi, faceRef, namesInText });
         painters.push((el, id) => paintPrompts(el, id));
     } catch (e) { console.warn('[Life] промты: старт', e); }
@@ -4629,6 +4631,10 @@ jQuery(async () => {
         globalThis.LifeBridge.register({
             id: 'life-pm',
             prompt: (type) => pmPrompt(type),
+        });
+        globalThis.LifeBridge.register({
+            id: 'life-dp',
+            prompt: (type) => dpPrompt(type),
         });
         globalThis.LifeBridge.register({
             id: 'life-steps',

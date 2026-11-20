@@ -3726,6 +3726,23 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #lf-pm .lf-pm-err button { margin-bottom: 6px; }
 #lf-pm .lf-pm-sel { flex: none; display: block; width: 100%; min-height: 44px; margin: 0; padding: 0 12px; border-radius: 12px; border: 1px solid var(--lf-line2, rgba(236, 222, 216, .2)); background: rgba(0, 0, 0, .28); color: inherit; font: inherit; font-size: 16px; }
 #lf-pm .lf-pm-sel:focus { border-color: rgba(var(--lf-rose-rgb), .6); outline: none; }
+/* оператор (0.61): ряд «Переснять / дубли / просьбы», карточки дублей, строка «Плёнка» */
+#lf-pm .lf-pm-chips.dp { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+#lf-pm .lf-pm-chips.dp::-webkit-scrollbar { display: none; }
+#lf-pm .lf-pm-chips.dp .lf-pm-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; }
+#lf-pm .lf-pm-chips.dp .lf-pm-chip.go { border: 0; padding: 0 14px; background: linear-gradient(180deg, var(--lf-wine3, #96404f), var(--lf-wine2, #7b2d3d)); font-weight: 500; }
+#lf-pm .lf-pm-card.busy .lf-pm-chips.dp, #lf-pm .lf-pm-card.busy .lf-pm-takes, #lf-pm .lf-pm-card.busy .lf-pm-chips.lk { opacity: .5; pointer-events: none; }
+#lf-pm .lf-pm-chips.lk { align-items: center; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+#lf-pm .lf-pm-chips.lk::-webkit-scrollbar { display: none; }
+#lf-pm .lf-pm-chips.lk > span { flex: none; margin-right: 2px; font-size: 12.5px; color: var(--lf-dim, #a3958f); }
+#lf-pm .lf-pm-takes { display: flex; flex-direction: column; gap: 8px; }
+#lf-pm .lf-pm-take { display: block; width: 100%; padding: 10px 12px; text-align: left; border-radius: 12px; border: 1px solid var(--lf-line2, rgba(236, 222, 216, .2)); background: rgba(0, 0, 0, .2); transition: transform .15s, border-color .2s; }
+#lf-pm .lf-pm-take:active { transform: scale(.985); border-color: rgba(var(--lf-rose-rgb, 217, 104, 123), .55); }
+#lf-pm .lf-pm-take b { display: block; font: 500 15px var(--lf-serif, Georgia, serif); }
+#lf-pm .lf-pm-take small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--lf-rose2, #eab3bc); }
+#lf-pm .lf-pm-take p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--lf-text2, #d6cac5); overflow-wrap: anywhere; }
+#lf-pm .lf-pm-note.warn { background: rgba(242, 200, 121, .1); color: #f2d9a6; }
+#lf-pm .lf-pm-note.warn button { border-color: rgba(242, 217, 166, .4); }
 #chat .lf-pm-proxy { display: none !important; }
 #chat .lf-pm-drawing { animation: lf-pm-draw 1.4s ease-in-out infinite; }
 @keyframes lf-pm-draw { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
