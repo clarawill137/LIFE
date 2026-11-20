@@ -71,7 +71,18 @@ function cc() {
     if (!s.cc.v51) { if (s.cc.ava === 'wide') s.cc.ava = 'cine'; s.cc.v51 = 1; }   // «Кино» — высокий баннер, имя по центру (просила); обратно — плиткой «Аватарки»
     return s.cc;
 }
-const PALETTES = [['graphite', 'Графит'], ['paper', 'Бумага'], ['moon', 'Луна']];
+// [id, название, цвета плитки выбора: фон, текст, приглушённый, акцент, заливка]. Сами темы — в style.css (body.lf-theme.lf-pal-<id>).
+// Графит, Бумага, Луна красят только Таверну (хаб у них винный, как был); Баклажан, Слива, Монтажная красят и хаб.
+const PALETTES = [
+    ['graphite', 'Графит', ['#171214', '#e9dfdb', '#8f817c', '#d9687b', '#7b2d3d']],
+    ['paper', 'Бумага', ['#f2ebdf', '#2f2724', '#8d7d74', '#9b3c4d', '#6e2433']],
+    ['moon', 'Луна', ['#0d121c', '#dfe6f2', '#7d8aa3', '#9fb6ee', '#3c5589']],
+    ['aubergine', 'Баклажан', ['#17101c', '#ebe1ea', '#92849a', '#e0829b', '#6a3564']],
+    ['plum', 'Слива', ['#201226', '#efe5ec', '#9a8a9e', '#e895b4', '#7a3a72']],
+    ['montage', 'Монтажная', ['#101417', '#efe7d7', '#8e9189', '#db9b99', '#65313a']],
+];
+export const PALETTE_NAMES = Object.fromEntries(PALETTES.map(([k, t]) => [k, t]));
+const palTile = (k, t, sw, on) => `<button class="cc-pal${on ? ' on' : ''}" data-cc="pal" data-v="${k}" style="--p-bg:${sw[0]};--p-text:${sw[1]};--p-dim:${sw[2]};--p-accent:${sw[3]};--p-fill:${sw[4]}"><span class="cc-pal-sw"></span><span class="cc-pal-l">${t}</span></button>`;
 
 // ───────────── низ чата ─────────────
 // Поле ввода Life в два ряда выше, чем рассчитывает таверна (у неё высота чата = экран − один ряд ввода),
@@ -486,6 +497,7 @@ function renderCC() {
         ${toggleTile('cc.qrShown', 'Над вводом', 'keyboard', !c.qrHidden)}
         ${toggleTile('cc.fabs', 'Плавающие', 'pointer', !c.hideFabs)}
     </div>
+    <div class="cc-pals">${PALETTES.map(([k, t, sw]) => palTile(k, t, sw, c.theme && c.palette === k)).join('')}${palTile('off', 'Без темы', ['#3a3a3c', '#d8d8d8', '#8e8e93', '#b0b0b5', '#636366'], !c.theme)}</div>
     ${c.read ? `<div class="cc-slider"><span>${icon('type')} Текст</span><input type="range" min="14" max="24" step="1" value="${c.fs}" data-cc-set="fs"><b>${c.fs}</b></div>
         <div class="cc-slider"><span>${icon('menu')} Строки</span><input type="range" min="1.3" max="2.2" step="0.05" value="${c.lh}" data-cc-set="lh"><b>${c.lh}</b></div>` : ''}
 
@@ -576,7 +588,7 @@ async function onCCClick(ev) {
             const a = AGENTS.find(x => x.key === k);
             if (a) { const on = !agentOn(a); el.classList.toggle('on', on); await setAgent(a, on); setTimeout(renderCC, 400); break; }
             if (k === 'cc.theme') {
-                // Графит → Бумага → Луна → выкл → Графит
+                // по кругу все темы из PALETTES → выкл → Графит (выбрать сразу нужную — плитками ниже)
                 if (!c.theme) { c.theme = true; c.palette = 'graphite'; }
                 else { const i = PALETTES.findIndex(p => p[0] === c.palette); if (i >= PALETTES.length - 1) c.theme = false; else c.palette = PALETTES[i + 1][0]; }
             }
@@ -590,6 +602,15 @@ async function onCCClick(ev) {
             else if (k === 'cc.read') c.read = !c.read;
             else if (k === 'cc.qrShown') c.qrHidden = !c.qrHidden;
             else if (k === 'cc.fabs') c.hideFabs = !c.hideFabs;
+            api.saveSettings();
+            applyTheme();
+            renderCC();
+            break;
+        }
+        case 'pal': {
+            const v = el.dataset.v;
+            if (v === 'off') c.theme = false;
+            else if (PALETTE_NAMES[v]) { c.theme = true; c.palette = v; }
             api.saveSettings();
             applyTheme();
             renderCC();

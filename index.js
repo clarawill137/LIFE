@@ -4,7 +4,7 @@
 // Life режет общий чат на главы-комнаты только на экране, рисует карты районов и даёт кнопки.
 
 import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icons.js';
-import { initControl, applyTheme, openCC, refreshAvatars } from './control.js';
+import { initControl, applyTheme, openCC, refreshAvatars, PALETTE_NAMES } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
@@ -3991,7 +3991,7 @@ function renderSettingsDrawer() {
             <div id="lf_cc_btn" class="menu_button"><i class="fa-solid fa-sliders"></i> Пульт</div>
           </div>
           <label class="checkbox_label"><input id="lf_set_edge" type="checkbox" ${s.cc?.on !== false ? 'checked' : ''}> Язычок пульта на краю экрана</label>
-          <label class="checkbox_label"><input id="lf_set_theme" type="checkbox" ${s.cc?.theme !== false ? 'checked' : ''}> Тема Life на всю Таверну (Графит / Бумага / Луна — в пульте)</label>
+          <label class="checkbox_label"><input id="lf_set_theme" type="checkbox" ${s.cc?.theme !== false ? 'checked' : ''}> Тема Life на всю Таверну (выбор темы — в пульте → Вид)</label>
           <small>Настройки — в хабе: Мир → ⚙ и в пульте. Команды <code>/life</code>, <code>/life cc</code>, аварийно <code>/life off</code>.</small>
         </div>
       </div>
@@ -4024,10 +4024,12 @@ function registerSlash() {
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
                 if (v === 'theme' || v.startsWith('theme ')) {
                     const c = settings().cc;
-                    const arg = { 'графит': 'graphite', 'бумага': 'paper', 'луна': 'moon' }[v.split(/\s+/)[1]] || v.split(/\s+/)[1];
-                    if (['graphite', 'paper', 'moon'].includes(arg)) { c.theme = true; c.palette = arg; } else if (arg === 'off') c.theme = false; else c.theme = !c.theme;
+                    // имя темы — по-английски (aubergine) или по-русски (баклажан); список — PALETTES в control.js
+                    const word = v.split(/\s+/)[1];
+                    const arg = Object.keys(PALETTE_NAMES).find(k => PALETTE_NAMES[k].toLowerCase() === word) || word;
+                    if (PALETTE_NAMES[arg]) { c.theme = true; c.palette = arg; } else if (arg === 'off') c.theme = false; else c.theme = !c.theme;
                     saveSettings(); applyTheme();
-                    toast('info', c.theme ? `Тема Life: ${({ graphite: 'Графит', paper: 'Бумага', moon: 'Луна' })[c.palette] || ''}` : 'Тема Life выключена');
+                    toast('info', c.theme ? `Тема Life: ${PALETTE_NAMES[c.palette] || ''}` : 'Тема Life выключена');
                     return '';
                 }
                 if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
