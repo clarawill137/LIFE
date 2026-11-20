@@ -3691,8 +3691,12 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 }
 #chat .lf-shot-pick-b button[data-sh="pk-pm"], #chat .lf-detpick .lf-shot-pick-b button[data-det="pk-pm"] { flex: none; width: 34px; padding: 0; }
 
-#lf-pm { position: fixed; inset: 0; z-index: 900000; display: flex; align-items: flex-end; justify-content: center; font: 14.5px/1.42 var(--lf-sans, -apple-system, system-ui, sans-serif); color: var(--lf-text, #ede4df); opacity: 0; transition: opacity .22s; -webkit-font-smoothing: antialiased; }
+#lf-pm { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; overflow: hidden; z-index: 900000; display: flex; align-items: flex-end; justify-content: center; font: 14.5px/1.42 var(--lf-sans, -apple-system, system-ui, sans-serif); color: var(--lf-text, #ede4df); opacity: 0; transition: opacity .22s; -webkit-font-smoothing: antialiased; }
 #lf-pm.on { opacity: 1; }
+/* 0.67.2: окно — <dialog> в верхнем слое (showModal); затемнение даёт своя подложка .lf-pm-back */
+#lf-pm:not([open]) { display: none; }
+#lf-pm::backdrop { background: transparent; }
+#lf-pm > .lf-pm-in { display: contents; }
 /* окно не видно под чужим слоем (0.67.1, windowSeen) — самый верх, без анимации */
 #lf-pm.top { z-index: 2147483600 !important; opacity: 1 !important; transition: none !important; }
 #lf-pm.top .lf-pm-card { transform: none !important; transition: none !important; }

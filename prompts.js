@@ -16,8 +16,11 @@
 // соседей перед запросом (порт 5.1.1: window.slayHooks.beforeGenerate). Новый промт вписывается в пост, когда SLAY дорисует.
 // 0.67.1: ✎ сама возвращается на место (движок карточек GC выбрасывает её вместе со старой карточкой после любой генерации,
 // даже фоновой); у фото в карточке — своя ↻ (SLAY свою там не держит); на картинке во весь экран — свой ряд кнопок поверх
-// окна SLAY («Промт», «Перерисовать»); окно промта проверяет, видно ли его, и поднимается над чужим слоем; без кнопок —
-// «/life pm», «/life redraw», «/life reshoot»; «/life pm log» — журнал того, что происходило.
+// окна SLAY («Промт», «Перерисовать»); без кнопок — «/life pm», «/life redraw», «/life reshoot»; «/life pm log» — журнал.
+// 0.67.2: окно промта — свой <dialog> в верхнем слое браузера (showModal), как хаб Life, её окна и Гардероб. Обычным
+// слоем (div с z-index) оно на её iPhone открывалось невидимым — «поверх лежит» верхняя панель таверны, и подъём над
+// чужими слоями не помогал. Верхний слой не перекрыть ничем и не сдвинуть ничьими трансформами. Тосты на время окна
+// переезжают в него — иначе их не видно.
 
 import { icon } from './icons.js';
 import { artBlocks } from './art.js';
@@ -1152,7 +1155,8 @@ function showLog() {
     const last = lastPicture();
     const head = [
         `Life ${A.version || ''} · SLAY ${slayOn() ? 'включён' : 'выключен'}${hookAlive() ? ', зовёт соседей' : ', соседей не зовёт'} · ✎ ${cfg().on ? 'вкл' : 'выкл'}`,
-        `экран ${window.innerWidth}×${window.innerHeight} · ${String(navigator.userAgent || '').replace(/^Mozilla\/5\.0 /, '').slice(0, 110)}`,
+        `${viewNow()} · ${String(navigator.userAgent || '').replace(/^Mozilla\/5\.0 /, '').slice(0, 110)}`,
+        `открытые окна: ${dialogsNow().join('; ') || 'нет'}`,
         last ? `последняя картинка: пост ${last.i}, №${last.k} — ${domOf(last.i, last.k)}` : 'картинок в чате нет',
         '—',
     ];
@@ -1198,9 +1202,47 @@ const QUICK = [
 ];
 const AR_SHOWN = ['1:1', '4:5', '3:4', '2:3', '9:16', '4:3', '3:2', '16:9'];
 
-function topDialog() {
-    const ds = [...document.querySelectorAll('dialog[open]')].filter(d => { try { return d.matches(':modal'); } catch { return true; } });
-    return ds[ds.length - 1] || null;
+/** Открытые <dialog> — для журнала: модальный ли, виден ли. Невидимый модальный — главный подозреваемый, если окна не видно. */
+function dialogsNow() {
+    return [...document.querySelectorAll('dialog[open]')].filter(d => d.id !== 'lf-pm').map(d => {
+        let modal = '?';
+        try { modal = d.matches(':modal') ? 'модальный' : 'обычный'; } catch { /* */ }
+        const r = d.getBoundingClientRect(), cs = getComputedStyle(d);
+        return `${d.id ? '#' + d.id : d.className ? '.' + String(d.className).split(/\s+/)[0] : 'dialog'} (${modal}, ${Math.round(r.width)}×${Math.round(r.height)}, ${cs.visibility}, opacity ${cs.opacity})`;
+    });
+}
+
+/** Окно промта в верхнем слое браузера. false — не вышло (старый браузер): тогда обычным слоем, как раньше. */
+function showOnTop(d) {
+    try {
+        if (typeof d.showModal !== 'function') return false;
+        d.showModal();
+        return d.matches(':modal');
+    } catch (e) {
+        console.warn('[Life] промты: верхний слой', e);
+        pmLog('окно: в верхний слой не встало —', String(e?.message || e));
+        return false;
+    }
+}
+
+// тосты таверны живут в обычном слое — пока окно открыто, их контейнер едет в окно, иначе их не видно
+let toastHome = null, toastWatch = null;
+function toastsIn(d) {
+    const grab = () => {
+        const tc = document.getElementById('toast-container');
+        if (!tc || tc.parentElement === d) return;
+        toastHome = toastHome || tc.parentElement;
+        d.append(tc);
+    };
+    grab();
+    try { toastWatch = new MutationObserver(grab); toastWatch.observe(document.body, { childList: true }); } catch { /* */ }
+}
+function toastsOut() {
+    try { toastWatch?.disconnect(); } catch { /* */ }
+    toastWatch = null;
+    const tc = document.getElementById('toast-container');
+    if (tc && tc.closest('#lf-pm')) (toastHome && toastHome.isConnected ? toastHome : document.body).append(tc);
+    toastHome = null;
 }
 
 /** Открыть окно промта. ad — «переходник» картинки: read / save / draw / setSrc / hid / engine (см. tagAdapter). */
@@ -1219,13 +1261,17 @@ export function openPromptManager(ad) {
         fix: '', note: '', busy: '', step: '', prev: null, fold: '',
         first: { p: cur.prompt, ar: cur.aspect, src: cur.src, note: '', at: Date.now(), by: '', sn: cur.pmStyle || '' },
     };
-    box = document.createElement('div');
+    box = document.createElement('dialog');
     box.id = 'lf-pm';
+    box.innerHTML = '<div class="lf-pm-in"></div>';   // перерисовывается только это — тосты и прочее рядом остаются
     box.addEventListener('click', onBoxClick);
     box.addEventListener('input', onBoxInput);
     box.addEventListener('change', onBoxInput);   // список стилей: не всякий браузер шлёт input на <select>
     box.addEventListener('keydown', onBoxKey);
-    (topDialog() || document.body).append(box);
+    box.addEventListener('cancel', (ev) => { ev.preventDefault(); closeManager(); });   // Esc и «назад»
+    document.body.append(box);
+    const dl = dialogsNow();
+    if (dl.length) pmLog('окно: уже открыты —', dl.join('; '));
     try { paint(); } catch (e) {
         // пустое окно осталось бы невидимым поверх всей таверны и глотало бы тапы
         console.warn('[Life] промты: окно', e);
@@ -1235,6 +1281,10 @@ export function openPromptManager(ad) {
         return;
     }
     const mine = box;
+    const onTop = showOnTop(mine);
+    if (!onTop) mine.setAttribute('open', '');   // обычным слоем, как до 0.67.2
+    else toastsIn(mine);
+    pmLog(`окно: ${onTop ? 'в верхнем слое' : 'обычным слоем'}`);
     requestAnimationFrame(() => mine.classList.add('on'));
     setTimeout(() => {
         if (box !== mine) return;
@@ -1247,7 +1297,12 @@ export function openPromptManager(ad) {
 
 const whoIs = (el) => { const out = []; for (let e = el, n = 0; e && e.nodeType === 1 && n < 3; e = e.parentElement, n++) out.push(e.tagName.toLowerCase() + (e.id ? `#${e.id}` : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '')); return out.join(' < '); };
 
-/** Окно открыто — а видно ли его? Поверх лежит чужой слой — поднять окно над всем; не помогло — сказать, что мешает. */
+const viewNow = () => {
+    const v = window.visualViewport;
+    return `экран ${window.innerWidth}×${window.innerHeight}${v ? `, видно ${Math.round(v.width)}×${Math.round(v.height)} со сдвигом ${Math.round(v.offsetLeft)},${Math.round(v.offsetTop)} ×${Math.round(v.scale * 100) / 100}` : ''}, прокрутка ${Math.round(window.scrollY)}`;
+};
+
+/** Окно открыто — а видно ли его? Обычным слоем: поверх чужой слой — поднять над всем. Не видно — сказать, почему. */
 function windowSeen(mine, lifted = false) {
     const card = mine.querySelector('.lf-pm-card');
     if (!card || !mine.isConnected) return;
@@ -1256,14 +1311,15 @@ function windowSeen(mine, lifted = false) {
     const x = Math.min(vw - 2, Math.max(2, r.left + r.width / 2)), y = Math.min(vh - 2, Math.max(2, r.top + Math.min(60, r.height / 2)));
     const top = document.elementFromPoint(x, y);
     const cs = getComputedStyle(mine);
+    let modal = false;
+    try { modal = mine.matches(':modal'); } catch { /* */ }
+    const rect = `карточка ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)}; ${viewNow()}; окно ${cs.display}/${cs.visibility}/${cs.opacity}`;
     const ok = r.width > 80 && r.height > 120 && r.top < vh - 40 && r.bottom > 40 && !!top && mine.contains(top) && cs.display !== 'none' && cs.visibility !== 'hidden';
-    if (ok) { pmLog(`окно: видно (${Math.round(r.width)}×${Math.round(r.height)}${lifted ? ', поднято над чужим слоем' : ''})`); return; }
-    const why = top && !mine.contains(top)
-        ? `поверх лежит ${whoIs(top)}`
-        : `карточка ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)} на экране ${vw}×${vh}, ${cs.display}/${cs.visibility}/${cs.opacity}`;
-    pmLog(lifted ? 'окно: не видно и после подъёма —' : 'окно: не видно —', why);
-    if (lifted || mine.parentElement !== document.body) {
-        A.toast('warning', `Окно промта открылось, но его не видно: ${esc(why)}. Картинку можно перерисовать и без окна: ↻ на ней или «/life redraw».`, '✎ Промт', { timeOut: 10000 });
+    if (ok) { pmLog(`окно: видно (${Math.round(r.width)}×${Math.round(r.height)}${modal ? ', верхний слой' : ''}${lifted ? ', поднято над чужим слоем' : ''})`); return; }
+    const why = top && !mine.contains(top) ? `в точке карточки — ${whoIs(top)}` : 'карточка не на экране';
+    pmLog(lifted ? 'окно: не видно и после подъёма —' : 'окно: не видно —', `${why}; ${rect}`);
+    if (modal || lifted || mine.parentElement !== document.body) {
+        A.toast('warning', `Окно промта открылось, но его не видно (${esc(why)}). Пришли Claude скрин «/life pm log». Перерисовать можно и без окна: ↻ на картинке или «/life redraw».`, '✎ Промт', { timeOut: 10000 });
         return;
     }
     mine.classList.add('top');   // самый верхний слой, без анимации
@@ -1272,6 +1328,8 @@ function windowSeen(mine, lifted = false) {
 }
 
 function closeManager() {
+    toastsOut();
+    try { if (box?.open && typeof box.close === 'function') box.close(); } catch { /* */ }
     box?.remove();
     box = null;
     S = null;
@@ -1429,7 +1487,8 @@ function paint() {
     const extra = (() => { try { return S.ad.extra?.(S.pmStyle) || ''; } catch { return ''; } })();
     const chev = (k) => icon(S.fold === k ? 'chevU' : 'chevD');
     const top = box.querySelector('.lf-pm-body')?.scrollTop || 0;
-    box.innerHTML = `<div class="lf-pm-back" data-pm="x"></div>
+    const host = box.querySelector(':scope > .lf-pm-in') || box;
+    host.innerHTML = `<div class="lf-pm-back" data-pm="x"></div>
     <div class="lf-pm-card${S.busy ? ' busy' : ''}" role="dialog" aria-label="Промт картинки">
         <div class="lf-pm-grab"></div>
         <header class="lf-pm-h"><b>${icon('pencil')} Промт картинки</b><small>${esc(S.ad.title || '')}</small><button data-pm="x" class="lf-pm-x" title="Закрыть">${icon('x')}</button></header>
