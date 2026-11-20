@@ -146,9 +146,10 @@ import { initDice, dicePrompt, diceAfterPost, diceSceneHtml, diceClick } from '.
 import { initAide, aideSceneHtml, aideClick } from './aide.js';
 import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
+import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
 
 const MODULE = 'life';
-const VERSION = '0.60.3';
+const VERSION = '0.62.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1056,15 +1057,17 @@ function callerLabel() {
 function countCall(label, messages, out) {
     try {
         const s = settings();
-        if (!s.stats || typeof s.stats !== 'object') s.stats = {};
+        // счёт живёт в calls: раньше лежал в stats — там же, где выключатель «Своих статов», и окно счёта показывало «0 вызовов»
+        if (!s.calls || typeof s.calls !== 'object') s.calls = {};
+        if (s.stats && typeof s.stats === 'object') for (const k of Object.keys(s.stats)) if (/^\d{4}-\d\d-\d\d$/.test(k)) { if (!s.calls[k]) s.calls[k] = s.stats[k]; delete s.stats[k]; }
         const day = dayStamp();
-        const d = s.stats[day] = s.stats[day] || {};
+        const d = s.calls[day] = s.calls[day] || {};
         const r = d[label] = d[label] || { n: 0, i: 0, o: 0 };
         r.n++;
         r.i += messages.reduce((a, m) => a + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content || '').length), 0);
         r.o += String(out || '').length;
-        const days = Object.keys(s.stats).sort();
-        for (const k of days.slice(0, Math.max(0, days.length - 7))) delete s.stats[k];
+        const days = Object.keys(s.calls).sort();
+        for (const k of days.slice(0, Math.max(0, days.length - 7))) delete s.calls[k];
         saveSettings();
     } catch { /* счётчик не важнее запроса */ }
 }
@@ -1184,6 +1187,19 @@ function relPinSet(from, to, vals) {
         if (pin[f] !== v) { pin[f] = v; changed = true; }
     }
     if (changed) cm.relPin[dk] = pin;
+    return changed;
+}
+
+/** Снять замки со шкал from → to: названные (fields) или все. true — что-то изменилось. */
+function relUnpinSet(from, to, fields = null) {
+    if (!from || !to || sameName(from, to)) return false;
+    const cm = chatMeta();
+    const dk = dirKey(from, to);
+    const pin = cm.relPin?.[dk];
+    if (!pin) return false;
+    let changed = false;
+    for (const f of Array.isArray(fields) && fields.length ? fields : Object.keys(pin)) if (f in pin) { delete pin[f]; changed = true; }
+    if (!Object.keys(pin).length) delete cm.relPin[dk];
     return changed;
 }
 
@@ -1751,7 +1767,7 @@ const REL_HINT = {
     love: ['', '', 'есть привязанность', 'любит', 'любит так, что это не обсуждается: ссора этого не отменяет'],
 };
 const relLvl = (v) => v < 15 ? 0 : v < 35 ? 1 : v < 60 ? 2 : v < 80 ? 3 : 4;
-const relBits = (sd) => SCALES.map(([f]) => REL_HINT[f][relLvl(sd[f])]).filter(Boolean);
+const relBits = (sd, p = null) => SCALES.filter(([f]) => !p || tiesHas(p.a, p.b, f)).map(([f]) => REL_HINT[f][relLvl(sd[f])]).filter(Boolean);   // p — пара: её набор шкал (ties.js)
 
 function scenePresent() {
     const st = worldState();
@@ -1765,7 +1781,7 @@ function relPrompt() {
     if (here.length >= 2) {
         const pairs = Object.values(relationsState()).filter(p => here.some(n => sameName(n, p.a)) && here.some(n => sameName(n, p.b)));
         const lines = pairs.slice(0, 4).map(p => {
-            const x = relBits(p.ab), y = relBits(p.ba);
+            const x = relBits(p.ab, p), y = relBits(p.ba, p);
             const last = p.moments.slice(-2).map(m => `«${m.text}»`).join(', ');
             const A = shortName(p.a), B = shortName(p.b);
             let body;
@@ -2636,7 +2652,7 @@ function renderRelations(who, st) {
     const meter = (v, locked) => `<i class="lf-meter${locked ? ' locked' : ''}"><b style="width:${v}%"></b></i><small>${locked ? icon('lock') : v}</small>`;
     const bars = `<div class="lf-bars2" data-act="pair-edit">
         <div class="lf-b2-head"><span></span><span></span><b>${esc(A)} → ${esc(B)}</b><b>${esc(B)} → ${esc(A)}</b></div>
-        ${SCALES.map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f], Number.isFinite(pinA[f]))}</span><span class="lf-b2-m">${meter(theirs[f], Number.isFinite(pinB[f]))}</span></div>`).join('')}
+        ${SCALES.filter(([f]) => tiesHas(who, other, f)).map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f], Number.isFinite(pinA[f]))}</span><span class="lf-b2-m">${meter(theirs[f], Number.isFinite(pinB[f]))}</span></div>`).join('')}
         <div class="lf-hint-i">Чувства не всегда взаимны: слева — что ${esc(A)} чувствует к ${esc(B)}, справа — наоборот. Нажми, чтобы поправить или запереть шкалу.</div>
     </div>`;
     let body = '';
@@ -2645,6 +2661,8 @@ function renderRelations(who, st) {
     } else if (tab === 'secrets') {
         body = secrets.length ? secrets.map(x => `<button class="lf-secret" data-act="jump" data-mes="${x.mes}">${icon('lock')}<span><b>Знает ${esc(x.knows.map(n => shortName(canonName(n))).join(', ') || '—')}</b>${esc(x.text)}</span></button>`).join('')
             : `<div class="lf-empty small">Тайн между ними пока нет.</div>`;
+        // секреты с легендой (vault.js): свои — сверху; найденные Летописцем остаются списком ниже (их можно забрать оттуда же)
+        try { const v = vaultPairHtml(who, other); if (v) body = `${v}${secrets.length ? sec('Все тайны по постам') : ''}${secrets.length ? body : ''}`; } catch (e) { console.warn('[Life] секреты', e); }
     } else if (tab === 'album') {
         body = (() => { try { return albumHtml(who, other, p.moments); } catch (e) { console.warn('[Life] альбом', e); return ''; } })();
     } else if (tab === 'steps') {
@@ -2669,7 +2687,7 @@ function renderRelations(who, st) {
         <button class="lf-glass" data-act="pair-pic">${icon('image')} ${pairImg ? 'Сменить' : 'Кадр пары'}</button>
         <h2>${esc(A)} <i>×</i> ${esc(B)}</h2>
     </section>
-    ${bars}` : ''}
+    ${bars}${(() => { try { return tiesPairHtml(who, other); } catch (e) { console.warn('[Life] шкалы пары', e); return ''; } })()}` : ''}
     ${seg([['common', 'Общее'], ['steps', 'Прожитое'], ['map', 'Карта'], ['album', 'Альбом'], ['tri', `Трое${nTri ? ` <span class="lf-cnt">${nTri}</span>` : ''}`], ['secrets', 'Секреты'], ['history', 'История']], tab, 'rel-tab').replace('lf-seg', 'lf-seg many')}
     ${body}`;
 }
@@ -2804,7 +2822,7 @@ function renderWorld() {
     const tab = ui.worldTab;
     let body = '';
     if (tab === 'days') {
-        body = (() => { try { return daysHtml() + recapCfgHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
+        body = (() => { try { return daysHtml() + (() => { try { return sagaHtml(); } catch (e) { console.warn('[Life] хроника', e); return ''; } })() + recapCfgHtml(); } catch (e) { console.warn('[Life] дни', e); return ''; } })();
     } else if (tab === 'cal') {
         body = (() => { try { return calHtml(); } catch (e) { console.warn('[Life] календарь', e); return ''; } })();
     } else if (tab === 'events') {
@@ -2972,6 +2990,7 @@ function renderCfg() {
         ${sw('on', 'Дом: пыль, посуда, стирка, холодильник и мусор по времени истории', s.house, 'house.on')}
         ${sw('on', 'Счета капают: почта, коммуналка, просрочки, чеки быта', s.bills, 'bills.on')}
         ${sw('on', 'Перепалки: терпение, поводы, вечные темы', s.bicker, 'bicker.on')}
+        ${(() => { try { return annexCfgHtml(s, sw); } catch (e) { console.warn('[Life] 0.62: настройки', e); return ''; } })()}
         ${sec('Прочее')}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
         ${sec('Карты и картинки')}
@@ -4199,11 +4218,12 @@ function registerSlash() {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
             helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }
                 if (v === 'cc' || v === 'пульт') { openCC(); return ''; }
+                if (globalThis.LifeWin?.list?.().includes(v)) { globalThis.LifeWin.open(v); return ''; }   // personas | books | exts | link — окна вне хаба
                 if (v === 'theme' || v.startsWith('theme ')) {
                     const c = settings().cc;
                     // имя темы — по-английски (aubergine) или по-русски (баклажан); список — PALETTES в control.js
@@ -4328,7 +4348,7 @@ const simApi = {
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, chronOf, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
     // 0.59: умная модель и свод всей истории — для больших заполнений
-    askDeep, askDeepJson, relSet, relPin: (a, b, v) => relPinSet(a, b, v), withStory: (m, o) => withStory(m, o),
+    askDeep, askDeepJson, relSet, relPin: (a, b, v) => relPinSet(a, b, v), relUnpin: (a, b, f) => relUnpinSet(a, b, f), withStory: (m, o) => withStory(m, o),
     // большое заполнение: свод всей истории в запрос + умная модель (думающей — запас токенов)
     askFill: (messages, tokens, label = '', opts = {}) => askDeep(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), label),
     askFillJson: (messages, tokens, o = {}, opts = {}) => askDeepJson(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), o),
@@ -4424,6 +4444,8 @@ jQuery(async () => {
     initTwists({ ...simApi, plainText, peopleList, onArm: () => disarmOnce() });
     initHurt(simApi);
     const extApi = { ...simApi, icon, chronOf, plainText, hash, genIdle, imgs, imagesBetween, paintSoon: () => decorateSoon(80) };
+    // плашка выделения в посте (voice.js): кнопка пристройки — «🔒 в секрет»
+    extApi.pillExtra = (sel) => annexPill(sel); extApi.pillAct = (id, sel) => annexPillAct(id, sel);
     initDays(extApi);
     initSeed(extApi);
     initCare({ ...extApi, version: VERSION, rekeySwipe: (i, cur) => rekeySwipe(i, cur) });
@@ -4463,7 +4485,7 @@ jQuery(async () => {
     initGraph({ ...extApi, peopleList, npcImg, horaeRelationships });
     initRecap({ ...extApi, daysBrief, closeHub, chapterCover });
     initBelly({ ...extApi, faceRef });
-    hubMods.push({ pre: 'bl-', click: bellyClick, label: 'Живот по сроку' });
+    hubMods.push({ pre: 'bly-', click: bellyClick, label: 'Живот по сроку' });   // было «bl-» — тот же префикс у «Счетов», и их кнопки уходили сюда
     initStance(extApi);
     initRitual(extApi);
     hubMods.push({ pre: 'stn-', click: stanceClick, label: 'Споры' }, { pre: 'rit-', click: ritualClick, label: 'Своё' });
@@ -4829,6 +4851,11 @@ jQuery(async () => {
             { id: 'aide', ico: '💬', name: 'Спросить', on: sOn('aide'), hint: 'Чат на полях про сюжет: почему он так, что дальше. В историю не попадает.', html: () => aideSceneHtml() },
         ]);
     } catch (e) { console.warn('[Life] 0.55', e); }
+    // 0.62: шкалы пары, секреты с легендой, лестница хроники, знакомства, облик; окна — персоны, лорбуки, расширения, подключение
+    try {
+        initAnnex({ ...globalThis.LifeBridge.api, ...extApi, peopleList, invalidate },
+            { hubMods, mindParts, addRecs, names: BRIDGE_NAMES, hudKeys: HUD_KEYS, tracker: (t) => addTracker(t), register: (m) => globalThis.LifeBridge.register(m) });
+    } catch (e) { console.warn('[Life] 0.62', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }

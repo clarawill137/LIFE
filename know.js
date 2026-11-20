@@ -31,7 +31,7 @@ function M() {
 }
 const everyone = () => [A.canonName(A.ctx().name1), ...mains(A)].filter(Boolean);
 const knows = (f, who) => f.pub || Object.keys(f.who || {}).some(n => A.sameName(n, who));
-const live = () => M().facts.filter(f => !f.pub && !everyone().every(n => knows(f, n)));
+const live = () => M().facts.filter(f => !f.pub && !f.off && !everyone().every(n => knows(f, n)));   // off — секрет придержан (vault.js)
 const leakOf = (i) => { const e = M().leaks[i]; const m = A.chatArr()[i]; return e && m && e.h === A.hash(m.mes || '') ? e : null; };
 
 const RULE = `
@@ -80,7 +80,8 @@ export function knowAfterPost(i, j, m) {
     const leaks = arr(j?.leaks).slice(0, 3).map(r => ({ who: A.canonName(str(r?.who, 50)), id: str(r?.id, 12), quote: str(r?.quote, 160), why: str(r?.why, 110) }))
         .filter(r => { const f = s.facts.find(x => x.id === r.id); return r.who && r.quote && f && !knows(f, r.who); });
     if (leaks.length) { s.leaks[i] = { h: A.hash((m || A.chatArr()[i])?.mes || ''), list: leaks }; changed = true; }
-    if (s.facts.length > 160) s.facts.splice(0, s.facts.length - 160);
+    // старое уходит первым — но не секреты и не вписанное руками (vault.js): их убирает только автор
+    for (let over = s.facts.length - 160, k = 0; over > 0 && k < s.facts.length;) { if (s.facts[k].src === 'post' && !s.facts[k].sec) { s.facts.splice(k, 1); over--; } else k++; }
     const keys = Object.keys(s.leaks).map(Number).sort((a, b) => a - b);
     for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete s.leaks[k];
     if (changed) { A.saveMeta(); A.paintSoon?.(); }
@@ -93,7 +94,9 @@ export function knowPrompt(type) {
     const user = A.canonName(A.ctx().name1);
     const S = A.canonName(String(A.ctx().name2 || '').trim());
     const list = mains(A);
-    const blind = (who) => facts.filter(f => !knows(f, who)).slice(-6).map(f => f.t);
+    // секрет с легендой (vault.js): незнающий видит прикрытие — оно идёт рядом; секреты — первыми, чтобы не выпали из шести
+    const tell = (f) => (f.legend ? `${f.t} (для него это выглядит так: ${f.legend})` : f.t);
+    const blind = (who) => { const b = facts.filter(f => !knows(f, who)); const sec = b.filter(f => f.sec).slice(-4); return [...b.filter(f => !sec.includes(f)).slice(-(6 - sec.length)), ...sec].slice(-6).map(tell); };
     const rule = 'ссылаться на это, намекать или действовать, исходя из этого, нельзя; узнает — если скажут, увидит сам или поймёт по явным признакам прямо в сцене';
     // ход конкретного героя — только его слепые пятна; рассказчик — у каждого, кто в сцене
     if (S && list.some(n => A.sameName(n, S))) {
@@ -115,7 +118,7 @@ export function paintKnow(el, id) {
     mount(el, 'lf-kw', `<div class="lf-kw lf-own">${list.map((x) => { const k = e.list.indexOf(x); return `<div class="lf-kw-i"><span>⚠ <b>${esc(A.shortName(x.who))}</b> не мог знать: ${esc(x.why || 'это')} <i>«${esc(A.cut(x.quote, 70))}»</i></span><span class="lf-kw-b"><button data-act="kw-fix" data-mes="${id}" data-n="${k}">исправить</button><button data-act="kw-ok" data-mes="${id}" data-n="${k}">он знает</button><button data-act="kw-no" data-mes="${id}" data-n="${k}">✕</button></span></div>`; }).join('')}</div>`, A.hash);
 }
 
-const factRow = (f) => `<div class="lf-kw-f"><div class="lf-kw-t">${esc(f.t)}<button data-act="kw-del" data-id="${f.id}" title="убрать">${A.icon('x')}</button></div>
+const factRow = (f) => `<div class="lf-kw-f${f.sec ? ' sec' : ''}"><div class="lf-kw-t"><span class="lf-kw-x">${f.sec ? `${A.icon('lock')} ` : ''}${esc(f.t)}${f.legend ? `<small class="lf-kw-l">для остальных: ${esc(f.legend)}</small>` : ''}</span><button data-act="vt-edit" data-id="${f.id}" title="секрет: участники, легенда">${A.icon('pencil')}</button><button data-act="kw-del" data-id="${f.id}" title="убрать">${A.icon('x')}</button></div>
     <div class="lf-kw-w">${everyone().map(n => `<button class="${knows(f, n) ? 'on' : ''}" data-act="kw-tog" data-id="${f.id}" data-who="${esc(n)}" title="${esc(A.shortName(n))}: ${knows(f, n) ? (HOW[f.who[Object.keys(f.who).find(k => A.sameName(k, n))]?.how] || 'знает') : 'не знает'}">${A.ava(n, 'xs')}</button>`).join('')}<button class="all" data-act="kw-pub" data-id="${f.id}">знают все</button></div></div>`;
 
 export function knowSceneHtml() {
@@ -191,3 +194,7 @@ export function knowAdd(t, who = []) {
     A.saveMeta(); A.updatePrompt();
     return true;
 }
+
+/** Для «Секретов» (vault.js): тот же список записей, без копии, и «знает ли». */
+export const knowStore = () => M();
+export const knowsFact = (f, who) => knows(f, who);

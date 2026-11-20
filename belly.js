@@ -43,7 +43,7 @@ export function bellyWardrobeHtml(who, set) {
     return `<div class="lf-belly">
         <span class="lf-belly-i">${A.icon('baby')}</span>
         <span class="lf-belly-t"><b>${esc(p.label)}</b><small>${esc(p.belly.ru)}</small>${set?.img ? `<em>${drawn != null ? `образ нарисован на ${drawn} нед` : 'образ нарисован без живота'}${stale ? ' — живот уже другой' : ''}</em>` : ''}</span>
-        ${set && p.ow >= 12 ? `<button class="lf-btn${stale ? ' primary' : ''}" data-act="bl-set" data-v="${esc(set.id)}" data-name="${esc(who)}">${A.icon('refresh')} по сроку</button>` : ''}
+        ${set && p.ow >= 12 ? `<button class="lf-btn${stale ? ' primary' : ''}" data-act="bly-set" data-v="${esc(set.id)}" data-name="${esc(who)}">${A.icon('refresh')} по сроку</button>` : ''}
     </div>`;
 }
 
@@ -75,8 +75,8 @@ Natural light, plain softly lit background, standing pose, 4:3. No text, no wate
 }
 
 export async function bellyClick(act, el) {
-    if (!act.startsWith('bl-')) return false;
-    if (act === 'bl-set') {
+    if (!act.startsWith('bly-')) return false;
+    if (act === 'bly-set') {
         const id = el.dataset.v;
         if (busy.has(id)) return true;
         busy.add(id);

@@ -104,6 +104,17 @@ function pill() {
     el.className = 'lf-vpill';
     document.body.append(el);
     const act = (ev) => {
+        // своя кнопка соседнего модуля (например «🔒 в секрет»): выделение — ему
+        const x = ev.target.closest('[data-vx]');
+        if (x && sel) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const s0 = sel;
+            try { window.getSelection()?.removeAllRanges(); } catch { /* */ }
+            hide();
+            try { A.pillAct?.(x.dataset.vx, s0); } catch (e) { console.warn('[Life] плашка выделения', e); }
+            return;
+        }
         const b = ev.target.closest('[data-vname]');
         if (!b || !sel) return;
         ev.preventDefault();
@@ -132,23 +143,26 @@ function namesFor(author) {
 }
 
 function checkSel() {
-    if (!A?.hasChat?.() || !A.settings().enabled || !voiceOn()) return;
+    if (!A?.hasChat?.() || !A.settings().enabled) return;
     let s = null;
     try { s = window.getSelection(); } catch { /* */ }
     const t = s && !s.isCollapsed ? String(s).trim() : '';
     if (!t) { if (sel) { clearTimeout(hideT); hideT = setTimeout(hide, 2600); } return; }
     const node = s.anchorNode?.nodeType === 1 ? s.anchorNode : s.anchorNode?.parentElement;
     const mesEl = node?.closest?.('#chat .mes');
-    if (!mesEl || !node.closest('.mes_text') || mesEl.getAttribute('is_user') === 'true' || mesEl.getAttribute('is_system') === 'true') { hide(); return; }
+    if (!mesEl || !node.closest('.mes_text') || mesEl.getAttribute('is_system') === 'true') { hide(); return; }
+    const isUser = mesEl.getAttribute('is_user') === 'true';   // в своём посте — только кнопки соседних модулей (в голос идут чужие реплики)
     if (t.length < 4 || t.length > 420) { hide(); return; }
     const mes = Number(mesEl.getAttribute('mesid'));
     const author = node.closest('[data-duo]')?.dataset.duo || A.chatArr()[mes]?.name || mesEl.getAttribute('ch_name') || ''; // в посте на двоих — чья часть
     clearTimeout(hideT);
     sel = { t, mes, author };
     const el = pill();
-    const names = namesFor(author);
-    if (!names.length) { hide(); return; }
-    el.innerHTML = `<span class="lf-vpill-q">⭐ «${esc(A.cut(clean(t), 60))}»</span><span class="lf-vpill-who">${names.map((n, k) => `<button class="${k ? '' : 'main'}" data-vname="${esc(n)}">${k ? '' : '<b>в голос</b> '}${esc(A.shortName(n))}</button>`).join('')}</span>`;
+    const names = isUser || !voiceOn() ? [] : namesFor(author);   // «Голос» выключен — плашка только для соседних модулей
+    let extra = '';
+    try { extra = String(A.pillExtra?.({ t, mes, author, user: isUser }) || ''); } catch { /* */ }
+    if (!names.length && !extra) { hide(); return; }
+    el.innerHTML = `<span class="lf-vpill-q">${names.length ? '⭐ ' : ''}«${esc(A.cut(clean(t), 60))}»</span><span class="lf-vpill-who">${names.map((n, k) => `<button class="${k ? '' : 'main'}" data-vname="${esc(n)}">${k ? '' : '<b>в голос</b> '}${esc(A.shortName(n))}</button>`).join('')}${extra}</span>`;
     el.classList.add('on');
 }
 

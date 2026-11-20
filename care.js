@@ -51,11 +51,16 @@ export async function swipeClean(keep = KEEP) {
 
 // ───────────── копия настроек ─────────────
 
+const DAY = /^\d{4}-\d\d-\d\d$/;
 const stamp = () => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 export function settingsDump() {
     const s = { ...A.settings() };
-    delete s.stats;
+    delete s.calls;
+    if (s.stats && typeof s.stats === 'object') {   // старый счёт вызовов лежал здесь же — он не настройка
+        s.stats = Object.fromEntries(Object.entries(s.stats).filter(([k]) => !DAY.test(k)));
+        if (!Object.keys(s.stats).length) delete s.stats;
+    }
     return JSON.stringify({ life: A.version, at: new Date().toISOString(), settings: s });
 }
 
@@ -94,7 +99,7 @@ export function settingsRestore(dump) {
     const src = dump?.settings;
     if (!src || typeof src !== 'object' || Array.isArray(src)) throw new Error('это не копия настроек Life');
     const s = A.settings();
-    const keep = { stats: s.stats, backupDay: s.backupDay };
+    const keep = { calls: { ...Object.fromEntries(Object.entries(s.stats && typeof s.stats === 'object' ? s.stats : {}).filter(([k]) => DAY.test(k))), ...(s.calls || {}) }, backupDay: s.backupDay };
     for (const k of Object.keys(s)) delete s[k];
     Object.assign(s, JSON.parse(JSON.stringify(src)), keep);
     A.saveSettings();
@@ -111,10 +116,12 @@ function download(name, text) {
 
 // ───────────── вид (Мир → ⚙) ─────────────
 
-const LABELS = { index: 'прочее', reply: 'не пропусти', rules: 'правила сцены', see: 'покажи им', days: 'дни', fix: 'правки поста', draft: 'черновик', fresh: 'свежесть', agenda: 'закулисье', shots: 'кадры', twists: 'твисты', inner: 'мысли', sim: 'жизнь', arcs: 'сюжетка', slip: 'ляп-фикс', hurt: 'травмы', people: 'люди', canon: 'канон', habits: 'привычки', lang: 'языки', ooc: 'OOC', steps: 'прожитое', shards: 'осколки', skip: 'перемотка', cal: 'календарь', route: 'дорога', ambient: 'запахи', mend: 'дописать пост' };
+const LABELS = { index: 'прочее', reply: 'не пропусти', rules: 'правила сцены', see: 'покажи им', days: 'дни', fix: 'правки поста', draft: 'черновик', fresh: 'свежесть', agenda: 'закулисье', shots: 'кадры', twists: 'твисты', inner: 'мысли', sim: 'жизнь', arcs: 'сюжетка', slip: 'ляп-фикс', hurt: 'травмы', people: 'люди', canon: 'канон', habits: 'привычки', lang: 'языки', ooc: 'OOC', steps: 'прожитое', shards: 'осколки', skip: 'перемотка', cal: 'календарь', route: 'дорога', ambient: 'запахи', mend: 'дописать пост', ties: 'шкалы пары', vault: 'секреты', saga: 'главы хроники', personas: 'персоны', meet: 'знакомства' };
 
 export function statsHtml() {
-    const st = A.settings().stats || {};
+    const all = A.settings();
+    // до 0.62 счёт лежал в stats вперемешку с выключателем «Своих статов» — дни оттуда читаем тоже
+    const st = { ...Object.fromEntries(Object.entries(all.stats && typeof all.stats === 'object' ? all.stats : {}).filter(([k]) => DAY.test(k))), ...(all.calls || {}) };
     const days = Object.keys(st).sort().reverse();
     if (!days.length) return '<div class="lf-hint">Пока пусто — счёт пойдёт с первого вызова.</div>';
     return days.slice(0, 3).map((d, k) => {

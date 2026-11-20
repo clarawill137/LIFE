@@ -5,6 +5,7 @@
 
 import { icon, iconUrl, CANDLE } from './icons.js';
 import { forties, isPhoneButton } from './era.js';
+import { commitEntry, booksReady } from './books.js';
 
 let api = null;
 
@@ -501,6 +502,14 @@ function renderCC() {
     ${c.read ? `<div class="cc-slider"><span>${icon('type')} Текст</span><input type="range" min="14" max="24" step="1" value="${c.fs}" data-cc-set="fs"><b>${c.fs}</b></div>
         <div class="cc-slider"><span>${icon('menu')} Строки</span><input type="range" min="1.3" max="2.2" step="0.05" value="${c.lh}" data-cc-set="lh"><b>${c.lh}</b></div>` : ''}
 
+    <div class="cc-label">Окна</div>
+    <div class="cc-grid small">
+        <button class="cc-tile" data-cc="win" data-v="personas">${icon('user')}<span>Персоны</span></button>
+        <button class="cc-tile" data-cc="win" data-v="books">${icon('folder')}<span>Библиотека</span></button>
+        <button class="cc-tile" data-cc="win" data-v="exts">${icon('puzzle')}<span>Расширения</span></button>
+        <button class="cc-tile" data-cc="win" data-v="link">${icon('plug')}<span>Подключение</span></button>
+    </div>
+
     <div class="cc-label">Кабинет</div>
     <div class="cc-grid small">
         <button class="cc-tile" data-cc="lore">${icon('book')}<span>Лорбуки</span></button>
@@ -656,6 +665,7 @@ async function onCCClick(ev) {
             break;
         }
         case 'edge': { c.side = c.side === 'right' ? 'left' : 'right'; api.saveSettings(); syncEdge(); renderCC(); break; }
+        case 'win': { const id = el.dataset.v; closeCC(); setTimeout(() => { if (!globalThis.LifeWin?.open?.(id)) api.toast('info', 'Это окно не поднялось — обнови страницу', '✦ Пульт'); }, 280); break; }
         case 'lore': await loreSheet(); break;
         case 'preset': presetSheet(); break;
         case 'days': await daysSheet(); break;
@@ -781,16 +791,26 @@ async function loreSheet() {
 
 async function toggleLoreEntry(inp) {
     const wi = await WI();
-    const entry = loreState.data?.entries?.[inp.dataset.loreUid];
+    const uid = inp.dataset.loreUid;
+    const entry = loreState.data?.entries?.[uid];
     if (!wi || !entry) return;
-    entry.disable = !inp.checked;
-    inp.closest('.cc-card')?.classList.toggle('off', entry.disable);
+    const want = !inp.checked;
+    inp.closest('.cc-card')?.classList.toggle('off', want);
     try {
-        await wi.saveWorldInfo(loreState.book, loreState.data, true);
-        try { wi.reloadEditor?.(loreState.book); } catch { /* редактор закрыт */ }
+        if (booksReady()) {
+            // книга берётся с сервера заново, в ней меняется одна запись (books.js): лист, открытый час назад,
+            // не затрёт правки, которые за это время приехали на сервер мимо окна
+            const r = await commitEntry(wi, loreState.book, uid, { disable: want });
+            loreState.data = r.data;
+        } else {
+            entry.disable = want;
+            await wi.saveWorldInfo(loreState.book, loreState.data, true);
+            try { wi.reloadEditor?.(loreState.book); } catch { /* редактор закрыт */ }
+        }
     } catch (e) {
-        entry.disable = !entry.disable;
-        inp.checked = !entry.disable;
+        if (!booksReady()) entry.disable = !want;
+        inp.checked = want;   // как было до тапа
+        inp.closest('.cc-card')?.classList.toggle('off', !want);
         api.toast('error', `Не сохранилось: ${esc(e?.message || e)}`);
     }
 }
