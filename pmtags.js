@@ -158,7 +158,7 @@ export const DIALECTS = {
     banana: {
         name: 'Nano Banana',
         refs: true,
-        guide: 'Google Nano Banana (Gemini image). A narrative scene description in natural language — one dense paragraph, 60-110 words, never a keyword list. Order: shot type, angle and lens → who is in frame (first names) and what they are doing → clothes → place → light → style. Positive framing only: describe what IS there ("an empty street") instead of listing what is not ("no cars"). Reference photos carry the faces — name the people, do not describe faces, hair or eye colour.',
+        guide: 'Google Nano Banana (Gemini image). A narrative scene description in natural language — one dense paragraph, 60-110 words, never a keyword list. Order: shot type, angle and lens → who is in frame (first names) and what they are doing → clothes → place → light. The art style usually travels separately (the style field of the tag): keep style words only if the current prompt already carries them. Positive framing only: describe what IS there ("an empty street") instead of listing what is not ("no cars"). Reference photos carry the faces — name the people, do not describe faces, hair or eye colour.',
         note: '',
     },
     gpt: {
@@ -188,7 +188,7 @@ export const DIALECTS = {
     generic: {
         name: 'рисовалка',
         refs: true,
-        guide: 'A general image model. One clear English paragraph, 50-100 words: framing → who is in frame (first names) and what they do → clothes → place → light → style.',
+        guide: 'A general image model. One clear English paragraph, 50-100 words: framing → who is in frame (first names) and what they do → clothes → place → light; art-style words only if the current prompt already carries them.',
         note: '',
     },
 };

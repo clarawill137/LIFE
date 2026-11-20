@@ -7,6 +7,7 @@
 import { icon } from './icons.js';
 import { playCut, lightbox } from './media.js';
 import { moodNow } from './mood.js';
+import { DP_BRIEF } from './dpcore.js';
 
 let A = null;
 export function initShots(api) { A = api; }
@@ -336,11 +337,12 @@ function move(c, fig, d) {
 // ───── съёмка ─────
 
 const SHOT_SYSTEM = (kind) => `You are a film director's storyboard assistant for an illustrated roleplay story. The post is split into numbered paragraphs.
-Return ONLY JSON: {"para":2,"title":"2-4 Russian words, name of the moment","frames":[{"title":"Russian frame label, 1-3 words","who":["exact names of people in the frame"],"caption":"one short Russian line from or about this moment, max 90 chars","motion":"${MOTIONS.join('|')}","prompt":"English image prompt, 45-70 words: shot type and angle, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), pose, gesture, expression, clothing as listed, setting, light, weather, mood; do not name an art style"}]}
+Return ONLY JSON: {"para":2,"title":"2-4 Russian words, name of the moment","frames":[{"title":"Russian frame label, 1-3 words","who":["exact names of people in the frame"],"caption":"one short Russian line from or about this moment, max 90 chars","motion":"${MOTIONS.join('|')}","prompt":"English image prompt, 60-90 words: shot size, camera height and lens, who is in frame BY NAME ONLY (never describe their faces, hair, eye or skin colour), what each is doing in this very moment, where each looks, the face, clothing as listed, the light and its source, the place; do not name an art style"}]}
 para — the number of the paragraph where the moment happens; the picture goes right after it.
 ${kind === 'cut'
         ? 'Make 3 or 4 frames that show this moment unfolding like a short film scene: first a wider shot of the place and the people, then closer shots of the key gestures and reactions, ending on the strongest beat. The frames are cuts of one continuous moment.'
         : 'Make exactly 1 frame: the single strongest image of this moment — the shot a director would put on the poster for this scene.'}
+${DP_BRIEF}
 Follow the story exactly: same place, time of day, weather, clothes, who is present and where they stand. motion — what moves in the frame: rain on glass rain, falling snow snow, coffee steam steam, cigarette smoke smoke, candle or neon flicker, warm lamp or sun glow, slow breathing pulse, heartbeat heartbeat, otherwise drift.
 Intimate or sexual moments: only atmosphere and emotion — faces close, foreheads touching, hands, silhouettes against a window, tangled sheets in shadow; everyone clothed or covered; no nudity, no underwear, nothing explicit. Violence: no gore.`;
 
@@ -358,6 +360,23 @@ function stateAt(i) {
         date = date || h.timestamp?.story_date || '';
     }
     return { loc: loc || st.scene?.location || '', atm: atm || st.scene?.atmosphere || '', time: time || st.timestamp?.story_time || '', date: date || st.timestamp?.story_date || '', st };
+}
+
+/** То же — для оператора (dp.js): место, час, воздух сцены, как место выглядит и кто во что одет на момент поста i. */
+export function sceneAt(i) {
+    const chat = A.chatArr();
+    const s = stateAt(Math.min(Math.max(0, i), Math.max(0, chat.length - 1)));
+    let desc = '';
+    for (let j = Math.min(i, chat.length - 1), n = 0; j >= 0 && n < 12 && !desc; j--) {
+        const sc = chat[j]?.horae_meta?.scene;
+        if (!sc) continue;
+        n++;
+        if (sc.location && s.loc && sc.location !== s.loc) break;   // раньше было другое место — его описание не годится
+        desc = String(sc.scene_desc || '');
+    }
+    let clothes = '';
+    try { clothes = clothesLine(s.st); } catch { /* без одежды */ }
+    return { loc: s.loc, atm: s.atm, time: s.time, date: s.date, desc, clothes };
 }
 
 function clothesLine(st) {
