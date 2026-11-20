@@ -145,7 +145,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.58.3';
+const VERSION = '0.58.4';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1521,13 +1521,18 @@ async function cleanInventory() {
 function pairKey(a, b) { return [canonName(a), canonName(b)].map(norm).sort().join('|'); }
 function dirKey(from, to) { return `${norm(canonName(from))}>${norm(canonName(to))}`; }
 
-const SCALES = [['trust', 'Доверие', 'handshake', 50], ['closeness', 'Близость', 'heart', 50], ['desire', 'Влечение', 'flame', 30], ['jealousy', 'Ревность', 'eye', 10], ['tension', 'Напряжение', 'zap', 25], ['guilt', 'Вина', 'moon', 5]];
+const SCALES = [['trust', 'Доверие', 'handshake', 50], ['closeness', 'Близость', 'heart', 50], ['desire', 'Влечение', 'flame', 30], ['jealousy', 'Ревность', 'eye', 10], ['tension', 'Напряжение', 'zap', 25], ['guilt', 'Вина', 'moon', 5], ['love', 'Любовь', 'gem', 0]];
 const scaleBase = () => Object.fromEntries(SCALES.map(([k, , , v]) => [k, v]));
 
 /** Шкалы «from → to» внутри пары. */
 function relSide(p, from) { return sameName(from, p.a) ? p.ab : p.ba; }
 
-function relationsState() {
+/** Замки пары: { 'from>to': { шкала: значение } } — запертая шкала не двигается, что бы ни записал Летописец. */
+const relPins = () => chatMeta().relPin || {};
+const relPinOf = (from, to) => relPins()[dirKey(from, to)] || {};
+
+/** raw — без замков: как шкалы сложились бы из точки отсчёта и записей Летописца. */
+function relationsState(raw = false) {
     const chat = chatArr();
     const cm = chatMeta();
     const oldBase = cm.pairBase || {};
@@ -1559,6 +1564,14 @@ function relationsState() {
     }
     for (const k of Object.keys(oldBase)) if (!pairs[k]) { const [a, b] = k.split('|'); get(a, b); }
     for (const k of Object.keys(base)) { const [a, b] = k.split('>'); if (a && b && !pairs[pairKey(a, b)]) get(a, b); }
+    if (!raw) {
+        const pins = cm.relPin || {};
+        for (const k of Object.keys(pins)) { const [a, b] = k.split('>'); if (a && b && !pairs[pairKey(a, b)]) get(a, b); }
+        for (const p of Object.values(pairs)) for (const [sd, from, to] of [[p.ab, p.a, p.b], [p.ba, p.b, p.a]]) {
+            const pin = pins[dirKey(from, to)];
+            if (pin) for (const [f] of SCALES) if (Number.isFinite(pin[f])) sd[f] = clamp(pin[f]);
+        }
+    }
     // плоские поля — среднее двух сторон (для старых мест, где хватает общей картины)
     for (const p of Object.values(pairs)) for (const [f] of SCALES) p[f] = Math.round((p.ab[f] + p.ba[f]) / 2);
     return pairs;
@@ -1570,6 +1583,8 @@ function relSeries(from, to, f = 'trust') {
     const cm = chatMeta();
     const a = canonName(from), b = canonName(to);
     const def = SCALES.find(x => x[0] === f)?.[3] ?? 50;
+    const pinned = relPinOf(a, b)[f];
+    if (Number.isFinite(pinned)) return [{ i: -1, v: pinned, d: '' }];
     let v = (cm.relBase || {})[dirKey(a, b)]?.[f] ?? (cm.pairBase || {})[pairKey(a, b)]?.[f] ?? def;
     const out = [{ i: -1, v, d: '' }];
     for (let i = 0; i < chat.length; i++) {
@@ -1589,7 +1604,7 @@ function relSeries(from, to, f = 'trust') {
 /** Чувства from к to: { trust, closeness, … } или null. */
 function relOf(from, to) {
     const p = relationsState()[pairKey(from, to)];
-    return p ? { ...relSide(p, from), moments: p.moments } : null;
+    return p ? { ...relSide(p, from), moments: p.moments, pin: { ...relPinOf(from, to) } } : null;
 }
 
 // как отношения выглядят в поведении — чтобы модель играла чувства, а не читала цифры
@@ -1600,6 +1615,7 @@ const REL_HINT = {
     jealousy: ['', '', 'тревога за своё место', 'ревнует, следит за соперниками', 'жгучая ревность'],
     tension: ['', '', 'что-то копится', 'колется, обижается', 'на грани взрыва'],
     guilt: ['', '', 'лёгкое чувство вины', 'вина давит, пытается загладить', 'вина съедает изнутри'],
+    love: ['', '', 'есть привязанность', 'любит', 'любит так, что это не обсуждается: ссора этого не отменяет'],
 };
 const relLvl = (v) => v < 15 ? 0 : v < 35 ? 1 : v < 60 ? 2 : v < 80 ? 3 : 4;
 const relBits = (sd) => SCALES.map(([f]) => REL_HINT[f][relLvl(sd[f])]).filter(Boolean);
@@ -2482,11 +2498,12 @@ function renderRelations(who, st) {
     const secrets = secretsState().filter(x => x.knows.some(k => sameName(k, who) || sameName(k, other)));
     const events = horaeEvents().filter(e => { const t = norm(e.event?.summary); return [who, other].every(n => [canonName(n), ...(aliasTable()[canonName(n)] || [])].some(a => t.includes(norm(a).split(' ')[0]))); }).slice(-20).reverse();
     const A = shortName(canonName(who)), B = shortName(canonName(other));
-    const meter = (v) => `<i class="lf-meter"><b style="width:${v}%"></b></i><small>${v}</small>`;
+    const pinA = relPinOf(who, other), pinB = relPinOf(other, who);
+    const meter = (v, locked) => `<i class="lf-meter${locked ? ' locked' : ''}"><b style="width:${v}%"></b></i><small>${locked ? icon('lock') : v}</small>`;
     const bars = `<div class="lf-bars2" data-act="pair-edit">
         <div class="lf-b2-head"><span></span><span></span><b>${esc(A)} → ${esc(B)}</b><b>${esc(B)} → ${esc(A)}</b></div>
-        ${SCALES.map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f])}</span><span class="lf-b2-m">${meter(theirs[f])}</span></div>`).join('')}
-        <div class="lf-hint-i">Чувства не всегда взаимны: слева — что ${esc(A)} чувствует к ${esc(B)}, справа — наоборот. Нажми, чтобы поправить.</div>
+        ${SCALES.map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f], Number.isFinite(pinA[f]))}</span><span class="lf-b2-m">${meter(theirs[f], Number.isFinite(pinB[f]))}</span></div>`).join('')}
+        <div class="lf-hint-i">Чувства не всегда взаимны: слева — что ${esc(A)} чувствует к ${esc(B)}, справа — наоборот. Нажми, чтобы поправить или запереть шкалу.</div>
     </div>`;
     let body = '';
     if (tab === 'tri') {
@@ -3714,26 +3731,34 @@ async function onClick(ev) {
             const pp = relationsState()[pairKey(ui.who, ui.pair)];
             const mine = pp ? relSide(pp, ui.who) : scaleBase(), theirs = pp ? relSide(pp, ui.pair) : scaleBase();
             const A = shortName(canonName(ui.who)), B = shortName(canonName(ui.pair));
-            const rng = (d, k, label, v) => `<div class="lf-field"><label>${label}: <b data-out>${v}</b></label><input type="range" min="0" max="100" value="${v}" data-rng="${d}.${k}"></div>`;
+            const pins = { ab: relPinOf(ui.who, ui.pair), ba: relPinOf(ui.pair, ui.who) };
+            const rng = (d, k, label, v) => `<div class="lf-field"><div class="lf-pinrow"><label>${label}: <b data-out>${v}</b></label><label class="lf-pinlab"><input type="checkbox" data-pin="${d}.${k}"${Number.isFinite(pins[d][k]) ? ' checked' : ''}> ${icon('lock')} не меняется</label></div><input type="range" min="0" max="100" value="${v}" data-rng="${d}.${k}"></div>`;
             openSheet(`${esc(A)} × ${esc(B)}`, `${sec(`${esc(A)} → ${esc(B)}`)}
                 ${SCALES.map(([f, label]) => rng('ab', f, label, mine[f])).join('')}
                 ${sec(`${esc(B)} → ${esc(A)}`)}
                 ${SCALES.map(([f, label]) => rng('ba', f, label, theirs[f])).join('')}
                 <button class="lf-btn primary full" data-act="pair-save">${icon('check')} Сохранить</button>
-                <div class="lf-hint">Это точка отсчёта — дальше Летописец двигает шкалы сам после каждого поста, отдельно для каждой стороны.</div>`);
+                <div class="lf-hint">Это точка отсчёта — дальше Летописец двигает шкалы сам после каждого поста, отдельно для каждой стороны. Шкала под замком стоит на месте, что бы ни случилось; «Любовь» Летописец не трогает вовсе — её ставишь ты.</div>`);
             break;
         }
         case 'pair-save': {
-            const pp = relationsState()[pairKey(ui.who, ui.pair)];
+            // точку отсчёта считаем от шкал без замков: снятый замок возвращает шкалу туда, куда её довёл бы Летописец
+            const pp = relationsState(true)[pairKey(ui.who, ui.pair)];
             const cm = chatMeta();
             cm.relBase = cm.relBase || {};
+            cm.relPin = cm.relPin || {};
             const oldB = (cm.pairBase || {})[pairKey(ui.who, ui.pair)] || {};
             for (const [d, from, to] of [['ab', ui.who, ui.pair], ['ba', ui.pair, ui.who]]) {
                 const cur = pp ? relSide(pp, from) : scaleBase();
                 const dk = dirKey(from, to);
                 const b0 = { ...scaleBase(), ...oldB, ...(cm.relBase[dk] || {}) };
                 const want = (f) => Number(box.querySelector(`[data-rng="${d}.${f}"]`).value);
-                cm.relBase[dk] = Object.fromEntries(SCALES.map(([f]) => [f, b0[f] + want(f) - cur[f]]));
+                const locked = (f) => !!box.querySelector(`[data-pin="${d}.${f}"]`)?.checked;
+                const pin = {};
+                for (const [f] of SCALES) if (locked(f)) pin[f] = want(f);
+                // запертую шкалу точка отсчёта не трогает — за неё отвечает замок
+                cm.relBase[dk] = Object.fromEntries(SCALES.map(([f]) => [f, locked(f) ? b0[f] : b0[f] + want(f) - cur[f]]));
+                if (Object.keys(pin).length) cm.relPin[dk] = pin; else delete cm.relPin[dk];
             }
             if (cm.pairBase) delete cm.pairBase[pairKey(ui.who, ui.pair)];
             saveMeta(); closeSheet(); render(); updateMovePrompt();
@@ -4193,6 +4218,9 @@ globalThis.LifeBridge = {
             steps: (a, b) => stepsBetween(a, b),                                   // прожитое вдвоём: { n, themes }
             // 0.58.3
             face: (i, who, k) => emoHint(i, who, k),                               // подсказать лицо поста, если Летописец его не увидел
+            // 0.58.4
+            rel: (from, to) => relOf(from, to),                                    // чувства from → to: шкалы 0…100 (с «Любовью»), pin — что заперто
+            ties: (who) => Object.values(relationsState()).filter(p => sameName(p.a, who) || sameName(p.b, who)).map(p => ({ to: sameName(p.a, who) ? p.b : p.a, ...relSide(p, who) })),
         },
         lore: { about: (who, o) => loreFor(who, o), card: (who, max) => cardText(who, max), core: (who) => coreOf(who), key: (who) => simLifeKey(who), coreAdd: (who, line) => coreAdd(who, line) },
         // полки: свой трекер в Сцене, свой блок в «Персонаж → Жизнь → Психика», свои строки в «Что записал пост»
