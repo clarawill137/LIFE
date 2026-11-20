@@ -69,14 +69,15 @@ async function extract(u) {
     // именно конец: на него она и отвечает (раньше сюда уходило начало поста — шапка и первые абзацы)
     for (let j = u - 1; j >= 0 && !prev; j--) if (chat[j] && !chat[j].is_system && !chat[j].is_user) { const t = A.plainText(chat[j].mes).trim(); prev = t.length > 700 ? `…${t.slice(t.length - 699).trimStart()}` : t; }
     const here = (A.worldState().scene?.characters_present || []).map(A.canonName).filter(Boolean);
-    // «Правила сцены» сверяются этим же запросом: их условия — в конец, отбор — полем rules
-    const rules = A.rulesJoin?.(u) || null;
-    const input = [`Игрок пишет за: ${userName()}`, here.length ? `В сцене: ${here.join(', ')}` : '', prev ? `Конец предыдущего поста:\n${prev}` : '', `Пост игрока:\n${A.cut(text, 4000)}`, rules?.input || ''].filter(Boolean).join('\n\n');
+    // «Правила сцены» и «Узнавание» сверяются этим же запросом: их списки — в конец, отбор — своими полями
+    const joins = [];
+    for (const f of [A.rulesJoin, A.johariJoin]) { try { const x = f?.(u); if (x) joins.push(x); } catch (e) { console.warn('[Life] не пропусти: присоединённое', e); } }
+    const input = [`Игрок пишет за: ${userName()}`, here.length ? `В сцене: ${here.join(', ')}` : '', prev ? `Конец предыдущего поста:\n${prev}` : '', `Пост игрока:\n${A.cut(text, 4000)}`, ...joins.map(x => x.input || '')].filter(Boolean).join('\n\n');
     let j = null;
     try {
-        const out = await A.askModel([{ role: 'system', content: SYSTEM + (rules?.system || '') }, { role: 'user', content: input }], 700 + (rules?.tokens || 0));
+        const out = await A.askModel([{ role: 'system', content: SYSTEM + joins.map(x => x.system || '').join('') }, { role: 'user', content: input }], 700 + joins.reduce((n, x) => n + (x.tokens || 0), 0));
         j = A.extractJson(out);
-    } finally { try { rules?.take(j); } catch (e) { console.warn('[Life] правила сцены', e); } }
+    } finally { for (const x of joins) { try { x.take(j); } catch (e) { console.warn('[Life] не пропусти: присоединённое', e); } } }
     const items = (Array.isArray(j?.items) ? j.items : []).map(x => ({ t: String(x?.t || '').trim().slice(0, 140), to: String(x?.to || '').trim().slice(0, 40) })).filter(x => x.t).slice(0, 5);
     return { items, choice: j?.choice && typeof j.choice === 'object' && !Array.isArray(j.choice) ? j.choice : null };
 }

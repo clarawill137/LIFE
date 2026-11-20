@@ -54,6 +54,27 @@ export function lustChron(i) {
     return { key: '"hot": null, "turnons": []', rule: `${RULE_HOT}${RULE_TURN}`, tokens: 420, input: '' };
 }
 
+/** Посев «от Claude»: постоянные вкусы в постели. dropCard — убрать записанное по карточке (mes −1, не своё). */
+export function lustSeed(who, v = {}) {
+    const n = A.canonName(who) || who;
+    if (!n || !v || typeof v !== 'object') return 0;
+    const s = M();
+    const k = Object.keys(s.traits).find(x => A.sameName(x, n)) || n;
+    const list = s.traits[k] = s.traits[k] || [];
+    let c = 0;
+    if (v.dropCard) for (let q = list.length - 1; q >= 0; q--) if (list[q].mes === -1 && !list[q].src) { list.splice(q, 1); c++; }
+    for (const r of Array.isArray(v.traits) ? v.traits : []) {
+        const kind = String(r?.kind || '').trim();
+        const t = String(r?.t || '').trim().slice(0, 140);
+        if (!KIND[kind] || !t) continue;
+        if (kind === 'libido') { const old = list.find(x => x.kind === 'libido'); if (old) { old.t = t; old.src = 'claude'; c++; continue; } }
+        if (list.some(x => x.kind === kind && similar(A, x.t, t))) continue;
+        list.push({ kind, t, mes: -1, src: 'claude' });
+        c++;
+    }
+    return c;
+}
+
 function addTrait(who, kind, t, mes) {
     const s = M();
     if (!who || !KIND[kind] || !t) return false;

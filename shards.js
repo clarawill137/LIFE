@@ -57,6 +57,16 @@ function addShard(r, i, src) {
     return x;
 }
 
+/** Узнавание (0.64): она рассказала то, что он забыл, — осколок «с её слов» (пока сам не вспомнит). */
+export function shardTold(who, t, era, i, by = '') {
+    if (!A || !shardsOn() || !hasShards(who)) return null;
+    const x = addShard({ who, t, era }, i, 'told');
+    if (!x) return null;
+    if (by) x.by = by;
+    A.saveMeta();
+    return x;
+}
+
 // ───────────── Летописец ─────────────
 
 export function shardsChron() {
@@ -89,8 +99,11 @@ export function shardsPrompt(type) {
         if (here.length && !here.some(h => A.sameName(h, who))) continue;
         const list = M().list.filter(x => A.sameName(x.who, who));
         if (!list.length) continue;
-        const byEra = erasOf(who).map(e => [e, list.filter(x => x.era === e).slice(-5)]).filter(([, l]) => l.length);
-        out.push(`[Память ${A.shortName(who)} — он уже вспомнил (и только это; остальное — провалы и обрывки): ${byEra.map(([e, l]) => `${e} — ${l.map(x => x.t).join('; ')}`).join(' | ')}. Новое всплывает только по ходу истории, кусками — через запах, слово, место, — не всё сразу; уже вспомненное он может назвать.]`);
+        const own = list.filter(x => x.src !== 'told');
+        const told = list.filter(x => x.src === 'told').slice(-4);
+        const byEra = erasOf(who).map(e => [e, own.filter(x => x.era === e).slice(-5)]).filter(([, l]) => l.length);
+        if (byEra.length) out.push(`[Память ${A.shortName(who)} — он уже вспомнил (и только это; остальное — провалы и обрывки): ${byEra.map(([e, l]) => `${e} — ${l.map(x => x.t).join('; ')}`).join(' | ')}. Новое всплывает только по ходу истории, кусками — через запах, слово, место, — не всё сразу; уже вспомненное он может назвать.]`);
+        if (told.length) out.push(`[Знает с чужих слов, сам не помнит: ${told.map(x => `${x.t}${x.by ? ` (рассказала ${A.shortName(x.by)})` : ''}`).join('; ')}. Может принять как факт, может вспомнить обрывком — не больше рассказанного.]`);
     }
     return out.join('\n');
 }
@@ -106,7 +119,7 @@ export function shardsHtml(who) {
     return `${A.sec('Осколки памяти', list.length ? String(list.length) : 'пока пусто')}
     <div class="lf-shards">${erasOf(who).map(e => {
         const l = list.filter(x => x.era === e);
-        return `<div class="lf-sh-era"><b>${esc(e)}</b>${l.length ? l.map(x => `<span class="lf-sh" style="--r:${((x.id.charCodeAt(x.id.length - 1) % 7) - 3) * 0.7}deg">${esc(x.t)}${Number.isFinite(x.mes) ? `<button data-act="jump" data-mes="${x.mes}">${A.icon('chevR')}</button>` : ''}<button data-act="shd-del" data-id="${x.id}">${A.icon('x')}</button></span>`).join('') : '<i>провал</i>'}</div>`;
+        return `<div class="lf-sh-era"><b>${esc(e)}</b>${l.length ? l.map(x => `<span class="lf-sh${x.src === 'told' ? ' told' : ''}" style="--r:${((x.id.charCodeAt(x.id.length - 1) % 7) - 3) * 0.7}deg">${esc(x.t)}${x.src === 'told' ? ' <i>с её слов</i>' : ''}${Number.isFinite(x.mes) ? `<button data-act="jump" data-mes="${x.mes}">${A.icon('chevR')}</button>` : ''}<button data-act="shd-del" data-id="${x.id}">${A.icon('x')}</button></span>`).join('') : '<i>провал</i>'}</div>`;
     }).join('')}</div>
     <div class="lf-actions"><button class="lf-btn" data-act="shd-scan" data-name="${N}">${A.icon('search')} ${ui.busy ? esc(ui.prog || 'Читаю…') : 'Собрать по истории'}</button><button class="lf-btn ghost" data-act="shd-add" data-name="${N}">${A.icon('plus')} Осколок</button></div>`;
 }

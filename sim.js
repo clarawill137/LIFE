@@ -3,6 +3,7 @@
 // Всё считает Летописец после поста (один запрос), а модели уходит короткая скрытая заметка.
 
 import { icon } from './icons.js';
+import { CRAFT_SHORT } from './craft.js';
 import { eraCommsNote } from './era.js';
 import { IDEA_KINDS, ideasSystem } from './chronicler.js';
 import { initPeople, peopleChronOpts, peopleAfterPost } from './people.js';
@@ -704,6 +705,26 @@ function ideaRow(x, tease) {
     </div>`;
 }
 
+/** Посев «от Claude»: вкусы. dropCard — убрать записанное по карточке (не правленое руками). */
+export function prefsSeed(who, v = {}) {
+    const n = A.canonName(who) || who;
+    if (!n || !v || typeof v !== 'object') return 0;
+    const m = M();
+    const arr = m.prefs[n] = m.prefs[n] || [];
+    let k = 0;
+    if (v.dropCard) for (let q = arr.length - 1; q >= 0; q--) if (arr[q].src === 'card' && !arr[q].hand) { arr.splice(q, 1); k++; }
+    for (const [list, kind] of [[v.like, 'like'], [v.dislike, 'dislike']]) {
+        for (const x of Array.isArray(list) ? list : []) {
+            const t = String(x || '').trim().slice(0, 80);
+            if (!t || arr.some(y => A.norm(y.t) === A.norm(t))) continue;
+            arr.push({ t, k: kind, mes: A.lastAiIndex(), src: 'claude' });
+            k++;
+        }
+    }
+    if (arr.length > 40) arr.splice(0, arr.length - 40);
+    return k;
+}
+
 function prefsHtml(who) {
     const p = prefsOf(who);
     const chip = (x) => `<span class="lf-pref${x.k === 'dislike' ? ' no' : ''}">${icon(x.k === 'dislike' ? 'x' : 'heart')}${esc(x.t)}<button data-act="sim-pref-del" data-name="${esc(who)}" data-t="${esc(x.t)}">${icon('x')}</button></span>`;
@@ -715,9 +736,9 @@ function prefsHtml(who) {
 // вкусы из карточки и лорбука — постоянные; заодно убрать то, что записалось временным (токсикоз, таблетки)
 const PREF_RE = /любит|обожа|нравит|предпочит|не любит|ненавид|терпеть не|не выносит|раздраж|вкус|любим|еда|кофе|чай|цвет|музык|книг|фильм|запах|духи|подар|хобби|увлеч|likes?|loves?|hates?|favou?rite|prefer|taste|food|drink|coffee|music|perfume/i;
 const PREFS_SYSTEM = `Ты ведёшь вкусы персонажа ролевой истории — для подарков и заботы. Даны карточка персонажа, записи лорбука о нём и то, что уже записано.
-Выпиши его ПОСТОЯННЫЕ вкусы — что верно о нём надолго: еда и напитки, цветы, запахи и духи, музыка, книги и фильмы, вещи, места, занятия; и что он не любит или не выносит. Только то, что правда есть в тексте, без догадок.
+Выпиши его ПОСТОЯННЫЕ вкусы — что верно о нём надолго: еда и напитки, цветы, запахи и духи, музыка, книги и фильмы, вещи, места, занятия; и что он не любит или не выносит. Только то, что правда есть в тексте, без догадок. Не жанром («старая музыка», «книги», «готовка»), а предметом, как в тексте: что именно, какое, откуда («свинг — Гленн Миллер», «сливы с рынка», «бейсбол по радио»). ${CRAFT_SHORT}
 НЕ вкусы: что тянет или тошнит сейчас (беременность, болезнь), лекарства и таблетки, симптомы, настроение момента.
-Ответь только JSON: {"like":["1–5 слов"],"dislike":["1–5 слов"],"drop":["уже записанное (точь-в-точь), что временное или не вкус"]}. like — до 15, dislike — до 8; уже записанное не повторяй.`;
+Ответь только JSON: {"like":["1–7 слов"],"dislike":["1–7 слов"],"drop":["уже записанное (точь-в-точь), что временное или не вкус"]}. like — до 15, dislike — до 8; уже записанное не повторяй.`;
 
 export async function prefsFromCard(who) {
     const n = A.canonName(who) || who;

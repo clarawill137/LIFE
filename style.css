@@ -4026,3 +4026,24 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 /* светлая тема «Бумага»: тёмные подложки полей — светлее */
 body.lf-theme.lf-pal-paper #lf-win input, body.lf-theme.lf-pal-paper #lf-win textarea, body.lf-theme.lf-pal-paper #lf-win select, body.lf-theme.lf-pal-paper .lw-pre { background: rgba(0, 0, 0, .04); }
 body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
+
+/* ───────────── 0.64 · Узнавание ───────────── */
+.lf-jo-g { margin: 6px 0 14px; }
+.lf-jo-h { display: flex; align-items: baseline; gap: 7px; margin: 10px 2px 2px; color: var(--lf-text2); }
+.lf-jo-h .lf-i { width: 15px; height: 15px; align-self: center; color: var(--lf-rose2); }
+.lf-jo-h b { font-weight: 500; font-size: 13.5px; letter-spacing: .02em; }
+.lf-jo-h small { color: var(--lf-dim); font-family: var(--lf-serif); font-style: italic; font-size: 12.5px; }
+.lf-jo .lf-idea-t { cursor: pointer; }
+.lf-jo-sub { display: block; margin-top: 3px; color: var(--lf-dim); font-style: normal; font-size: 12px; line-height: 1.35; }
+.lf-jo-dots { display: inline-flex; gap: 4px; margin-top: 6px; }
+.lf-jo-dots i { width: 14px; height: 3px; border-radius: 2px; background: rgba(var(--lf-text-rgb), .14); }
+.lf-jo-dots i.on { background: var(--lf-rose); box-shadow: 0 0 6px rgba(var(--lf-rose-rgb), .45); }
+.lf-jo.k-hidden .lf-idea-ic { background: rgba(232, 195, 122, .13); color: #e7c77a; }
+.lf-jo.k-unknown .lf-idea-ic { background: rgba(140, 160, 230, .14); color: #a9b8ef; }
+.lf-jo.k-past .lf-idea-ic { background: rgba(160, 200, 170, .13); color: #b4d6bd; }
+.lf-jo.k-hidden .lf-jo-dots i.on { background: #e7c77a; box-shadow: 0 0 6px rgba(232, 195, 122, .45); }
+.lf-jo.k-unknown .lf-jo-dots i.on { background: #a9b8ef; box-shadow: 0 0 6px rgba(140, 160, 230, .45); }
+.lf-jo.k-past .lf-jo-dots i.on { background: #b4d6bd; box-shadow: 0 0 6px rgba(160, 200, 170, .45); }
+.lf-jo.done .lf-idea-ic { background: rgba(242, 200, 121, .16); color: #f2c879; }
+.lf-sh.told { opacity: .85; border-style: dashed; }
+.lf-sh.told > i { font-size: 11px; color: var(--lf-dim); font-style: italic; margin-left: 4px; }

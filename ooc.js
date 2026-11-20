@@ -5,6 +5,7 @@
 
 import { loreFor, cardText } from './lore.js';
 import { lifeKey } from './sim.js';
+import { CRAFT_SHORT } from './craft.js';
 
 let A = null;
 export function initOoc(api) { A = api; }
@@ -31,7 +32,7 @@ export function coreOf(who) { return String(cfg().prof[keyOf(who)]?.text || '').
 
 const SYSTEM = `По карточке и записям лорбука о персонаже ролевой истории выпиши ЯДРО его характера и речи — по нему потом проверяют, «он ли это» в каждом ответе.
 Что писать: как говорит (длина фраз, словарь, мат, юмор, обращения, на каком языке срывается), чего НИКОГДА не скажет и не сделает, как реагирует на страх, нежность, злость, давление, ключевые черты и раны, которые определяют поступки.
-10–16 строк, каждая 5–20 слов, конкретно, без пересказа биографии. Ответь только JSON: {"core":["…"]}`;
+10–16 строк, каждая 5–20 слов, конкретно, без пересказа биографии: «если …, то он …» лучше, чем «он такой-то». ${CRAFT_SHORT} Ответь только JSON: {"core":["…"]}`;
 
 /** Собрать ядро из карточки и лорбука. */
 export async function oocCollect(who) {
@@ -47,6 +48,17 @@ export async function oocCollect(who) {
     cfg().prof[keyOf(name)] = { text: list.map(x => `• ${x}`).join('\n'), at: Date.now(), hand: false };
     A.saveSettings();
     return list.length;
+}
+
+/** Посев «от Claude»: ядро характера. Правленое руками (hand) не трогает. */
+export function coreSeed(who, text) {
+    const t = String(text || '').trim().slice(0, 3000);
+    if (!t) return 0;
+    const k = keyOf(A.canonName(who));
+    const cur = cfg().prof[k];
+    if (cur?.hand) return 0;
+    cfg().prof[k] = { text: t, at: Date.now(), hand: false, by: 'claude' };
+    return 1;
 }
 
 /** Мост: дописать строку в ядро характера (например, когда сломалось старое убеждение). */

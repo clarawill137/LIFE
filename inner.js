@@ -9,6 +9,7 @@ import { agendaCardHtml } from './agenda.js';
 import { hurtSection, hurtCap, hurtCount } from './hurt.js';
 import { armSection } from './arm.js';
 import { eraVisible, eraBooks } from './lore.js';
+import { CRAFT, CRAFT_SHORT } from './craft.js';
 
 let A = null;
 export function initInner(api) { A = api; }
@@ -385,16 +386,17 @@ export function innerBrief(who) {
 // ───────────── заполнить по карточке / подумать за него ─────────────
 
 const FILL_SYSTEM = `Ты помогаешь оживить персонажа ролевой истории на русском: чтобы у него была своя жизнь, а не только реакции на игрока.
-По карточке и последним событиям ответь только JSON:
-{"fem":false,"hobbies":["1–4 слова"],"turnons":["что его сексуально возбуждает в партнёре, 2–8 слов"],"bed":["как он в сексе, 3–10 слов"],"romance":{"level":"off|some|lots","rel":"кто ему игрок: жена, девушка…","style":"2–4 предложения: как он сам ухаживает, флиртует и проявляет нежность, в его манере"},"metab":1,"thoughts":[{"t":"что его тяготит или занимает, 6–14 слов","w":2}],"wants":[{"t":"его собственное желание или план, не про игрока, 6–14 слов","with":"с кем или пусто"}]}
-fem — true, если персонаж женщина. hobbies — 3–8 увлечений и привычек из карточки (книги, техника, руками по дереву, спорт, пробежка по утрам…). turnons — 4–8 конкретных сексуальных триггеров: части тела, жесты, одежда, запахи, слова, ситуации, то, что делает партнёр (взрослые, по обоюдному согласию; откровенно, без цензуры, но без мата); bed — 4–8 пунктов, какой он в сексе: темп, мягкость или напор, что любит делать и слышать, привычки, что после. turnons и bed — только если между ним и игроком есть романтика, иначе []. romance.level: off — романтики с игроком нет; some — есть, но сдержанно; lots — пара, он открыто ухаживает. metab — 2, если у него ускоренный метаболизм (суперсолдат, сыворотка), иначе 1. thoughts — 3–5 внутренних тем и конфликтов: прошлое, вина, служба, будущее семьи, друзья, страхи; w — 1 (фоном), 2 (тяготит), 3 (сильно давит). wants — 2–4 его желания: с друзьями, хобби, дела, планы для дома и семьи. Всё конкретно и в его характере.`;
+По карточке, лорбукам, своду истории и последним событиям ответь только JSON:
+{"fem":false,"hobbies":["2–6 слов"],"turnons":["что его сексуально возбуждает в партнёре, 2–8 слов"],"bed":["как он в сексе, 3–10 слов"],"romance":{"level":"off|some|lots","rel":"кто ему игрок: жена, девушка…","style":"2–4 предложения: как он сам ухаживает, флиртует и проявляет нежность, в его манере"},"metab":1,"thoughts":[{"t":"что его тяготит или занимает, 6–16 слов","w":2}],"wants":[{"t":"его собственное желание или план, не про игрока, 6–16 слов","with":"с кем или пусто"}]}
+fem — true, если персонаж женщина. hobbies — 3–8 увлечений, но не жанром («книги», «музыка», «техника»), а предметом: что именно, какое, где и как он этим занят («свинг сороковых — Гленн Миллер на виниле», «чинит чужие часы на кухонном столе»). turnons — 4–8 конкретных сексуальных триггеров: части тела, жесты, одежда, запахи, слова, ситуации, то, что делает партнёр (взрослые, по обоюдному согласию; откровенно, без цензуры, но без мата); bed — 4–8 пунктов, какой он в сексе: темп, мягкость или напор, что любит делать и слышать, привычки, что после. turnons и bed — только если между ним и игроком есть романтика, иначе []. romance.level: off — романтики с игроком нет; some — есть, но сдержанно; lots — пара, он открыто ухаживает. metab — 2, если у него ускоренный метаболизм (суперсолдат, сыворотка), иначе 1. thoughts — 3–5 того, что занимает его СЕЙЧАС, по последним событиям и по его жизни: дела, люди, планы, вина и смешное вперемешку — с именами, местами, вещами; w — 1 (фоном), 2 (тяготит), 3 (сильно давит). wants — 2–4 его собственных желания: с друзьями, руками, по дому, для себя — конкретно, чтобы это можно было сделать в сцене.
+${CRAFT}`;
 
 const THINK_SYSTEM = `Ты пишешь внутреннюю жизнь персонажа ролевой истории на русском — то, что у него на уме и чего он сам хочет, помимо игрока.
-Ответь только JSON: {"thoughts":[{"t":"6–14 слов","w":2}],"wants":[{"t":"6–14 слов","with":"с кем или пусто"}]}. 2–3 мысли (что тяготит или занимает: прошлое, вина, будущее, семья, друзья, работа; w 1–3 — насколько давит) и 1–2 желания (его собственные: друзья, хобби, дела, планы). Опирайся на свежие события. Не повторяй то, что уже есть.`;
+Ответь только JSON: {"thoughts":[{"t":"6–16 слов","w":2}],"wants":[{"t":"6–16 слов","with":"с кем или пусто"}]}. 2–3 мысли (что тяготит или занимает: дела, люди, будущее, вина, смешное; w 1–3 — насколько давит) и 1–2 желания (его собственные: друзья, руки, дела, планы). Опирайся на свежие события: с именами, местами, вещами из них. ${CRAFT_SHORT} Не повторяй то, что уже есть.`;
 
 const SPICE_SYSTEM = `Ты помогаешь вести интимную линию ролевой истории для взрослых на русском. Персонажи — взрослые, в отношениях по обоюдному согласию.
 По карточке и записям лорбуков о персонаже ответь только JSON: {"turnons":["2–8 слов"],"bed":["3–12 слов"]}.
-turnons — 5–8 конкретных сексуальных триггеров: что в партнёре и в ситуации его возбуждает (части тела, жесты, одежда, запахи, слова, её поведение, обстоятельства). bed — 5–8 пунктов, какой он в сексе: темп, мягкость или напор, доминирование, что любит делать и слышать, что говорит, привычки, что после. Откровенно и телесно, без цензуры, но без мата и без пошлых штампов; в его характере и строго по тому, что есть в записях. Не повторяй уже записанное.`;
+turnons — 5–8 конкретных сексуальных триггеров: что в партнёре и в ситуации его возбуждает (части тела, жесты, одежда, запахи, слова, её поведение, обстоятельства). bed — 5–8 пунктов, какой он в сексе: темп, мягкость или напор, доминирование, что любит делать и слышать, что говорит, привычки, что после. Откровенно и телесно, без цензуры, но без мата и без пошлых штампов; в его характере и строго по тому, что есть в записях: если в лорбуке сказано, что для него что-то стало победой (добровольно, по его выбору), не записывай это в табу из общих соображений о его прошлом. Не повторяй уже записанное.`;
 
 async function wiMod() { try { return await import('/scripts/world-info.js'); } catch { return null; } }
 
@@ -508,9 +510,49 @@ async function innerFill(who, mode) {
     return n;
 }
 
+/** Посев «от Claude»: свои «на уме» и «хочет сам»; dropCard — снять то, что записалось по карточке (общие места). */
+export function innerSeed(who, v = {}) {
+    who = A.canonName(who);
+    if (!who || !v || typeof v !== 'object') return 0;
+    const x = I(who);
+    let n = 0;
+    if (v.dropCard) {
+        for (const t of x.thoughts) if (t.src === 'card' && t.status === 'on') { t.status = 'gone'; n++; }
+        for (const t of x.wants) if (t.src === 'card' && t.status === 'on') { t.status = 'gone'; n++; }
+    }
+    const i = A.lastAiIndex();
+    for (const t of Array.isArray(v.thoughts) ? v.thoughts : []) if (addThought(who, String(t?.t || t || '').trim(), i, 'claude', [1, 2, 3].includes(Number(t?.w)) ? Number(t.w) : 2)) n++;
+    for (const w of Array.isArray(v.wants) ? v.wants : []) if (addWant(who, String(w?.t || w || '').trim(), String(w?.with || '').trim(), i, 'claude')) n++;
+    return n;
+}
+
+/** Посев «от Claude»: увлечения (новые — вперёд), что заводит, в постели, как ухаживает. drop — убрать перечисленное дословно. */
+export function profSeed(who, v = {}) {
+    who = A.canonName(who);
+    if (!who || !v || typeof v !== 'object') return 0;
+    const p = prof(who);
+    const norm = (t) => A.norm(String(t || '')).replace(/[^a-zа-я0-9 ]/gi, '').trim();
+    const drop = new Set((Array.isArray(v.drop) ? v.drop : []).map(norm).filter(Boolean));
+    let n = 0;
+    for (const k of ['hobbies', 'turnons', 'bed']) {
+        if (drop.size) { const before = p[k].length; p[k] = p[k].filter(t => !drop.has(norm(t))); n += before - p[k].length; }
+        const add = (Array.isArray(v[k]) ? v[k] : []).map(t => String(t || '').trim().slice(0, 140)).filter(t => t && !p[k].some(y => norm(y) === norm(t)));
+        if (add.length) { p[k] = [...add, ...p[k]].slice(0, 16); n += add.length; }
+    }
+    if (v.romance && typeof v.romance === 'object') {
+        if (ROM[String(v.romance.level || '')]) p.romance.level = String(v.romance.level);
+        if (String(v.romance.rel || '').trim()) p.romance.rel = String(v.romance.rel).trim().slice(0, 100);
+        // как ухаживает: заменяем, только если его писала модель по карточке (руками правленое не трогаем)
+        if (String(v.romance.style || '').trim() && !p.styleHand) { p.romance.style = String(v.romance.style).trim().slice(0, 2000); n++; }
+    }
+    if (Number(v.metab) >= 1) p.metab = [1, 1.5, 2].includes(Number(v.metab)) ? Number(v.metab) : p.metab;
+    p.filled = true;
+    return n;
+}
+
 // ───────────── вкладка «Внутри» и «Характер» ─────────────
 
-const SRC = { card: 'по карточке', ai: 'заметил Летописец', me: 'твоё' };
+const SRC = { card: 'по карточке', ai: 'заметил Летописец', me: 'твоё', claude: 'от Claude' };
 const dots = (w) => `<span class="lf-in-w" title="Насколько давит">${[1, 2, 3].map(k => `<i class="${k <= w ? 'on' : ''}"></i>`).join('')}</span>`;
 
 function addRow(k, who, ph) {
@@ -640,7 +682,7 @@ export async function innerClick(act, el) {
         case 'in-share': p.share = el.dataset.v; return done(false);
         case 'in-rom': p.romance.level = el.dataset.v; if (p.romance.level !== 'off' && !p.romance.rel) p.romance.rel = ''; return done(false);
         case 'in-rel': p.romance.rel = el.parentElement?.querySelector('input')?.value?.trim().slice(0, 100) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
-        case 'in-style': p.romance.style = el.parentElement?.querySelector('textarea')?.value?.trim().slice(0, 2000) || ''; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
+        case 'in-style': p.romance.style = el.parentElement?.querySelector('textarea')?.value?.trim().slice(0, 2000) || ''; p.styleHand = true; A.toast('success', 'Сохранила', '✦ Life', { timeOut: 1000 }); return done(false);
         case 'in-metab': p.metab = Number(el.dataset.v) || 1; return done(false);
         case 'in-fem': p.fem = el.dataset.v === '1'; return done(false);
         case 'in-on': p.on = !!el.checked; return done(false);
