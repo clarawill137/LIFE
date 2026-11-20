@@ -597,8 +597,18 @@ export function onPromptClick(ev) {
  */
 function hookPencilTap() {
     const live = (b) => !!b && !!b.closest('#chat') && !!A && A.settings().enabled !== false;
+    // ✎ под пальцем, но тап достался тому, что лежит поверх неё: прозрачной накладке или кнопке SLAY из пустой обёртки
+    // (картинку из неё унёс движок карточек). Чужую живую кнопку не трогаем — это её тап.
+    const under = (ev) => {
+        const t = ev.target;
+        if (!t?.closest?.('#chat') || typeof document.elementsFromPoint !== 'function') return null;
+        const ctl = t.closest('button, a, input, textarea, select, summary, label, [role="button"], [contenteditable="true"]');
+        const wrap = ctl?.closest('.iig-img-wrap');
+        if (ctl && !(wrap && !wrap.querySelector('img, video'))) return null;
+        return document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.classList?.contains('lf-pm-btn')) || null;
+    };
     window.addEventListener('click', (ev) => {
-        const b = ev.target?.closest?.('.lf-pm-btn');
+        const b = ev.target?.closest?.('.lf-pm-btn') || under(ev);
         if (!live(b)) return;
         ev.preventDefault();
         ev.stopImmediatePropagation();
