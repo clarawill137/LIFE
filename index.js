@@ -148,7 +148,7 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 
 const MODULE = 'life';
-const VERSION = '0.60.0';
+const VERSION = '0.60.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -1168,6 +1168,23 @@ function relSet(from, to, f, v) {
     const b0 = { ...scaleBase(), ...((cm.pairBase || {})[pairKey(from, to)] || {}), ...(cm.relBase[dk] || {}) };
     cm.relBase[dk] = { ...b0, [f]: b0[f] + Math.max(0, Math.min(100, Math.round(v))) - cur };
     return true;
+}
+
+/** Запереть шкалы from → to на значениях (мозг так держит «своих»: любовь и близость по сто). true — что-то изменилось. */
+function relPinSet(from, to, vals) {
+    if (!from || !to || sameName(from, to) || !vals || typeof vals !== 'object') return false;
+    const cm = chatMeta();
+    cm.relPin = cm.relPin || {};
+    const dk = dirKey(from, to);
+    const pin = { ...(cm.relPin[dk] || {}) };
+    let changed = false;
+    for (const [f] of SCALES) {
+        if (!Number.isFinite(vals[f])) continue;
+        const v = Math.max(0, Math.min(100, Math.round(vals[f])));
+        if (pin[f] !== v) { pin[f] = v; changed = true; }
+    }
+    if (changed) cm.relPin[dk] = pin;
+    return changed;
 }
 
 // Летописцу — за JSON с переспросом на обрезанный/битый ответ (ask.js)
@@ -4311,7 +4328,7 @@ const simApi = {
     fitAttr, placeIcon, sec, seg, openSheet, closeSheet, withBusy, render, askModel, askJson, extractJson, normalizeResult, drawPicture, refData, style, lightbox,
     lastAiIndex, chatArr, chronStore, chronOf, relationsState, relOf, triangles, secretsState, horaeEvents, ui, chapters, updatePrompt: () => updateMovePrompt(), isPost,
     // 0.59: умная модель и свод всей истории — для больших заполнений
-    askDeep, askDeepJson, relSet, withStory: (m, o) => withStory(m, o),
+    askDeep, askDeepJson, relSet, relPin: (a, b, v) => relPinSet(a, b, v), withStory: (m, o) => withStory(m, o),
     // большое заполнение: свод всей истории в запрос + умная модель (думающей — запас токенов)
     askFill: (messages, tokens, label = '', opts = {}) => askDeep(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), label),
     askFillJson: (messages, tokens, o = {}, opts = {}) => askDeepJson(withStory(messages, opts), Math.max(Number(tokens) || 0, 3500), o),
