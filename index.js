@@ -4,7 +4,7 @@
 // Life режет общий чат на главы-комнаты только на экране, рисует карты районов и даёт кнопки.
 
 import { icon, CANDLE, guessPlaceIcon, PLACE_ICON_NAMES, iconName } from './icons.js';
-import { initControl, applyTheme, openCC, refreshAvatars, PALETTE_NAMES } from './control.js';
+import { initControl, applyTheme, openCC, refreshAvatars, PALETTE_NAMES, PALETTES } from './control.js';
 import { bank, bankNow, bankState, moneyView, autopay, payBill, payLoan, addBill, delBill } from './money.js';
 import { chatImages, imageNear, imagesBetween, imagesWith, lightbox, playCut, periodOf, PERIODS, setSceneBg, Music, uploadTrack, resetImages } from './media.js';
 import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSetPetImg, renderLife, renderPet, petsRowHtml, renderRoom, roomButton, renderRumors, simSceneHtml, itemHistoryHtml, initChipFor , lifeKey as simLifeKey } from './sim.js';
@@ -150,10 +150,10 @@ import { initAide, aideSceneHtml, aideClick } from './aide.js';
 import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
-import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle } from './nav.js';
+import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle, navThemeHtml } from './nav.js';
 
 const MODULE = 'life';
-const VERSION = '0.67.2';
+const VERSION = '0.68.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2925,6 +2925,7 @@ function renderCfg() {
     const profOpts = (cur) => `<option value="">— как у костюмера Гардероба —</option>${profiles().map(p => `<option value="${esc(p.name)}" ${p.name === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
     return `<div class="lf-form">
         ${sw('enabled', 'Life включён')}
+        ${(() => { try { return navThemeHtml(); } catch (e) { console.warn('[Life] навигация: оформление', e); return ''; } })()}
         <div class="lf-field"><label>Главы в самом чате</label>
             <select data-set="chatMarks"><option value="off" ${s.chatMarks !== 'thin' ? 'selected' : ''}>никак — сплошной чат, главы только здесь</option><option value="thin" ${s.chatMarks === 'thin' ? 'selected' : ''}>тонкая строчка, где сменилось место</option></select></div>
         ${sw('showFab', 'Плавающая кнопка со свечой')}
@@ -4463,7 +4464,9 @@ jQuery(async () => {
     extApi.pillExtra = (sel) => annexPill(sel); extApi.pillAct = (id, sel) => annexPillAct(id, sel);
     // 0.67: навигация группами — Сцена · Герои · Мир · История · Всё (nav.js); экраны и их id прежние
     try {
-        initNav({ ...extApi, personNames, moodOf, weatherWord, peopleList, npcImg, chapterCard, chapterCover, focusChapter, openCC,
+        initNav({ ...extApi, personNames, moodOf, weatherWord, peopleList, npcImg, chapterCard, chapterCover, focusChapter, openCC, palettes: PALETTES,
+            // 0.68: тема плиткой прямо из хаба («Всё» → Оформление, «Настройки») — то же, что плитка в Пульте и /life theme
+            setPalette: (v) => { const c = settings().cc; if (v === 'off') c.theme = false; else if (PALETTE_NAMES[v]) { c.theme = true; c.palette = v; } else return; saveSettings(); applyTheme(); render(); },
             petsRow: (who) => { let h = ''; try { h = petsRowHtml(who); } catch (e) { console.warn('[Life] питомцы', e); } return h + bridgeEach(m => m.personRow?.(who), 'персонаж').join(''); } });
         hubMods.push({ pre: 'nv-', click: navClick, label: 'Навигация' });
     } catch (e) { console.warn('[Life] навигация', e); }

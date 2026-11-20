@@ -290,6 +290,34 @@ function goAttrs(go) {
     return `data-act="nv-go"${Object.entries(go).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('')}`;
 }
 
+// ───────────── оформление ─────────────
+
+const OFF_SW = ['#3a3a3c', '#d8d8d8', '#8e8e93', '#b0b0b5', '#636366'];
+
+/** «Оформление» (0.68): темы плитками — маленький экран Life в цветах темы, с портретами из чата. Тап — сразу, без Пульта.
+ *  Стоит наверху «Всё» и в «Настройках»: в Пульте (Пульт → Вид) их не находили. */
+export function navThemeHtml() {
+    const pals = A?.palettes || [];
+    if (!pals.length) return '';
+    const c = A.settings().cc || {};
+    let faces = [];
+    try {
+        const st = A.worldState();
+        const me = A.ctx().name1;
+        const names = A.personNames(st);
+        const present = (st.scene?.characters_present || []).map(A.canonName);
+        const other = names.find(n => !A.sameName(n, me) && present.some(p => A.sameName(p, n))) || names.find(n => !A.sameName(n, me));
+        faces = [me, other].filter(Boolean).map(n => A.avatarUrl(n) || '');
+    } catch (e) { console.warn('[Life] навигация: портреты для тем', e); }
+    const ph = faces.length ? faces.map(src => `<i${bg(src)}></i>`).join('') : '<i></i><i></i>';
+    const tile = (k, t, sw, on) => `<button class="lf-nv-pal${on ? ' on' : ''}" data-act="nv-pal" data-v="${esc(k)}" style="--p-bg:${sw[0]};--p-text:${sw[1]};--p-dim:${sw[2]};--p-acc:${sw[3]};--p-fill:${sw[4]}">
+        <span class="lf-nv-pal-scr"><i class="k"></i><i class="h"></i><span class="ph">${ph}</span><span class="bar"><b></b><b class="on"></b><b></b><b></b><b></b></span></span>
+        <span class="lf-nv-pal-l">${esc(t)}</span></button>`;
+    return `${A.sec('Оформление')}
+    <div class="lf-nv-pals">${pals.map(([k, t, sw]) => tile(k, t, sw, c.theme !== false && c.palette === k)).join('')}${tile('off', 'Без темы', OFF_SW, c.theme === false)}</div>
+    <div class="lf-hint">Баклажан, Слива и Монтажная красят и это окно, и всю Таверну; Графит, Бумага и Луна — только Таверну. Фон, аватарки и чтение — в Пульте.</div>`;
+}
+
 // ───────────── «дома» групп ─────────────
 
 function heroesHome() {
@@ -417,6 +445,7 @@ function allHome() {
     <label class="lf-nv-search">${icon('search')}<input type="search" data-in="nv-q" placeholder="Найти экран: календарь, гардероб, штампы…" value="${esc(q)}" autocomplete="off" enterkeyhint="search"></label>
     <div class="lf-list lf-nv-found"${has ? '' : ' hidden'}>${items.map((it, i) => rowHtml(it, !ok[i])).join('')}<div class="lf-empty small lf-nv-none"${has && !ok.some(Boolean) ? '' : ' hidden'}>Такого экрана нет. Попробуй другое слово.</div></div>
     <div class="lf-nv-rest"${has ? ' hidden' : ''}>
+        ${navThemeHtml()}
         ${subCard(g, g.subs[0], { line: 'Летописец, вкус, правила, выключатели', extra: [...extraWorld].map(([id, t]) => `<button class="lf-chip" ${goAttrs({ tab: 'world', wt: id })}>${icon('puzzle')} ${esc(t)}</button>`).join('') })}
         ${tabChips ? `${A.sec('Ещё вкладки')}<div class="lf-chips wrap">${tabChips}</div>` : ''}
         ${A.sec('Окна и вид')}
@@ -522,6 +551,7 @@ export async function navClick(act, el) {
     if (act === 'nv-go') { goTo(el.dataset); return; }
     if (act === 'nv-win') { try { globalThis.LifeWin?.open?.(el.dataset.id); } catch (e) { console.warn('[Life] навигация: окно', e); } return; }
     if (act === 'nv-cc') { try { A.openCC?.(); } catch (e) { console.warn('[Life] навигация: пульт', e); } return; }
+    if (act === 'nv-pal') { try { A.setPalette?.(el.dataset.v); } catch (e) { console.warn('[Life] навигация: тема', e); } return; }
 }
 
 /** Поиск на «Всё»: фильтруем уже нарисованные строки, без перерисовки (чтобы не терять фокус в поле). */

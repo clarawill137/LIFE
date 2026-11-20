@@ -172,6 +172,25 @@
 .lf-nv-search:focus-within { border-color: var(--lf-rose); }
 .lf-nv-row > span { display: flex; flex-direction: column; }
 .lf-nv-row small { font-size: 12px; }
+/* 0.68: «Оформление» — плитки тем в хабе («Всё» и «Настройки»): каждая — маленький экран Life в своих цветах, с вашими портретами */
+.lf-nv-pals { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; margin: 0 0 6px; padding: 4px 2px 12px; scroll-padding: 0 2px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.lf-nv-pals::-webkit-scrollbar { display: none; }
+.lf-nv-pal { flex: none; width: 92px; padding: 0; margin: 0; border: 0; background: none; color: var(--lf-text2); font: inherit; text-align: center; scroll-snap-align: start; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.lf-nv-pal-scr { position: relative; display: flex; flex-direction: column; gap: 5px; height: 148px; padding: 10px 7px 0; border-radius: 16px; overflow: hidden;
+    background: radial-gradient(140% 55% at 50% -12%, color-mix(in srgb, var(--p-fill) 55%, transparent), transparent 72%), var(--p-bg);
+    border: 1px solid color-mix(in srgb, var(--p-text) 18%, transparent); box-shadow: 0 8px 22px rgba(0, 0, 0, .35); transition: transform .18s var(--lf-ease), box-shadow .2s; }
+.lf-nv-pal-scr .k { width: 34%; height: 3px; border-radius: 2px; background: var(--p-acc); }
+.lf-nv-pal-scr .h { width: 66%; height: 7px; border-radius: 4px; background: var(--p-text); opacity: .9; }
+.lf-nv-pal-scr .ph { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; min-height: 0; margin-top: 3px; }
+.lf-nv-pal-scr .ph i { border-radius: 8px; background: color-mix(in srgb, var(--p-bg) 74%, var(--p-text)) center 22% / cover no-repeat; border: 1px solid color-mix(in srgb, var(--p-text) 14%, transparent); }
+.lf-nv-pal-scr .bar { display: flex; justify-content: space-around; align-items: center; height: 20px; margin: 4px -7px 0; background: color-mix(in srgb, var(--p-bg) 86%, var(--p-text)); }
+.lf-nv-pal-scr .bar b { width: 7px; height: 7px; border-radius: 2px; background: var(--p-dim); opacity: .75; }
+.lf-nv-pal-scr .bar b.on { background: var(--p-acc); opacity: 1; box-shadow: 0 0 6px var(--p-acc); }
+.lf-nv-pal-l { display: block; margin-top: 7px; font-size: 12.5px; line-height: 1.2; }
+.lf-nv-pal-l small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--lf-dim2); }
+.lf-nv-pal.on .lf-nv-pal-scr { border-color: var(--lf-rose); box-shadow: 0 0 0 2px rgba(var(--lf-rose-rgb), .5), 0 10px 26px rgba(0, 0, 0, .4); }
+.lf-nv-pal.on .lf-nv-pal-l { color: var(--lf-text); font-weight: 600; }
+.lf-nv-pal:active .lf-nv-pal-scr { transform: scale(.96); }
 
 /* ───── кнопки ───── */
 
@@ -279,7 +298,7 @@
 .lf-titlebar .lf-kicker { flex: none; }
 
 .lf-sec { display: flex; align-items: center; gap: 12px; margin: 22px 0 11px; }
-.lf-sec > span { font-family: var(--lf-serif); font-size: 22px; font-weight: 500; flex: none; }
+.lf-sec > span { font-family: var(--lf-serif); font-size: 22px; font-weight: 500; flex: 0 1 auto; min-width: 0; }   /* 0.68: длинный заголовок переносится, а не тащит страницу вбок */
 .lf-sec-line { flex: 1; height: 1px; background: var(--lf-line2); }
 .lf-sec small { flex: none; color: var(--lf-dim); font-family: var(--lf-serif); font-style: italic; font-size: 13px; }
 .lf-note { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(var(--lf-rose-rgb), .07); border: 1px solid var(--lf-line); color: var(--lf-dim); font-size: 13px; margin-bottom: 10px; }
@@ -771,37 +790,38 @@ body.lf-theme.lf-pal-moon {
     --t-bgimg: .5;
 }
 /* новые тёмные темы: красят и всю Таверну (--t-*), и хаб (--lf-*). Графит, Бумага и Луна выше не тронуты — у них хаб как был */
+/* 0.68: Баклажан и Слива ярче — прежние (#1a1120, #24142b) на телефоне не отличались от Графита */
 body.lf-theme.lf-pal-aubergine {
-    --t-bg: #17101c; --t-panel: rgba(24, 16, 30, .96); --t-bar: rgba(21, 14, 26, .88); --t-pop: rgba(29, 20, 36, .97);
-    --t-card: rgba(32, 22, 40, .78); --t-card-user: rgba(74, 35, 80, .55); --t-fade: #20162a; --t-fade-user: #3a1d40; --t-input: rgba(29, 20, 36, .92);
-    --t-text: #ebe1ea; --t-text2: #cdbfcf; --t-dim: #92849a; --t-em: #b9aabd; --t-quote: #eba9bd;
-    --t-accent: #e0829b; --t-accent2: #6a3564; --t-name: #f3e9f2; --t-name-user: #f0bccb;
-    --t-line: rgba(232, 220, 236, .1); --t-line2: rgba(232, 220, 236, .2); --t-shadow: rgba(0, 0, 0, .45); --t-field: rgba(7, 4, 9, .3);
-    --t-bgimg: .5;
-    --lf-bg: #1a1120; --lf-bg2: #1f1526; --lf-card: #251a2d; --lf-card2: #2e2137;
-    --lf-line: rgba(232, 220, 236, .11); --lf-line2: rgba(232, 220, 236, .2);
-    --lf-wine: #4a2350; --lf-wine2: #6a3564; --lf-wine3: #8a4a80; --lf-rose: #e0829b; --lf-rose2: #f0bccb;
-    --lf-text: #efe6ee; --lf-text2: #d8cdd8; --lf-dim: #a698a8; --lf-dim2: #7a6d7d;
-    --lf-bg2-rgb: 31, 21, 38; --lf-card-rgb: 37, 26, 45; --lf-card2-rgb: 46, 33, 55;
-    --lf-wine-rgb: 74, 35, 80; --lf-wine2-rgb: 106, 53, 100; --lf-wine3-rgb: 138, 74, 128;
-    --lf-rose-rgb: 224, 130, 155; --lf-rose2-rgb: 240, 188, 203;
-    --lf-text-rgb: 239, 230, 238; --lf-text2-rgb: 216, 205, 216; --lf-line-rgb: 232, 220, 236;
+    --t-bg: #26102c; --t-panel: rgba(41, 19, 47, .96); --t-bar: rgba(36, 16, 42, .9); --t-pop: rgba(47, 22, 54, .97);
+    --t-card: rgba(52, 25, 60, .82); --t-card-user: rgba(104, 40, 100, .6); --t-fade: #33193b; --t-fade-user: #552456; --t-input: rgba(47, 22, 54, .92);
+    --t-text: #f4eaf3; --t-text2: #dccbda; --t-dim: #ae96b0; --t-em: #cdb6cf; --t-quote: #f4b0cf;
+    --t-accent: #f2a2c6; --t-accent2: #7e3478; --t-name: #fcf3fa; --t-name-user: #f7c6dc;
+    --t-line: rgba(245, 222, 245, .11); --t-line2: rgba(245, 222, 245, .22); --t-shadow: rgba(0, 0, 0, .45); --t-field: rgba(12, 4, 14, .32);
+    --t-bgimg: .42;
+    --lf-bg: #2a1230; --lf-bg2: #31173a; --lf-card: #391c42; --lf-card2: #44234f;
+    --lf-line: rgba(245, 222, 245, .13); --lf-line2: rgba(245, 222, 245, .24);
+    --lf-wine: #5e2560; --lf-wine2: #7e3478; --lf-wine3: #9e4c96; --lf-rose: #f2a2c6; --lf-rose2: #fad0e3;
+    --lf-text: #f6edf5; --lf-text2: #e0d2df; --lf-dim: #bca6be; --lf-dim2: #8d7792;
+    --lf-bg2-rgb: 49, 23, 58; --lf-card-rgb: 57, 28, 66; --lf-card2-rgb: 68, 35, 79;
+    --lf-wine-rgb: 94, 37, 96; --lf-wine2-rgb: 126, 52, 120; --lf-wine3-rgb: 158, 76, 150;
+    --lf-rose-rgb: 242, 162, 198; --lf-rose2-rgb: 250, 208, 227;
+    --lf-text-rgb: 246, 237, 245; --lf-text2-rgb: 224, 210, 223; --lf-line-rgb: 245, 222, 245;
 }
 body.lf-theme.lf-pal-plum {
-    --t-bg: #201226; --t-panel: rgba(34, 19, 41, .96); --t-bar: rgba(30, 17, 36, .88); --t-pop: rgba(40, 23, 48, .97);
-    --t-card: rgba(44, 26, 52, .78); --t-card-user: rgba(90, 42, 92, .55); --t-fade: #2c1a34; --t-fade-user: #48244c; --t-input: rgba(40, 23, 48, .92);
-    --t-text: #efe5ec; --t-text2: #d3c4d1; --t-dim: #9a8a9e; --t-em: #c0b0c2; --t-quote: #f1b3c8;
-    --t-accent: #e895b4; --t-accent2: #7a3a72; --t-name: #f7edf4; --t-name-user: #f6c8d8;
-    --t-line: rgba(240, 224, 238, .1); --t-line2: rgba(240, 224, 238, .2); --t-shadow: rgba(0, 0, 0, .42); --t-field: rgba(9, 4, 11, .3);
-    --t-bgimg: .5;
-    --lf-bg: #24142b; --lf-bg2: #2a1832; --lf-card: #311d3a; --lf-card2: #3b2545;
-    --lf-line: rgba(240, 224, 238, .11); --lf-line2: rgba(240, 224, 238, .2);
-    --lf-wine: #5a2a5c; --lf-wine2: #7a3a72; --lf-wine3: #9c5492; --lf-rose: #e895b4; --lf-rose2: #f6c8d8;
-    --lf-text: #f2e9ee; --lf-text2: #dccfd8; --lf-dim: #ad9dae; --lf-dim2: #806f83;
-    --lf-bg2-rgb: 42, 24, 50; --lf-card-rgb: 49, 29, 58; --lf-card2-rgb: 59, 37, 69;
-    --lf-wine-rgb: 90, 42, 92; --lf-wine2-rgb: 122, 58, 114; --lf-wine3-rgb: 156, 84, 146;
-    --lf-rose-rgb: 232, 149, 180; --lf-rose2-rgb: 246, 200, 216;
-    --lf-text-rgb: 242, 233, 238; --lf-text2-rgb: 220, 207, 216; --lf-line-rgb: 240, 224, 238;
+    --t-bg: #1b1731; --t-panel: rgba(31, 27, 56, .96); --t-bar: rgba(27, 24, 50, .9); --t-pop: rgba(37, 32, 66, .97);
+    --t-card: rgba(42, 37, 72, .8); --t-card-user: rgba(78, 58, 128, .58); --t-fade: #262142; --t-fade-user: #3e2f6a; --t-input: rgba(37, 32, 66, .92);
+    --t-text: #ece8f8; --t-text2: #cfc8e4; --t-dim: #9a93b8; --t-em: #bdb5d8; --t-quote: #cdb9f7;
+    --t-accent: #c3adf5; --t-accent2: #5d4390; --t-name: #f6f3ff; --t-name-user: #d8c9fa;
+    --t-line: rgba(226, 222, 250, .11); --t-line2: rgba(226, 222, 250, .22); --t-shadow: rgba(0, 0, 0, .45); --t-field: rgba(6, 5, 14, .32);
+    --t-bgimg: .42;
+    --lf-bg: #1e1a36; --lf-bg2: #24203f; --lf-card: #2b2649; --lf-card2: #352f57;
+    --lf-line: rgba(226, 222, 250, .13); --lf-line2: rgba(226, 222, 250, .24);
+    --lf-wine: #46326e; --lf-wine2: #5d4390; --lf-wine3: #7a5bb0; --lf-rose: #c3adf5; --lf-rose2: #e2d6fb;
+    --lf-text: #efebfa; --lf-text2: #d4cee8; --lf-dim: #a39cc0; --lf-dim2: #77709a;
+    --lf-bg2-rgb: 36, 32, 63; --lf-card-rgb: 43, 38, 73; --lf-card2-rgb: 53, 47, 87;
+    --lf-wine-rgb: 70, 50, 110; --lf-wine2-rgb: 93, 67, 144; --lf-wine3-rgb: 122, 91, 176;
+    --lf-rose-rgb: 195, 173, 245; --lf-rose2-rgb: 226, 214, 251;
+    --lf-text-rgb: 239, 235, 250; --lf-text2-rgb: 212, 206, 232; --lf-line-rgb: 226, 222, 250;
 }
 body.lf-theme.lf-pal-montage {
     --t-bg: #101417; --t-panel: rgba(18, 23, 26, .96); --t-bar: rgba(15, 19, 22, .88); --t-pop: rgba(22, 27, 30, .97);
