@@ -4149,7 +4149,11 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 .lf-jo.k-past .lf-jo-dots i.on { background: #b4d6bd; box-shadow: 0 0 6px rgba(160, 200, 170, .45); }
 .lf-jo.done .lf-idea-ic { background: rgba(242, 200, 121, .16); color: #f2c879; }
 /* Соавтор (0.66): письмо игроку — бумага поверх всего, не часть чата */
-.lf-letter-wrap { position: fixed; inset: 0; z-index: 1000001; display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px); background: rgba(10, 8, 9, .5); opacity: 0; transition: opacity .25s ease; }
+.lf-letter-wrap { position: fixed; inset: 0; z-index: 1000001; display: flex; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 12px); background: rgba(10, 8, 9, .5); opacity: 0; transition: opacity .25s ease;
+    /* 0.68.2: письмо — <dialog> в верхнем слое; снять браузерные размеры, рамку и отступы диалога */
+    width: auto; height: auto; max-width: none; max-height: none; margin: 0; border: 0; color: inherit; overflow: hidden; box-sizing: border-box; }
+.lf-letter-wrap:not([open]) { display: none; }
+.lf-letter-wrap::backdrop { background: transparent; }
 .lf-letter-wrap.in { opacity: 1; }
 .lf-letter { position: relative; width: min(94vw, 460px); max-height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; padding: 20px 20px 16px; border-radius: 18px; background: #f5ede1; color: #2c2420; box-shadow: 0 24px 60px rgba(0, 0, 0, .5); font: 15.5px/1.5 Georgia, 'Times New Roman', serif; transform: translateY(14px); transition: transform .3s cubic-bezier(.2, .9, .25, 1.05); }
 .lf-letter-wrap.in .lf-letter { transform: none; }

@@ -195,21 +195,50 @@ function toInput(line) {
     return true;
 }
 
+// 0.68.2: письмо — <dialog> в верхнем слое браузера (showModal), как окно промта (0.67.2), хаб и Гардероб. Обычным
+// слоем (div, z-index 1000001) на её iPhone оно открывалось под чатом: видна была только шапка «Соавтор» над второй
+// панелью таверны. Верхний слой не перекрыть ничьим z-index. Тосты на время письма — в нём, иначе их не видно.
+let toastHome = null, toastWatch = null;
+function toastsIn(d) {
+    const grab = () => {
+        const tc = document.getElementById('toast-container');
+        if (!tc || tc.parentElement === d) return;
+        toastHome = toastHome || tc.parentElement;
+        d.append(tc);
+    };
+    grab();
+    try { toastWatch = new MutationObserver(grab); toastWatch.observe(document.body, { childList: true }); } catch { /* */ }
+}
+function toastsOut(d) {
+    try { toastWatch?.disconnect(); } catch { /* */ }
+    toastWatch = null;
+    try {
+        const tc = document.getElementById?.('toast-container');
+        if (tc && d?.contains?.(tc)) (toastHome && toastHome.isConnected ? toastHome : document.body).append(tc);
+    } catch { /* */ }
+    toastHome = null;
+}
+
 export function closeLetter() {
     const w = st.open;
     st.open = null;
     if (!w) return;
+    toastsOut(w);
     w.classList.remove('in');
-    setTimeout(() => w.remove(), 260);
+    setTimeout(() => {
+        try { if (w.open && typeof w.close === 'function') w.close(); } catch { /* */ }
+        w.remove();
+    }, 260);
 }
 
 /** Открыть письмо (по умолчанию — последнее). */
 export function openLetter(L = st.letters[0]) {
     if (!L || typeof document === 'undefined' || !document.body?.append) return false;
     closeLetter();
-    const wrap = document.createElement('div');
+    const wrap = document.createElement('dialog');
     wrap.className = 'lf-letter-wrap';
     wrap.innerHTML = letterHtml(L);
+    wrap.addEventListener('cancel', (ev) => { ev.preventDefault(); closeLetter(); });   // Esc и «назад»
     wrap.addEventListener('click', async (e) => {
         const b = e.target.closest?.('[data-cw]');
         if (!b) { if (e.target === wrap) closeLetter(); return; }
@@ -232,7 +261,12 @@ export function openLetter(L = st.letters[0]) {
     });
     document.body.append(wrap);
     st.open = wrap;
+    let onTop = false;
+    try { if (typeof wrap.showModal === 'function') { wrap.showModal(); onTop = wrap.matches(':modal'); } } catch (e) { console.warn('[Life] Соавтор: верхний слой', e); }
+    if (!onTop) wrap.setAttribute?.('open', '');   // старый браузер — обычным слоем, как до 0.68.2
+    else toastsIn(wrap);
     requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('in')));
+    setTimeout(() => { if (st.open === wrap) wrap.classList.add('in'); }, 120);   // вкладка не на экране — кадр мог не прийти
     return true;
 }
 
