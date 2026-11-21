@@ -273,18 +273,151 @@ function heal() {
         if (!el.querySelector('.mes_text [data-iig-instruction], .lf-pm-btn, .lf-pm-re')) continue;
         const id = Number(el.getAttribute('mesid'));
         if (!Number.isInteger(id) || !chat[id]) continue;
+        try { syncShown(el, id); } catch (e) { console.warn('[Life] промты: сверка картинок', e); }
         const was = el.querySelectorAll('.lf-pm-btn').length;
         try { paintPrompts(el, id); } catch (e) { console.warn('[Life] промты: ✎', e); }
         const now = el.querySelectorAll('.lf-pm-btn').length;
         if (now > was) pmLog(`✎ вернула на место: пост ${id} (${was} → ${now})`);
     }
 }
+let healAt = 0;
+/** Сверить посты чуть погодя (SLAY дорисовал — его тост). Несколько сроков: пост сохраняется и пересобирается не сразу. */
+function healSoon(...ms) {
+    for (const t of ms) setTimeout(() => { if (Date.now() - healAt < 200) return; healAt = Date.now(); try { heal(); } catch (e) { console.warn('[Life] промты: сверка', e); } }, t);
+}
+
+// ───────────── картинка в посте ↔ картинка на экране ─────────────
+// SLAY ставит готовую картинку на место своей плашки «рисуется». Если пост за это время перерисовали (ExtBlocks дописал
+// блок, кто угодно прислал MESSAGE_UPDATED — таверна пересобирает пост из текста), плашки на экране уже нет: путь SLAY
+// в пост впишет, а на экране так и останется сырой тег [IMG:GEN] — «?» в карточке, хотя картинка нарисована и в окне
+// промта видна (21.11). Сверяем сами: в посте картинка, на экране пустышка — ставим из поста; в посте ошибка или картинка
+// легла под старую плашку — пост пересобираем; картинка есть только на экране — вписываем её в пост. Пока SLAY рисует,
+// сырой тег показываем как «Рисуется…», а не «?» (и без ↻: перерисовка пустышки задела бы все такие теги поста).
+const shownSeen = new Map();     // «пост:картинка» → { sig, at, n } — расхождение видели; чиним со второго взгляда
+const shownNoted = new Set();    // о чём уже записали в журнал
+const cardFirst = new WeakMap(); // плашка SLAY на экране → каким был тег, когда её увидели впервые
+const drawingIn = new Map();     // пост → сколько картинок в нём сейчас рисует сама Life
+const slayBusy = new Map();      // пост → когда SLAY начал в нём рисовать (его крючок перед рисованием)
+const BUSY_SEL = '.iig-loading-placeholder, .iig-regen-overlay, .iig-regen-active, .lf-pm-proxy, .lf-pm-drawing';
+const fakeSrc = (s) => /^data:,life-pm-/.test(String(s || ''));
+const rawGen = (s) => /^\s*\[IMG:GEN\]\s*$/i.test(String(s || ''));
+function shownSrc(s) {
+    let x = String(s || '').trim().replace(/&amp;/g, '&');
+    try { if (/^https?:\/\//i.test(x)) { const u = new URL(x); if (u.origin === location.origin) x = u.pathname + u.search; } } catch { /* как есть */ }
+    try { x = decodeURI(x); } catch { /* как есть */ }
+    return x;
+}
+const fileOf = (s) => { const x = String(s || ''); if (!x) return 'пусто'; if (/^\[IMG:/i.test(x)) return x.slice(0, 40); if (fakeSrc(x)) return 'путь двойника'; if (/^data:/.test(x)) return 'пустышка'; return x.split(/[?#]/)[0].split('/').pop().slice(0, 60); };
+const drawIn = (i, d) => { const n = (drawingIn.get(i) || 0) + d; if (n > 0) drawingIn.set(i, n); else drawingIn.delete(i); };
+function slayBusyIn(i) {
+    const at = slayBusy.get(i);
+    if (!at) return false;
+    if (Date.now() - at > DRAW_MS) { slayBusy.delete(i); return false; }
+    return true;
+}
+
+/** Сырой [IMG:GEN] на экране, пока SLAY рисует: вместо «?» — «Рисуется…». */
+function pend(node, on) {
+    if (!node || node.tagName !== 'IMG') return;
+    const box = node.closest('.iig-img-wrap') || node.closest('.gca-slot');
+    if (!on) {
+        if (!node.classList.contains('lf-pm-pending')) return;
+        node.classList.remove('lf-pm-pending');
+        if (box) { box.classList.remove('lf-pm-pending-box'); box.querySelectorAll(':scope > .lf-pm-pend').forEach(x => x.remove()); }
+        return;
+    }
+    if (!box) return;   // без рамки «Рисуется» поставить некуда — пусть остаётся как есть
+    node.classList.add('lf-pm-pending');
+    box.classList.add('lf-pm-pending-box');
+    if (!box.querySelector(':scope > .lf-pm-pend')) {
+        const d = document.createElement('div');
+        d.className = 'lf-pm-pend';
+        d.setAttribute('contenteditable', 'false');
+        d.innerHTML = '<i></i><span>Рисуется…</span>';
+        box.append(d);
+    }
+}
+
+/** Пост в тексте и на экране — об одних картинках? Нет — поставить то, что в посте (или вписать в пост то, что на экране). */
+function syncShown(el, i) {
+    const m = A.chatArr()[i];
+    if (!m || m.is_user || typeof m.mes !== 'string' || !m.mes.includes('data-iig-instruction')) return;
+    const tags = tagsOf(i);
+    if (!tags.length) return;
+    if (!tags.some(t => !t.video && tagState(t) === 'wait')) slayBusy.delete(i);
+    // кто-то рисует в этом посте прямо сейчас — он сам поставит картинку, не мешаем
+    const busy = !!el.querySelector(BUSY_SEL) || drawingIn.has(i) || drawAs?.i === i || !!(S?.busy && S.ad?.kind === 'post' && S.ad.mes === i) || [...quick].some(q => q.startsWith(`${i}:`));
+    const nodes = nodesOf(i);
+    const now = Date.now();
+    let redo = '';
+    tags.forEach((t, k) => {
+        if (t.video) return;
+        const key = `${i}:${k}`;
+        const st = tagState(t);
+        const node = nodeFor(i, k, tags);
+        const img = node?.tagName === 'IMG';
+        const on = img ? node.getAttribute('src') || '' : '';
+        const onD = shownSrc(on);   // таверна могла закодировать скобки: %5BIMG:GEN%5D
+        pend(node, img && st === 'wait' && rawGen(onD) && slayBusyIn(i));
+        if (!node) { shownSeen.delete(key); return; }
+        const card = node.matches('.iig-error-placeholder');
+        if (card && !cardFirst.has(node)) cardFirst.set(node, st);
+        const real = img && isPicture(onD) && !fakeSrc(onD);
+        let what = '';
+        if (img && onD !== shownSrc(t.src)) {
+            if (!real) what = st === 'ok' ? 'put' : st === 'error' ? 'redo' : '';
+            else if (st === 'ok') what = 'other';
+            else if (!/^data:/i.test(onD)) what = 'lost';
+        } else if (card && st === 'ok' && cardFirst.get(node) !== 'ok') what = 'redo';   // картинка вписалась под плашку, а та осталась
+        if (!what) { shownSeen.delete(key); return; }
+        if (busy) return;
+        const sig = `${what}|${t.src}|${on}`;
+        if (what === 'other') {   // обе — картинки, обе бывают правдой (SLAY сам переводит старые пути на новые) — только в журнал
+            if (!shownNoted.has(`${key}|${sig}`)) { shownNoted.add(`${key}|${sig}`); keepLog(`на экране другая картинка, чем в посте: пост ${i}, картинка ${k} — на экране ${fileOf(on)}, в посте ${fileOf(t.src)}`); }
+            return;
+        }
+        if (what === 'put') {
+            // в посте картинка, на экране сырой тег / пустышка / путь двойника: ставим из поста, сразу — ждать тут нечего
+            node.setAttribute('src', t.src);
+            node.removeAttribute('data-iig-error');
+            if (t.data && nodeSig(node) !== sigOf(t.data, t.raw)) node.setAttribute('data-iig-instruction', encodeIns(t.data));
+            pend(node, false);
+            shownSeen.delete(key);
+            keepLog(`картинка не показывалась: пост ${i}, картинка ${k} — на экране ${fileOf(on)}, в посте ${fileOf(t.src)} → поставила из поста`);
+            return;
+        }
+        const rec = shownSeen.get(key);
+        if (!rec || rec.sig !== sig) { shownSeen.set(key, { sig, at: now, n: 0 }); return; }
+        if (now - rec.at < (what === 'lost' ? 3000 : 1200) || rec.n >= 2) return;
+        rec.n++;
+        if (what === 'lost') {
+            // нарисованная картинка есть только на экране (SLAY не вписал путь в пост) — после перезагрузки она пропала бы.
+            // Вписываем, только если ясно, чья она: инструкция та же, или картинка в посте одна.
+            const mine = nodeSig(node) === sigOf(t.data, t.raw) || (tags.length === 1 && nodes.length === 1);
+            if (!mine) { if (rec.n === 1) keepLog(`картинка только на экране, чья — не ясно: пост ${i}, картинка ${k} — ${fileOf(on)}`); return; }
+            const m0 = m.mes;
+            swapTag(i, m, t, withSrc(t, on));
+            if (m.mes !== m0) {
+                A.ctx().saveChat?.();
+                shownSeen.delete(key);
+                keepLog(`картинка была только на экране: пост ${i}, картинка ${k} — ${fileOf(on)} → вписала в пост`);
+            }
+            return;
+        }
+        redo = redo || `пост ${i}, картинка ${k} — в посте ${st === 'ok' ? fileOf(t.src) : 'ошибка'}, на экране ${card ? 'старая плашка' : fileOf(on)}`;
+    });
+    if (redo) {
+        keepLog(`картинка не показывалась: ${redo} → пересобрала пост`);
+        rerender(i).catch(e => console.warn('[Life] промты: пересобрать пост', e));
+    }
+}
+
 function hookHeal() {
     const chatEl = document.getElementById('chat');
     if (!chatEl) { setTimeout(() => { try { hookHeal(); } catch { /* чата ещё нет */ } }, 1500); return; }
     if (chatEl.dataset.lfPmHeal) return;
     chatEl.dataset.lfPmHeal = '1';
-    const ours = (n) => n.nodeType !== 1 || n.classList?.contains('lf-pm-btn') || n.classList?.contains('lf-pm-re');
+    const ours = (n) => n.nodeType !== 1 || n.classList?.contains('lf-pm-btn') || n.classList?.contains('lf-pm-re') || n.classList?.contains('lf-pm-pend');
     new MutationObserver((list) => {
         if (healT) return;
         // свои же кнопки — не повод (иначе сверка будила бы сама себя); посты без картинок — тоже
@@ -362,6 +495,8 @@ function hookToasts() {
                 if (/slay/i.test(String(title || ''))) {
                     const txt = String(message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
                     if (!(kind === 'info' && !/Найдено|Генерац/i.test(txt))) keepLog(`SLAY ${kind === 'success' ? '✓' : kind === 'info' ? '·' : '✗'} ${txt.slice(0, 300)}`, `(последний пост ${lastAi()})`);
+                    // SLAY дорисовал или сдался — путь (или ошибка) уже в посте; на экране его может не быть, если пост пересобрали
+                    if (kind !== 'info') healSoon(350, 1700);
                     if (kind === 'success' || kind === 'info') return fn.call(this, message, title, ...rest);
                     const msg = String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, '');
                     const filter = explainError(msg)?.kind === 'filter';
@@ -615,7 +750,8 @@ function tagAdapter(i, k0) {
             return true;
         },
         async draw(onStep) {
-            return (await slayDraw(i, idx(), onStep)) || lifeDraw(i, cur, onStep);
+            drawIn(i, 1);
+            try { return (await slayDraw(i, idx(), onStep)) || await lifeDraw(i, cur, onStep); } finally { drawIn(i, -1); }
         },
         /** Вернуть в пост прежнюю картинку. Отдаёт путь, каким он записан. */
         async setSrc(src) {
@@ -1150,6 +1286,8 @@ async function quickDraw(i, k, { shoot = false } = {}) {
     try { cur = ad.read(); } catch (e) { console.warn('[Life] промты: чтение', e); }
     if (!cur) { pmLog(`без окна: промт не найден (пост ${i}, картинка ${k})`); A.toast('warning', 'Не нашла промт этой картинки в посте.', T); return false; }
     if (!cur.prompt.trim()) { A.toast('info', 'У картинки пустой промт — открой ✎ и впиши кадр.', T); return false; }
+    // SLAY её ещё рисует (на экране «Рисуется…» — его плашку снесла пересборка поста): второй раз не запускаем
+    if (cur.state === 'wait' && slayBusyIn(i) && nodeFor(i, k)?.classList?.contains('lf-pm-pending')) { pmLog(`без окна: пост ${i}, картинка ${k} — SLAY ещё рисует`); A.toast('info', 'SLAY ещё рисует эту картинку — появится на своём месте.', T); return false; }
     quick.add(key);
     busyMark(i, k, true);
     try { const el = mesEl(i); if (el) paintPrompts(el, i); } catch { /* */ }
@@ -1819,6 +1957,7 @@ const promptSig = (p) => sigOf({ prompt: p });
 async function onSlayDraw(req) {
     try {
         if (!A?.hasChat?.() || A.settings().enabled === false) return null;
+        { const bi = Number(req?.messageId); if (req?.messageId != null && Number.isInteger(bi) && bi >= 0) slayBusy.set(bi, Date.now()); }
         const mine = drawAs;
         // номер поста SLAY берёт с того же элемента; если тот уже не на экране, номера нет — тогда узнаём свой тап по времени
         if (mine && Date.now() - mine.at < 10000 && (req?.messageId == null || Number.isNaN(Number(req.messageId)) || Number(req.messageId) === mine.i)) {

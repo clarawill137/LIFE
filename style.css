@@ -3845,6 +3845,14 @@ body.lf-theme .mes .lf-rules-i { border-color: var(--t-line2); background: trans
 #chat .lf-pm-drawing { animation: lf-pm-draw 1.4s ease-in-out infinite; }
 @keyframes lf-pm-draw { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { #chat .lf-pm-drawing { animation: none; opacity: .6; } }
+/* 0.68.3: SLAY ещё рисует, а пост пересобрали — на экране сырой [IMG:GEN] («?»). Вместо него — «Рисуется…», без ↻:
+   перерисовка пустышки задела бы все такие теги поста. Дорисует — Life поставит картинку из поста. */
+#chat .lf-pm-pending-box { position: relative; display: block; min-height: 168px; border-radius: 10px; background: rgba(127, 127, 127, .07); }
+#chat img.lf-pm-pending { opacity: 0 !important; }
+#chat .lf-pm-pending-box > .iig-regen-btn, #chat .lf-pm-pending-box > .lf-pm-re { display: none !important; }
+#chat .lf-pm-pend { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none; color: rgba(214, 219, 228, .8); font: 500 13px/1.3 -apple-system, system-ui, sans-serif; }
+#chat .lf-pm-pend i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(244, 114, 182, .25); border-top-color: rgba(244, 114, 182, .85); animation: lf-rot 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { #chat .lf-pm-pend i { animation: none; } }
 
 /* картинка во весь экран (0.67.1): «Промт» и «Перерисовать» — своим рядом поверх окна SLAY, слева сверху (в <body>).
    Прежняя кнопка в ряду SLAY под картинкой в Safari на iPhone не срабатывала (почему — не установлено). */
