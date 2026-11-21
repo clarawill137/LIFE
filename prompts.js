@@ -17,6 +17,14 @@
 // 0.67.1: ✎ сама возвращается на место (движок карточек GC выбрасывает её вместе со старой карточкой после любой генерации,
 // даже фоновой); у фото в карточке — своя ↻ (SLAY свою там не держит); на картинке во весь экран — свой ряд кнопок поверх
 // окна SLAY («Промт», «Перерисовать»); без кнопок — «/life pm», «/life redraw», «/life reshoot»; «/life pm log» — журнал.
+// 0.68.1: «Не удалось записать картинку в чат». Кадр, генерацию которого оборвали (Safari выгрузил вкладку), стоит в
+// посте с [IMG:GEN], а на экране — плашка SLAY «прервана». Её «Попробовать снова» помнит промт с момента, когда плашка
+// появилась. Life правила промт в посте (оператор, своя метка, правка в окне) и жала эту кнопку — SLAY рисовал и искал
+// в посте тег по старому промту, не находил и писал этот тост; картинка держалась только на спасении Life, а после
+// правки в окне и тапа по плашке пропадала совсем. Теперь Life кнопку «Попробовать снова» не жмёт — несостоявшиеся
+// кадры рисует через двойника (его ↻ SLAY ищет тег по промту из поста, по пути и по месту); тап по устаревшей плашке
+// перехватывается и рисуется так же. Журнал картинок (что рисовалось, чем кончилось, что ответил сервер) — ещё и в
+// метаданных чата (pm.log): снимок чата с сервера покажет, что было, без скринов.
 // 0.67.2: окно промта — свой <dialog> в верхнем слое браузера (showModal), как хаб Life, её окна и Гардероб. Обычным
 // слоем (div с z-index) оно на её iPhone открывалось невидимым — «поверх лежит» верхняя панель таверны, и подъём над
 // чужими слоями не помогал. Верхний слой не перекрыть ничем и не сдвинуть ничьими трансформами. Тосты на время окна
@@ -29,7 +37,7 @@ import {
     ASPECTS, imageModelOf, DIALECTS, dialectNote, explainError, sourceSnap, sourceIsCurrent,
 } from './pmtags.js';
 import { dpCfg, reshoot, lookNow, lookChoices, sceneOf } from './dp.js';
-import { LOOKS, LOOK_OWN, lookText, lookOfText, lookById, shotOf, shotLabelRu } from './dpcore.js';
+import { LOOKS, LOOK_OWN, LOOK_SAFE, PAINTED, lookText, lookOfText, lookById, shotOf, shotLabelRu } from './dpcore.js';
 
 let A = null;
 const esc = (v) => A.esc(v);
@@ -40,6 +48,22 @@ function pmLog(...a) {
     LOG.push(`${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())} ${a.filter(x => x !== '' && x != null).join(' ')}`);
     if (LOG.length > 70) LOG.shift();
 }
+/** Важное о картинках — и в журнал, и в метаданные чата (pm.log, 80 последних): снимок чата с сервера покажет, что было. */
+function keepLog(...a) {
+    pmLog(...a);
+    try {
+        if (!A?.hasChat?.()) return;
+        const cm = A.chatMeta();
+        if (!cm.pm || typeof cm.pm !== 'object') cm.pm = {};
+        if (!Array.isArray(cm.pm.log)) cm.pm.log = [];
+        cm.pm.log.push([Date.now(), a.filter(x => x !== '' && x != null).join(' ').slice(0, 400)]);
+        if (cm.pm.log.length > 80) cm.pm.log.splice(0, cm.pm.log.length - 80);
+        A.saveMeta();
+    } catch { /* журнал — не главное */ }
+}
+/** Инструкция картинки в одном виде — с экрана (сущности уже раскрыты) и из текста поста. */
+const insKey = (raw) => { const d = parseIns(raw); return d ? JSON.stringify(d) : String(raw || '').trim(); };
+const lastAi = () => { const c = A.chatArr(); for (let i = c.length - 1; i >= 0; i--) if (c[i] && !c[i].is_user) return i; return -1; };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const DRAW_MS = 6 * 60 * 1000; // дольше SLAY сам не ждёт
 
@@ -328,13 +352,17 @@ let lastSlayErr = null;
 function hookToasts() {
     const t = globalThis.toastr;
     if (!t || t.__lifePm || typeof t.error !== 'function') return;
-    // SLAY 5.x часть отказов (фильтр, например) показывает не ошибкой, а предупреждением — слушаем оба вида
-    for (const kind of ['error', 'warning']) {
+    // SLAY 5.x часть отказов (фильтр, например) показывает не ошибкой, а предупреждением — слушаем оба вида;
+    // готово и «найдено тегов» — только в журнал
+    for (const kind of ['error', 'warning', 'success', 'info']) {
         const fn = t[kind];
         if (typeof fn !== 'function') continue;
         t[kind] = function (message, title, ...rest) {
             try {
                 if (/slay/i.test(String(title || ''))) {
+                    const txt = String(message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (!(kind === 'info' && !/Найдено|Генерац/i.test(txt))) keepLog(`SLAY ${kind === 'success' ? '✓' : kind === 'info' ? '·' : '✗'} ${txt.slice(0, 300)}`, `(последний пост ${lastAi()})`);
+                    if (kind === 'success' || kind === 'info') return fn.call(this, message, title, ...rest);
                     const msg = String(message || '').replace(/^(Перегенерация упала|Ошибка):\s*/i, '');
                     const filter = explainError(msg)?.kind === 'filter';
                     // предупреждения у SLAY бывают и не про рисование («каталог не загрузился») — из них берём только отказ фильтра
@@ -438,14 +466,18 @@ const busyMark = (i, k, on) => { try { nodeFor(i, k)?.classList?.toggle('lf-pm-d
 async function slayDraw(i, k, onStep) {
     if (!slayOn() || !mesEl(i)) return null;
     const m = A.chatArr()[i];
-    const t0 = tagsOf(i)[k];
+    let t0 = tagsOf(i)[k];
     if (!t0?.data) return null;
+    // тег — в одном виде с тем, что получит двойник: ↻ SLAY находит тег в посте по инструкции, и она должна совпасть знак в знак
+    const canon = withIns(t0, t0.data);
+    if (canon !== t0.full) { swapTag(i, m, t0, canon); await A.ctx().saveChat(); t0 = tagsOf(i)[k]; if (!t0?.data) return null; }
     const sig = sigOf(t0.data, t0.raw);
     const alone = srcTwins(i, t0) <= 1;
     let node = () => nodeFor(i, k);
+    // «Попробовать снова» SLAY не жмём: плашка помнит промт с момента ошибки, а он мог с тех пор поменяться (оператор,
+    // своя метка, правка в окне) — тогда SLAY рисует старый кадр и не может вписать его в пост. Двойник берёт промт из поста.
     let ctl = alone ? slayCtl(node()) : null;
-    // после сохранения пост с несостоявшейся картинкой пересобирается — её плашка встаёт не сразу
-    if (!ctl && alone && tagState(t0) === 'error') ctl = await until(() => slayCtl(node()), 2500);
+    if (ctl?.kind !== 'regen') ctl = null;
     let proxy = null;
     if (!ctl) {
         proxy = await slayProxy(i, t0, alone && tagState(t0) === 'ok');
@@ -481,8 +513,9 @@ async function slayDraw(i, k, onStep) {
                 t = tagsOf(i)[k];
             }
         }
-        if (t && tagState(t) === 'ok' && t.src !== oldSrc) return { src: t.src };
+        if (t && tagState(t) === 'ok' && t.src !== oldSrc) { keepLog(`нарисовано: пост ${i}, картинка ${k}${proxy ? ' (двойник)' : ''} → ${t.src.split('/').pop()}`); return { src: t.src }; }
         const why = (lastSlayErr && lastSlayErr.at >= started ? lastSlayErr.msg : '') || errOf(node()) || errOf(nodeFor(i, k)) || '';
+        keepLog(`не нарисовано: пост ${i}, картинка ${k} —`, A.cut(why || 'SLAY не ответил', 300));
         throw new Error(why || 'SLAY не нарисовал картинку');
     } finally {
         if (drawAs?.at === started) drawAs = null;   // SLAY без крючка его не забирает; с крючком — уже забрал
@@ -574,7 +607,9 @@ function tagAdapter(i, k0) {
             if (nf === t.full) return false;
             const failed = tagState(t) === 'error';
             swapTag(i, m, t, nf);
-            if (node) node.setAttribute('data-iig-instruction', encodeIns(next)); // живой элемент: ↻ SLAY читает промт отсюда
+            // живой картинке: её ↻ SLAY читает промт отсюда. Плашке ошибки — нет: её «Попробовать снова» помнит промт в себе,
+            // и по атрибуту видно, что плашка устарела (её тап перехватит Life — staleRetry)
+            if (node?.tagName === 'IMG') node.setAttribute('data-iig-instruction', encodeIns(next));
             await A.ctx().saveChat();
             if (failed) await rerender(i);   // плашка ошибки помнит старый промт — пусть SLAY соберёт её заново
             return true;
@@ -712,6 +747,8 @@ function hookPencilTap() {
         return document.elementsFromPoint(ev.clientX, ev.clientY).find(e => e.classList?.contains('lf-pm-btn') || e.classList?.contains('lf-pm-re')) || null;
     };
     window.addEventListener('click', (ev) => {
+        const r = ev.target?.closest?.('.iig-error-retry');
+        if (r && staleRetry(r, ev)) return;
         const b = ev.target?.closest?.(TAP_SEL) || under(ev);
         if (!live(b)) return;
         ev.preventDefault();
@@ -735,6 +772,29 @@ function hookPencilTap() {
             if (S) S.ghost = Date.now();   // запоздалый клик того же касания попадёт уже в окно — его пропустить
         }, 380);
     }, true);
+}
+
+/**
+ * «Попробовать снова» SLAY на плашке, промт которой уже не тот, что в посте (Life его переписала — оператор, своя метка,
+ * правка в окне, — а плашка помнит промт с момента ошибки). SLAY нарисовал бы старый кадр и не вписал бы его в пост:
+ * «Не удалось записать картинку в чат». Такой тап берёт Life и рисует по промту из поста. true — тап наш.
+ */
+function staleRetry(btn, ev) {
+    const card = btn.closest('.iig-error-placeholder');
+    if (!card || card.closest('.lf-pm-proxy') || !card.closest('#chat') || !A?.hasChat?.() || A.settings().enabled === false || !cfg().on) return false;
+    const i = Number(card.closest('.mes')?.getAttribute('mesid'));
+    if (!Number.isInteger(i) || !A.chatArr()[i]) return false;
+    const tags = tagsOf(i);
+    const key = insKey(card.getAttribute('data-iig-instruction'));
+    if (key && tags.some(t => insKey(t.raw) === key)) return false;   // плашка свежая — её кнопка сработает как надо
+    let k = tagIndexOf(i, card);
+    if (k < 0) { const open = tags.map((t, j) => [t, j]).filter(([t]) => !t.video && tagState(t) !== 'ok'); if (open.length === 1) k = open[0][1]; }
+    if (k < 0) return false;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    keepLog(`«Попробовать снова» на устаревшей плашке: пост ${i}, картинка ${k} — рисует Life по промту из поста`);
+    quickDraw(i, k);
+    return true;
 }
 
 // ───────────── открыть окно с самой картинки ─────────────
@@ -1025,14 +1085,19 @@ async function autoFallback(i, k, rec) {
     const need = fbAfter();
     const T = '✎ Запасной стиль';
     try {
-        // до порога — ещё раз как есть, в общем стиле
+        // до порога — ещё раз в общем стиле. Плёнка была фото (кино, Portra, неон…) — повтор тем же кадром, но рисунком
+        // («Кино · кисть»): тот же промт фильтр второй раз почти всегда режет так же, а рисованный кадр пропускает.
         while (rec.n < need) {
-            A.toast('info', `Фильтр не пропустил картинку — пробую ещё раз (отказ ${rec.n} из ${need}).`, T, { timeOut: 4000 });
+            const was = ad.read();
+            const photo = !!was && !PAINTED.has(lookOfText(was.look)) && !!lookOfText(was.look);
+            A.toast('info', photo ? `Фильтр не пропустил фото — рисую тот же кадр кистью (отказ ${rec.n} из ${need}).` : `Фильтр не пропустил картинку — пробую ещё раз (отказ ${rec.n} из ${need}).`, T, { timeOut: 4000 });
+            keepLog(`отказ фильтра: пост ${i}, картинка ${k} — ${photo ? 'повтор рисунком («Кино · кисть»)' : 'повтор как есть'} (отказ ${rec.n} из ${need})`);
             busyMark(i, k, true);
             try {
+                if (photo) await ad.save({ prompt: was.prompt, aspect: was.aspect, look: lookById(LOOK_SAFE)[3] });
                 await ad.draw();
                 rec.done = true;
-                A.toast('success', 'Повторная попытка прошла — картинка в общем стиле.', T, { timeOut: 3500 });
+                A.toast('success', photo ? 'Рисунком прошло. Вернуть фото — ✎ → «Плёнка».' : 'Повторная попытка прошла — картинка в общем стиле.', T, { timeOut: 3500 });
                 return;
             } catch (e) {
                 seePost(i);
@@ -1088,7 +1153,7 @@ async function quickDraw(i, k, { shoot = false } = {}) {
     quick.add(key);
     busyMark(i, k, true);
     try { const el = mesEl(i); if (el) paintPrompts(el, i); } catch { /* */ }
-    pmLog(`без окна: ${shoot ? 'переснять' : 'перерисовать'} — пост ${i}, картинка ${k}, рисует ${ad.engine() === 'slay' ? 'SLAY' : 'Гардероб'}`);
+    keepLog(`без окна: ${shoot ? 'переснять' : 'перерисовать'} — пост ${i}, картинка ${k} (${cur.state === 'ok' ? 'была картинка' : cur.state === 'error' ? 'была ошибка' : 'не рисовалась'}), рисует ${ad.engine() === 'slay' ? 'SLAY' : 'Гардероб'}`);
     const first = { p: cur.prompt, ar: cur.aspect, src: cur.src, note: '', at: Date.now(), by: '', sn: cur.pmStyle || '' };
     const by = imageModel().name;
     const tr = globalThis.toastr;
@@ -1115,7 +1180,7 @@ async function quickDraw(i, k, { shoot = false } = {}) {
     } catch (e) {
         const msg = String(e?.message || e);
         console.warn('[Life] промты: без окна', e);
-        pmLog('без окна: не вышло —', msg.slice(0, 200));
+        keepLog('без окна: не вышло —', msg.slice(0, 300));
         drop(tw);
         A.toast('warning', esc(explainError(msg)?.text || A.cut(msg, 220)), `${T}: не вышло`, { timeOut: 8000 });
         return false;
@@ -1160,7 +1225,8 @@ function showLog() {
         last ? `последняя картинка: пост ${last.i}, №${last.k} — ${domOf(last.i, last.k)}` : 'картинок в чате нет',
         '—',
     ];
-    const text = [...head, ...(LOG.length ? LOG : ['журнал пуст: с загрузки страницы кнопки картинок не трогали'])].join('\n');
+    const kept = (() => { try { return (A.chatMeta().pm?.log || []).slice(-25).map(([at, t]) => { const d = new Date(at), two = (n) => String(n).padStart(2, '0'); return `${two(d.getDate())}.${two(d.getMonth() + 1)} ${two(d.getHours())}:${two(d.getMinutes())} ${t}`; }); } catch { return []; } })();
+    const text = [...head, ...(LOG.length ? LOG : ['с загрузки страницы кнопки картинок не трогали']), ...(kept.length ? ['— из чата (последние):', ...kept] : [])].join('\n');
     const c = A.ctx();
     const html = `<div style="text-align:left;font:12px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word">${esc(text)}</div>`;
     try {
@@ -1785,9 +1851,16 @@ async function onSlayDraw(req) {
             return null;
         }
         if (A.chatArr()[i] !== m) { adoptDone(i); return null; }
+        // кто-то в кадре раздет, а в теге фото-плёнка (модель не взяла её из заметки или списала со старого тега):
+        // фото раздетых рисовалка режет фильтром — тот же кадр кистью. Только когда плёнка «Авто»: свою выбранную не трогаем.
+        let look = '';
+        try {
+            const lk = lookOfText(t.data.style);
+            if (dpCfg().look === 'auto' && lk && lk !== LOOK_OWN && !PAINTED.has(lk) && sceneOf(i).skin) look = lookById(LOOK_SAFE)[3];
+        } catch { /* сцена не прочиталась — как в теге */ }
         req.status?.('Генерация…');
-        adoptLater(i, m, t.data.prompt, take).catch(e => console.warn('[Life] оператор: вписать промт в пост', e)).finally(() => adoptDone(i));
-        return { prompt: take.prompt, aspectRatio: take.aspect || undefined };
+        adoptLater(i, m, t.data.prompt, take, look).catch(e => console.warn('[Life] оператор: вписать промт в пост', e)).finally(() => adoptDone(i));
+        return { prompt: take.prompt, aspectRatio: take.aspect || undefined, ...(look ? { style: look } : {}) };
     } catch (e) {
         console.warn('[Life] оператор', e);
         return null;
@@ -1800,7 +1873,7 @@ function adoptDone(i) {
 }
 
 /** SLAY дорисовал кадр по промту оператора — вписать этот промт в пост: ↻, окно и версии дальше работают с ним. */
-async function adoptLater(i, m, old, take) {
+async function adoptLater(i, m, old, take, look = '') {
     const want = promptSig(old);
     const find = () => { const ts = tagsOf(i); const k = ts.findIndex(x => !x.video && x.data?.prompt && promptSig(x.data.prompt) === want); return k >= 0 ? { k, t: ts[k] } : null; };
     const hit = await until(() => {
@@ -1819,9 +1892,10 @@ async function adoptLater(i, m, old, take) {
     if (!cur) return;
     // Кадр не нарисовался: отказ фильтра считаем сейчас — после сохранения пост пересоберётся, и причина с плашки пропадёт.
     const oldId = fbId(i, f.t);
+    keepLog(`оператор: пост ${i} — ${cur.state === 'ok' ? 'нарисовано' : `не нарисовано: ${A.cut(errOf(nodeFor(i, f.k)) || (lastSlayErr && Date.now() - lastSlayErr.at < 120000 ? lastSlayErr.msg : '') || 'причина неизвестна', 300)}`} · кадр: ${take.note || take.shot || ''} · плёнка: ${look ? LOOK_SAFE : lookOfText(f.t.data?.style) || 'нет'}`);
     if (cur.state === 'error') { try { noteRefusals(i, true); } catch (e) { console.warn('[Life] оператор: счёт отказов', e); } }
     const first = { p: old, ar: cur.aspect, src: '', note: '', at: Date.now(), by: 'как написала модель', sn: '' };
-    await ad.save({ prompt: take.prompt, aspect: take.aspect || cur.aspect });
+    await ad.save({ prompt: take.prompt, aspect: take.aspect || cur.aspect, look });
     // у картинки теперь своя метка — запись об отказах и место в очереди запасного стиля переезжают на новое имя
     const now = ad.tag();
     const newId = now ? fbId(i, now) : oldId;

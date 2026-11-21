@@ -10,10 +10,7 @@ import { scanTags, imageModelOf, DIALECTS, cleanPrompt } from './pmtags.js';
 import { sceneAt } from './shots.js';
 import { forties } from './era.js';
 import { moodNow } from './mood.js';
-import {
-    LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, lookById, lookText, pickLook, shotOf, shotKnown, variety,
-    dpSystem, dpUser, dpNote, postForDp, readTakes,
-} from './dpcore.js';
+import { LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, lookById, lookText, pickLook, shotOf, shotKnown, variety, dpSystem, dpUser, dpNote, postForDp, readTakes, skinScene } from './dpcore.js';
 
 let A = null;
 export function initDp(api) { A = api; }
@@ -45,11 +42,13 @@ export function sceneOf(i = A.lastAiIndex()) {
     try { intim = !!moodNow().intimOn; } catch { /* */ }
     let old = false;
     try { old = forties(); } catch { /* */ }
-    return {
+    const out = {
         loc: sc.loc || '', time: sc.time || '', date: sc.date || '', atm: sc.atm || '', desc: sc.desc || '', clothes: sc.clothes || '',
         modes: [...tones, intim ? 'an intimate scene — covered and atmospheric' : ''].filter(Boolean).join('; '),
-        forties: old, tender: (A.chatMeta().modes?.on || []).includes('tender'),
+        forties: old, tender: (A.chatMeta().modes?.on || []).includes('tender'), intim,
     };
+    out.skin = skinScene(out);
+    return out;
 }
 
 /** Плёнка сейчас: { id, name, text }. text пустой — стиль не трогаем. */
@@ -67,11 +66,23 @@ export function lookChoices() {
     return [[LOOK_AUTO, 'Авто', 'по сцене: час, свет, эпоха'], ...LOOKS.map(([id, label, hint]) => [id, label, hint]), [LOOK_OWN, 'Своя', 'свой текст'], [LOOK_KEEP, 'Не трогать', 'стиль как в пресете и SLAY']];
 }
 
-/** Последние кадры чата до поста before (свежий — первым): как они сняты. */
-export function recentShots(before = Infinity, max = 5) {
+/** Последние кадры чата до поста before (свежий — первым): как они сняты. same — пост, кадр которого переснимают:
+ *  его прошлые свайпы — тот же момент, снятый раньше; свайпнула — значит, хочет другой кадр, а не тот же план опять. */
+export function recentShots(before = Infinity, max = 5, same = null) {
     const chat = A.chatArr();
     const out = [];
     let pics = 0;
+    if (same && Array.isArray(same.swipes)) {
+        const cur = same.swipe_id ?? 0;
+        for (let j = same.swipes.length - 1; j >= 0 && out.length < Math.min(3, max); j--) {
+            if (j === cur || typeof same.swipes[j] !== 'string') continue;
+            for (const t of scanTags(same.swipes[j]).filter(x => !x.video && x.data?.prompt).reverse()) {
+                pics++;
+                const s = shotOf(t.data.prompt);
+                if (shotKnown(s) && out.length < Math.min(3, max)) out.push(s);
+            }
+        }
+    }
     for (let i = Math.min(chat.length - 1, before - 1), posts = 0; i >= 0 && posts < 16 && out.length < max; i--) {
         const m = chat[i];
         if (!m || m.is_user || typeof m.mes !== 'string' || !m.mes.includes('data-iig-instruction')) continue;
@@ -133,7 +144,7 @@ export async function reshoot({ i = -1, t = null, prompt, aspect = '', request =
     const d = DIALECTS[im.kind] || DIALECTS.generic;
     const m = i >= 0 ? A.chatArr()[i] : null;
     const scene = sceneOf(m ? i : undefined);
-    const { shots, seed } = recentShots(m ? i : Infinity);
+    const { shots, seed } = recentShots(m ? i : Infinity, 5, m);
     const post = m ? postParas(m, t) : { paras: [], at: -1 };
     const pf = postForDp(post.paras, post.at);
     const look = lookNow(scene);
