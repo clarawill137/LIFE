@@ -11,8 +11,8 @@ import { initSim, simCfg, simChronOpts, simAfterPost, simPrompt, simClick, simSe
 import { initErrors } from './errors.js';
 import { peopleDedupe, peopleDropCards, peopleClaimEra, renderPeople, peopleClick, peoplePrompt, npcImg, peopleSetImg, findPerson, peopleList } from './people.js';
 import { agendaClick, agendaCfgHtml, agendaUpdate } from './agenda.js';
-import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
-import { initModes, MODES_KEY, MODES, modesOn, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
+import { initMood, MOOD_RULE, normalizeScene, moodPrompt, moodHtml, setMood, cycleIntim, moodNow, moodBrief, setTone, toggleIntimOpt, sceneLabel, cycleBond, setBondTone } from './mood.js';
+import { initModes, MODES_KEY, MODES, modesOn, modesBrief, modesPrompt, modesHtml, toggleMode, armOnce, disarmOnce, syncBody } from './modes.js';
 import { initTwists, twistPrompt, twistsHtml, twistClick, twistChron, twistAfterPost, armTwist, clearTwist, twistByWord, TWISTS } from './twists.js';
 import { hurtLevel, initHurt, hurtPrompt, hurtChron, hurtAfterPost, hurtSceneHtml, hurtClick } from './hurt.js';
 import { initDays, daysPrompt, daysAfterPost, daysHtml, daysClick, daysBrief, paintDateGuard } from './days.js';
@@ -92,7 +92,7 @@ import { initCast, castPrompt } from './cast.js';
 import { initKnock, knockClick, paintKnock, knockSceneHtml } from './knock.js';
 import { initTidy, tidyMessage } from './tidy.js';
 import { initMend, mendWanted, mendPost, mendLast, setMesText } from './mend.js';
-import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar } from './taste.js';
+import { initTaste, tastePrompt, tasteOnce, tasteChron, tasteAfterPost, paintTaste, tasteClick, tasteHtml, polish, tasteSnap, tasteEdited, tasteGenEnd, paintOocBar, oocFor } from './taste.js';
 import { initArt, onArtClick, artOnReceived, artTidy, paintArt, onArtPick } from './art.js';
 import { initShots, paintShots, onShotClick, shoot as shootShot, styleChips, chatStyle, styleText, styleName, shotAct, SHOT_STYLES, shotsHeal } from './shots.js';
 import { initPrompts, paintPrompts, onPromptClick, pmPrompt, openPromptManager, pmCommand } from './prompts.js';
@@ -153,7 +153,7 @@ import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml
 import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle, navThemeHtml } from './nav.js';
 
 const MODULE = 'life';
-const VERSION = '0.68.4';
+const VERSION = '0.68.5';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4383,6 +4383,17 @@ function mindHtml(who) {
 }
 const mindParts = [];
 
+/** 0.68.5 — сцена у поста i для соседних расширений (Реплики): то же, что модель получает заметками, только данными. */
+function sceneBrief(i = -1) {
+    const out = { modes: [], mood: null, intim: null, after: false, bond: null, wish: '', label: '' };
+    if (!hasChat()) return out;
+    try { out.modes = modesBrief(); } catch (e) { console.warn('[Life] сцена: режимы', e); }
+    try { Object.assign(out, moodBrief(i)); } catch (e) { console.warn('[Life] сцена: тон', e); }
+    try { out.wish = oocFor(i); } catch (e) { console.warn('[Life] сцена: пожелание', e); }
+    out.label = [...out.modes.map(m => `${m.emo} ${m.label}`), out.label].filter(Boolean).join(' · ');
+    return out;
+}
+
 globalThis.LifeBridge = {
     version: VERSION,
     api: { ...simApi, icon, uploadImage, fileToJpeg, openHub, renderSoon, hasChat, decorateSoon,
@@ -4421,6 +4432,8 @@ globalThis.LifeBridge = {
             recs: (fn) => addRecs(fn),
         },
         hash, plainText,
+        // 0.68.5 — какая сцена у поста i (для Реплик): режимы пульта, тон, секс и близость с оттенком, пожелание к ответу
+        scene: (i = -1) => sceneBrief(i),
         rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); } },
     register(mod) {
         if (!mod?.id || bridgeMods.some(x => x.id === mod.id)) return false;

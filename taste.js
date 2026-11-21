@@ -362,6 +362,16 @@ function tempoLine() {
 }
 
 export function oocGet() { return CM().ooc || { text: '', sticky: false }; }
+
+/** 0.68.5 — пожелание, с которым писался ответ i (для Реплик): ещё не снятое (📌 или разовое), если задано до этого ответа, или запомненное при снятии. */
+export function oocFor(i) {
+    if (!A?.hasChat?.() || !Number.isInteger(i) || i < 0) return '';
+    const cm = CM();
+    const o = cm.ooc;
+    if (o?.text && i > (o.after ?? -1)) return o.text;
+    const l = cm.oocLast;
+    return l?.text && l.i === i && (l.sw ?? 0) === (A.chatArr()[i]?.swipe_id ?? 0) ? l.text : '';
+}
 export function oocSet(text, sticky) {
     const cm = CM();
     const cur = cm.ooc || { text: '', sticky: false };
@@ -434,7 +444,13 @@ export function tasteGenEnd() {
     if (!A?.hasChat?.()) return;
     const cm = CM();
     let ch = false;
-    if (cm.ooc?.text && !cm.ooc.sticky && A.lastAiIndex() > (cm.ooc.after ?? -1)) { cm.ooc = { text: '', sticky: false }; ch = true; }
+    if (cm.ooc?.text && !cm.ooc.sticky && A.lastAiIndex() > (cm.ooc.after ?? -1)) {
+        // 0.68.5 — помним, с каким пожеланием писался этот ответ: Реплики делают варианты уже после снятия
+        const li = A.lastAiIndex();
+        cm.oocLast = { text: cm.ooc.text, i: li, sw: A.chatArr()[li]?.swipe_id ?? 0 };
+        cm.ooc = { text: '', sticky: false };
+        ch = true;
+    }
     if (cm.why?.used) { delete cm.why; ch = true; }
     if (ch) { A.saveMeta(); try { paintOocBar(); } catch { /* */ } }
 }

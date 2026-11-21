@@ -82,6 +82,11 @@ function M() {
 }
 
 export function modesOn() { return A.hasChat() ? M().on.filter(id => modeById(id)) : []; }
+
+/** 0.68.5 — для соседей (Реплики): какие режимы пульта держатся — [{ id, emo, label }]. */
+export function modesBrief() {
+    return modesOn().map(id => { const m = modeById(id); return { id, emo: m[1], label: m[2] }; });
+}
 export function onceArmed() { return armed.chat === chatKey() ? armed.id : ''; }
 
 export function toggleMode(id) {

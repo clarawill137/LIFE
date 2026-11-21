@@ -187,6 +187,30 @@ export function moodNow() {
         bondMode: m.bond, bondOn, bondLevel: d?.bond || 0, btoneManual, btoneAuto, btone: btoneManual || btoneAuto };
 }
 
+/**
+ * 0.68.5 — для соседей (Реплики): тон сцены у поста i, данными и словами.
+ * Летописец пост уже разметил — берётся его разметка (тон самого поста), иначе то, с чем модель этот пост писала.
+ * Заданное руками сильнее разметки.
+ */
+export function moodBrief(i = -1) {
+    const n = moodNow();
+    const e = Number.isInteger(i) && i >= 0 ? A.chronOf(i)?.scene || null : null;
+    const pack = (row, at) => (row ? { id: row[0], label: row[1], text: row[at] } : null);
+    const md = moodById(n.manual) || moodById(e ? e.mood : n.auto);
+    const mood = md ? { ...pack(md, 3), manual: !!n.manual && md[0] === n.manual } : null;
+    const intimOn = n.intimMode === 'on' || (n.intimMode !== 'off' && (e ? e.intim === 2 && !e.end : n.intimOn));
+    const tone = intimOn ? pack(toneById(n.toneManual || e?.tone || n.toneAuto), 4) : null;
+    const bondOn = n.bondMode === 'on' || (n.bondMode !== 'off' && (e ? e.bond === 2 : n.bondOn));
+    const btone = bondOn ? pack(bondById(n.btoneManual || e?.btone || n.btoneAuto), 4) : null;
+    const after = !intimOn && !e && n.after;
+    const bits = [];
+    if (mood) bits.push(mood.label.toLowerCase());
+    if (intimOn) bits.push(tone ? `секс: ${tone.label.toLowerCase()}` : 'секс');
+    else if (after) bits.push('после секса');
+    if (bondOn) bits.push(btone ? `близость: ${btone.label.toLowerCase()}` : 'близость');
+    return { mood, intim: intimOn ? { tone } : null, after, bond: bondOn ? { tone: btone } : null, label: bits.join(' · ') };
+}
+
 export function moodPrompt(type) {
     if (type === 'quiet' || type === 'impersonate') return '';
     const n = moodNow();
