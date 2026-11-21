@@ -50,7 +50,10 @@ export function scanTags(text) {
         const aStart = mk - st;
         const aEnd = (q && s[je] === q ? je + 1 : je) - st;
         const outside = full.slice(0, aStart) + full.slice(aEnd);
-        const src = (outside.match(/\bsrc\s*=\s*["']?([^"'\s>]+)/i) || [])[1] || '';
+        // путь в кавычках — целиком: SLAY кладёт картинки в папку персонажа, «/user/images/Bucky Barnes/…» (с пробелом).
+        // До 0.68.4 он читался до пробела — и ↻ двойника резал путь в посте пополам (21.11).
+        const sm = outside.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^"'\s>]+))/i);
+        const src = sm ? (sm[1] ?? sm[2] ?? sm[3] ?? '').trim() : '';
         const stamp = /\bdata-iig-error\s*=/i.test(outside);   // SLAY 5.x: метка несостоявшейся картинки на самом теге
         out.push({ start: st, end, full, raw, data: parseIns(raw), src, stamp, aStart, aEnd, video });
         pos = end;

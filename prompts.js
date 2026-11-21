@@ -250,6 +250,7 @@ function watch(i, m) {
 
 function sweep() {
     if (!A?.hasChat?.() || document.hidden || A.settings().enabled === false) return;
+    try { fixSplitSrcs(); } catch (e) { console.warn('[Life] промты: разрезанные пути картинок', e); }
     const chat = A.chatArr();
     for (let i = chat.length - 1, k = 0; i >= Math.max(0, chat.length - 30) && k < 10; i--) {
         const m = chat[i];
@@ -410,6 +411,85 @@ function syncShown(el, i) {
         keepLog(`картинка не показывалась: ${redo} → пересобрала пост`);
         rerender(i).catch(e => console.warn('[Life] промты: пересобрать пост', e));
     }
+}
+
+// ───────────── путь с пробелом, разрезанный пополам (до 0.68.4) ─────────────
+// SLAY кладёт картинки в папку персонажа: «/user/images/Bucky Barnes/…». Life читала путь тега до первого пробела
+// («/user/images/Bucky») и ставила его двойнику; ↻ SLAY заменял этот кусок новым путём во всём посте — во всех свайпах
+// и показах: «/user/images/generated/new.jpg Barnes/old.png». На экране «?», а Life (тоже до пробела) видела новую
+// картинку — в окне промта она была (21.11, пост 833: свайпы 17 и 2). Чиним при открытии чата: картинке, которую
+// перерисовывали (новый путь — в её «Версиях»), — новый путь; кого задело заодно — прежний путь целиком (начало папки
+// берём с других картинок той же папки). Заодно «Версии» с путём до пробела — целиком.
+const IMG_EXT = '(?:png|jpe?g|webp|gif|avif|mp4|webm)';
+const SPLIT_RE = new RegExp(`^(\\S+?\\.${IMG_EXT}(?:\\?\\S*)?)(\\s+\\S[\\s\\S]*?\\.${IMG_EXT}(?:\\?\\S*)?)$`, 'i');
+const SRC_ATTR_RE = /\bsrc\s*=\s*(["'])([^"']*)\1/gi;
+const dirKey = (rest) => { const r = String(rest || ''); const k = r.lastIndexOf('/'); return k > 0 ? r.slice(0, k + 1) : ''; };
+function textStores(m) {
+    const out = [];
+    if (typeof m.mes === 'string') out.push([m, 'mes', -1]);
+    if (Array.isArray(m.swipes)) m.swipes.forEach((s, j) => { if (typeof s === 'string') out.push([m.swipes, j, j]); });
+    for (const f of ['display_text', 'extblocks']) if (m.extra && typeof m.extra[f] === 'string') out.push([m.extra, f, -1]);
+    if (Array.isArray(m.swipe_info)) m.swipe_info.forEach((si, j) => { const x = si?.extra; if (x) for (const f of ['display_text', 'extblocks']) if (typeof x[f] === 'string') out.push([x, f, j]); });
+    return out;
+}
+let splitChat = '';
+function fixSplitSrcs() {
+    const key = chatKey();
+    const chat = A.chatArr();
+    if (!key || key === splitChat || !Array.isArray(chat) || !chat.length) return;
+    splitChat = key;
+    const bad = [], heads = new Map(), full = new Map();   // full: метка картинки → её путь целиком (с пробелом)
+    chat.forEach((m, i) => {
+        if (!m || typeof m !== 'object') return;
+        for (const [obj, f, j] of textStores(m)) {
+            const s = obj[f];
+            if (!s.includes('src') || !s.includes('data-iig-instruction')) continue;
+            for (const mm of s.matchAll(SRC_ATTR_RE)) {
+                const v = mm[2];
+                if (!/\s/.test(v.trim())) continue;
+                const sp = v.trim().match(SPLIT_RE);
+                if (sp) { bad.push({ obj, f, v, i, j, head: sp[1], rest: sp[2] }); continue; }
+                const ws = v.search(/\s/), X = v.slice(0, ws), dk = dirKey(v.slice(ws));
+                if (!dk) continue;
+                const c = heads.get(dk) || new Map();
+                c.set(X, (c.get(X) || 0) + 1);
+                heads.set(dk, c);
+            }
+            if (f === 'mes' && /\s/.test(s)) for (const t of scanTags(s)) if (t.data?.pm && /\s/.test(t.src) && !SPLIT_RE.test(t.src)) full.set(t.data.pm, t.src);
+        }
+    });
+    const hs = store();
+    const headOf = (rest) => { const c = heads.get(dirKey(rest)); return c ? [...c.entries()].sort((a, b) => b[1] - a[1])[0][0] : ''; };
+    const touched = new Set();
+    let metaDirty = false;
+    for (const b of bad) {
+        const cur = b.obj[b.f];
+        const t = scanTags(cur).find(x => x.src === b.v.trim());
+        const pm = t?.data?.pm || '';
+        const vers = pm && Array.isArray(hs[`t:${pm}`]?.v) ? hs[`t:${pm}`].v : [];
+        const X = headOf(b.rest), old = X ? X + b.rest : '';
+        const own = vers.some(v => shownSrc(v.src) === shownSrc(b.head));
+        const to = own || !old ? b.head : old;
+        const next = cur.split(`"${b.v}"`).join(`"${to}"`).split(`'${b.v}'`).join(`'${to}'`);
+        if (next === cur) continue;
+        b.obj[b.f] = next;
+        if (own && X) for (const v of vers) if (v.src === X) { v.src = old; metaDirty = true; }   // версия «до перерисовки» — целиком
+        if (b.f === 'mes' || b.j < 0 || b.j === (chat[b.i].swipe_id ?? 0)) touched.add(b.i);
+        const where = typeof b.f === 'number' ? '' : b.f === 'mes' ? ' (текст)' : b.f === 'display_text' ? ' (показ)' : ' (блоки)';
+        keepLog(`путь картинки был разрезан пополам: пост ${b.i}${b.j >= 0 ? `, свайп ${b.j}` : ''}${where} → ${own ? 'её новая картинка' : old ? 'прежняя картинка' : 'новая картинка'} ${fileOf(to)}`);
+    }
+    // «Версии», записанные с путём до пробела: целиком — если картинка всё та же, что в посте
+    for (const [id, rec] of Object.entries(hs)) {
+        const pm = id.startsWith('t:') ? id.slice(2) : '';
+        const f = pm ? full.get(pm) : '';
+        if (!f || !Array.isArray(rec?.v)) continue;
+        const X = f.slice(0, f.search(/\s/));
+        for (const v of rec.v) if (v && v.src === X) { v.src = f; metaDirty = true; }
+    }
+    if (metaDirty) A.saveMeta();
+    if (!bad.length) return;
+    A.ctx().saveChat?.();
+    for (const i of touched) if (mesEl(i)) rerender(i).catch(e => console.warn('[Life] промты: пересобрать пост', e));
 }
 
 function hookHeal() {
