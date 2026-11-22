@@ -7,6 +7,7 @@
 
 import { knockPromptFor } from './knock.js';
 import { duoPartner, duoLines, duoFollow } from './duo.js';
+import { cutLinesFor } from './cut.js';
 
 let A = null;
 export function initCast(api) { A = api; }
@@ -22,6 +23,10 @@ export function castPrompt(type, consume = false) {
     if (!S || NARRATOR.test(S)) return '';
     const U = c.name1 || 'the player';
     const same = A.sameName;
+    // «Тем временем» (cut.js): его отдельная сцена там, где он сейчас — свои правила, без поста на двоих и стука
+    let cut = null;
+    try { cut = cutLinesFor(S, U, type, consume); } catch (e) { console.warn('[Life] тем временем', e); }
+    if (cut) return [...cut, `- Never write ${U}'s words, actions or thoughts.]`].join('\n');
     // пост на двоих (duo.js): второй пишет свою часть сам
     let P = '';
     try { P = duoPartner(S, type, consume); } catch (e) { console.warn('[Life] вдвоём', e); }

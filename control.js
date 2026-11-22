@@ -465,6 +465,8 @@ function renderCC() {
 
     ${api.twistsHtml ? (() => { const h = api.twistsHtml(); return h ? `<div class="cc-label">Твист — на следующий ответ</div>${h}` : ''; })() : ''}
 
+    ${api.groupHtml ? (() => { const h = api.groupHtml(); return h ? `<div class="cc-label">Группа — тап: ответит · удержать: молчит</div>${h}` : ''; })() : ''}
+
     ${api.duoHtml ? (() => { const h = api.duoHtml(); return h ? `<div class="cc-label">Вдвоём — следующий ответ пишут двое</div>${h}` : ''; })() : ''}
 
     ${api.moodHtml ? (() => { const h = api.moodHtml(); return h ? `<div class="cc-label">Настроение сцены</div>${h}` : ''; })() : ''}
@@ -545,6 +547,12 @@ async function onCCClick(ev) {
     if (act.startsWith('duo-')) {
         try { api.duoCC?.(act, el); } catch (e) { console.warn('[Life] вдвоём', e); }
         renderCC();
+        return;
+    }
+    if (act.startsWith('grp-')) {
+        let r = null;
+        try { r = await api.groupCC?.(act, el); } catch (e) { console.warn('[Life] группа', e); }
+        if (r === 'close') closeCC(); else renderCC();
         return;
     }
     if (act.startsWith('tw-')) {

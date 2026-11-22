@@ -151,9 +151,14 @@ import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
 import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle, navThemeHtml } from './nav.js';
+// 0.70: глухие стены, «пока тебя не было», «тем временем», «кто ответит?» (идеи Immersion Director, moonnsy)
+import { initWalls, wallsFilter, wallsReady, wallsPrompt, wallsChron, wallsAfterPost, wallsSceneHtml, wallsClick, paintWalls, wallsSees, wallsWho, wallsAway, wallsDrop } from './walls.js';
+import { initCut, paintCut, cutClick, isCutMsg } from './cut.js';
+import { initPick, pickCCHtml, pickCC } from './pick.js';
+import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.69.0';
+const VERSION = '0.70.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -181,6 +186,8 @@ const DEFAULTS = {
     cast: { on: true },
     tidy: true,
     mend: { on: true, tries: 2 },
+    wit: { on: true, eye: true, back: true, scene: true, gap: true, hearText: 'Bucky, Баки, Winter Soldier, Зимний, Steve, Стив' },
+    pick: { on: true, empty: true, scene: false },
 };
 
 const ctx = () => SillyTavern.getContext();
@@ -203,6 +210,10 @@ function settings() {
     if (!s.plates || typeof s.plates !== 'object') s.plates = clone(DEFAULTS.plates);
     if (!s.cast || typeof s.cast !== 'object') s.cast = clone(DEFAULTS.cast);
     if (!s.mend || typeof s.mend !== 'object') s.mend = clone(DEFAULTS.mend);
+    for (const k of ['wit', 'pick']) {
+        if (!s[k] || typeof s[k] !== 'object') s[k] = clone(DEFAULTS[k]);
+        for (const [kk, v] of Object.entries(DEFAULTS[k])) if (s[k][kk] === undefined) s[k][kk] = v;
+    }
     if (!s.shot || typeof s.shot !== 'object') s.shot = clone(DEFAULTS.shot);
     for (const [k, v] of Object.entries(DEFAULTS.shot)) if (s.shot[k] === undefined) s.shot[k] = v;
     if (!s.migr02) migrate01(s);
@@ -311,14 +322,29 @@ function emptyMeta() {
     };
 }
 
+/** 0.70: последний пост с записью Horae — «Тем временем» (cut.js): «где мы сейчас» — по основной сцене, не по нему. */
+function cutTail() {
+    const chat = chatArr();
+    for (let i = chat.length - 1, k = 0; i >= 0 && k < 12; i--) {
+        const m = chat[i];
+        if (!m || m.is_user || m.is_system) continue;
+        k++;
+        if (isCutMsg(m)) return true;
+        if (m.horae_meta?.scene?.characters_present?.length || m.horae_meta?.scene?.location) return false;
+    }
+    return false;
+}
+
 function worldState() {
     if (horaeOn()) {
-        try { return window.Horae.getLatestState() || emptyMeta(); } catch (e) { console.warn('[Life] Horae.getLatestState', e); }
+        let cut = false;
+        try { cut = cutTail(); } catch { /* */ }
+        if (!cut) { try { return window.Horae.getLatestState() || emptyMeta(); } catch (e) { console.warn('[Life] Horae.getLatestState', e); } }
     }
     const st = emptyMeta();
     for (const m of chatArr()) {
         const meta = m?.horae_meta;
-        if (!meta || meta._skipHorae) continue;
+        if (!meta || meta._skipHorae || m?.extra?.lifeCut) continue;
         if (meta.timestamp?.story_date) st.timestamp.story_date = meta.timestamp.story_date;
         if (meta.timestamp?.story_time) st.timestamp.story_time = meta.timestamp.story_time;
         if (meta.scene?.location) st.scene.location = meta.scene.location;
@@ -941,7 +967,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { brain: 'код-мозг', 'life-cowriter': 'соавтор', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были' };
+const BRIDGE_NAMES = { brain: 'код-мозг', 'life-cowriter': 'соавтор', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были', 'life-walls': 'глухие стены: пока тебя не было' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -952,14 +978,21 @@ function updateMovePrompt(type, consume = false) {
     if (p) add('переход', moveNote(p.mark));
     if (dir?.once && dir.text) add('режиссёр', `[Режиссёр: ${dir.text}]`);
     if (settings().enabled && hasChat()) {
+        // 0.70: говорящего нет в сцене — заметки самой сцены (мизансцена, близость, под словами, дом…) ему не уходят
+        let away = null;
+        try { away = wallsAway(type); } catch (e) { console.warn('[Life] глухие стены', e); }
         try { add('жизнь', simPrompt(type)); } catch (e) { console.warn('[Life] Жизнь: заметка', e); }
         try { add('отношения', relPrompt()); } catch (e) { console.warn('[Life] отношения: заметка', e); }
         try { add('люди', peoplePrompt(type)); } catch (e) { console.warn('[Life] люди: заметка', e); }
-        try { add('настроение', moodPrompt(type)); } catch (e) { console.warn('[Life] настроение', e); }
+        try { if (!wallsDrop('mood', away)) add('настроение', moodPrompt(type)); } catch (e) { console.warn('[Life] настроение', e); }
         try { add('СМИ', pressPrompt()); } catch (e) { console.warn('[Life] СМИ', e); }
         try { add('плашки', platesPrompt()); } catch (e) { console.warn('[Life] плашки', e); }
-        for (const m of bridgeMods) { try { add(BRIDGE_NAMES[m.id] || m.id, m.prompt?.(type)); } catch (e) { console.warn(`[Life] ${m.id}: заметка`, e); } }
-        try { add('дни', daysPrompt(type), true); } catch (e) { console.warn('[Life] дни', e); }
+        try { add('вдвоём: кто второй', duoCardPrompt(type)); } catch (e) { console.warn('[Life] вдвоём: карточка', e); }
+        for (const m of bridgeMods) { if (wallsDrop(m.id, away)) continue; try { add(BRIDGE_NAMES[m.id] || m.id, m.prompt?.(type)); } catch (e) { console.warn(`[Life] ${m.id}: заметка`, e); } }
+        // «Последние дни» — его глазами: что он сам видел (глухие стены)
+        let who = [];
+        try { who = wallsWho(type); } catch (e) { console.warn('[Life] глухие стены: дни', e); }
+        try { add('дни', daysPrompt(type, { who }), true); } catch (e) { console.warn('[Life] дни', e); }
         try { add('свежесть', freshPrompt(type)); } catch (e) { console.warn('[Life] свежесть', e); }
     }
     const text = parts.join('\n');
@@ -999,7 +1032,11 @@ globalThis.life_intercept = async function (_chat, _size, _abort, type) {
     try { if (type !== 'quiet' && settings().enabled) await seeReady(type); } catch (e) { console.warn('[Life] покажи им', e); }
     // Летописец ещё читает прошлый ответ — подождать, чтобы модель видела свежее состояние (раны, рука, кто где)
     try { await chronReady(type); } catch (e) { console.warn('[Life] Летописец: ожидание', e); }
+    // 0.70: вернулся после отсутствия — «Пока тебя не было» (не дольше 20 секунд)
+    try { if (type !== 'quiet' && settings().enabled) await wallsReady(type); } catch (e) { console.warn('[Life] пока тебя не было', e); }
     try { if (type !== 'quiet') updateMovePrompt(type, true); } catch (e) { console.warn('[Life] перехват', e); }
+    // 0.70: глухие стены — посты, которых говорящий не видел, модели на его ход не уходят
+    try { if (type !== 'quiet' && settings().enabled) wallsFilter(_chat, type); } catch (e) { console.warn('[Life] глухие стены', e); }
 };
 
 async function removeMarker(id) {
@@ -2959,6 +2996,14 @@ function renderCfg() {
         ${sw('suggest', 'Подсказывать, где в посте просится кадр или кат-сцена', s.shot, 'shot.suggest')}
         ${sw('btn', 'Кнопка «кадр» у каждого поста', s.shot, 'shot.btn')}
         ${sw('on', 'В группе каждый пишет за себя (остальные — коротко, кого нет в сцене — не появляются)', s.cast, 'cast.on')}
+        ${sw('on', 'Глухие стены: на ход героя модель получает только посты, которые он видел и слышал (по Horae, звонкам, суперслуху и 👁 у постов); вместо остальных — строка «пропуск»', s.wit, 'wit.on')}
+        ${sw('eye', '👁 у поста — кто его видел и слышал (тап — поправить)', s.wit, 'wit.eye')}
+        ${sw('back', '«Пока тебя не было»: вернувшемуся — только то, что видно с порога и что ему сообщили', s.wit, 'wit.back')}
+        ${sw('scene', 'Кого нет в сцене, тот не получает её заметок (мизансцена, близость, под словами, дом, бой)', s.wit, 'wit.scene')}
+        <div class="lf-field"><label>Слышат через стенку <small>(суперслух: в том же доме, но в другой комнате — слышат; имена через запятую)</small></label><input type="text" data-set="wit.hearText" value="${esc(s.wit.hearText || '')}" placeholder="Bucky, Баки, Steve, Стив"></div>
+        ${sw('on', '«Кто ответит?» — долгий тап по «Отправить»: лица группы, тап — отвечает он', s.pick, 'pick.on')}
+        ${sw('empty', 'Пустая отправка в группе — отвечает тот, кто в сцене (а не случайный из всей группы)', s.pick, 'pick.empty')}
+        ${sw('scene', 'Отправка с текстом — сразу отвечает тот, кто в сцене (иначе только пост, как в ручном режиме группы)', s.pick, 'pick.scene')}
         ${sw('on', 'Дописывать оборванный пост: модель оборвала заметки или текст на полуслове — Life допишет тихим запросом тем же подключением (вручную — /life fix)', s.mend, 'mend.on')}
         ${sw('tidy', 'Срезать обрезанный блок в конце поста, если дописать не вышло (иначе он глотает блоки ExtBlocks в «Подробнее»)', s, 'tidy')}
         ${sw('on', 'Плашки газет и писем в постах (старая бумага, сургуч)', s.plates, 'plates.on')}
@@ -4087,6 +4132,7 @@ async function onChange(ev) {
         if (path[0] === 'call') updateMovePrompt();
         if (path[0] === 'plates') platesSync().then(() => { updateMovePrompt(); render(); });
         if (path[0] === 'cast') updateMovePrompt();
+        if (path[0] === 'wit' || path[0] === 'pick') { updateMovePrompt(); decorateSoon(80); }
         if (HUD_KEYS.includes(path[0])) { updateMovePrompt(); decorateSoon(80); }
         if (k === 'autopay' && obj[k]) runAutopay();
         if (k === 'enabled') updateMovePrompt();
@@ -4353,6 +4399,9 @@ const controlApi = {
     feel: () => feelOn(),
     toggleFeel: () => toggleFeel(),
     duoCC: (act, el) => duoClick(act, el),
+    // 0.70: группа в пульте — тап: ответит, удержать: молчит
+    groupHtml: () => (hasChat() && settings().enabled ? pickCCHtml() : ''),
+    groupCC: (act, el) => pickCC(act, el),
     rekeyMessage: (i, oldMes) => { try { tasteSnap(i); } catch { /* */ } return rekeyChron(i, oldMes); },
 };
 
@@ -4785,6 +4834,17 @@ jQuery(async () => {
     } catch (e) { console.warn('[Life] твисты/раны: мост', e); }
     initCast(simApi);
     initKnock(simApi);
+    // 0.70: глухие стены, «пока тебя не было», «тем временем», «кто ответит?» (идеи Immersion Director, moonnsy)
+    try {
+        initCut({ ...extApi, closeHub: () => closeHub() });
+        initWalls({ ...extApi, namesInText });
+        initPick({ ...extApi, namesInText });
+        extApi.wallsSees = (i, who) => wallsSees(i, who);   // «Последние дни» — глазами говорящего (days.js)
+        painters.push((el, id) => paintCut(el, id), (el, id) => paintWalls(el, id));
+        chatClicks.push((act, el) => wallsClick(act, el), (act, el) => cutClick(act, el));
+        hubMods.push({ pre: 'wit-', click: wallsClick, label: 'Глухие стены' }, { pre: 'cut-', click: cutClick, label: 'Тем временем' });
+        globalThis.LifeBridge.register({ id: 'life-walls', prompt: (type) => wallsPrompt(type), chron: (i) => wallsChron(i), afterPost: (i, j, m) => wallsAfterPost(i, j, m), sceneHtml: () => wallsSceneHtml() });
+    } catch (e) { console.warn('[Life] 0.70: глухие стены', e); }
     initTidy(simApi);
     initMend(simApi);
     initArt({ ...simApi, icon, faceRef, namesInText, artImage: (info) => bridgeEach(m => m.artImage?.(info), 'картинка в карточке')[0] || null });

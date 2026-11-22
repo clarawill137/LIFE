@@ -4195,3 +4195,81 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 .lf-letter-sign { margin-top: 10px; text-align: right; color: #8a7a6c; font: italic 12.5px/1.3 Georgia, serif; }
 .lf-sh.told { opacity: .85; border-style: dashed; }
 .lf-sh.told > i { font-size: 11px; color: var(--lf-dim); font-style: italic; margin-left: 4px; }
+
+/* ───────────── 0.70: глухие стены, «тем временем», «кто ответит?» ───────────── */
+/* 👁 у поста: кто видел и слышал */
+.mes .lf-wit { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; font-size: 0; }
+.mes .lf-wit-b { display: inline-flex; align-items: center; gap: 0; height: 20px; padding: 0 6px 0 5px; border-radius: 999px; border: 1px solid rgba(var(--lf-text-rgb), .16); background: rgba(255, 255, 255, .04); color: var(--t-text, var(--lf-text2)); cursor: pointer; opacity: .85; -webkit-tap-highlight-color: transparent; }
+.mes .lf-wit-b.solo { opacity: .42; padding: 0 5px; }
+.mes .lf-wit-b.fixed { border-color: rgba(var(--lf-rose-rgb), .55); }
+.mes .lf-wit-b > .lf-i { width: 12px; height: 12px; flex: none; margin-right: 3px; }
+.mes .lf-wit-b.solo > .lf-i { margin-right: 0; }
+.mes .lf-wit-f { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; flex: none; background: linear-gradient(135deg, var(--lf-wine), #2b1f22); border: 1px solid rgba(var(--lf-rose2-rgb), .55); margin-left: -3px; }
+.mes .lf-wit-b > .lf-i + .lf-wit-f { margin-left: 0; }
+.mes .lf-wit-f img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.mes .lf-wit-f i { font: 600 8px/1 var(--lf-sans); font-style: normal; color: var(--lf-rose2); }
+.mes .lf-wit-f.h-phone { border: 1px dashed #8fd18f; }
+.mes .lf-wit-f.h-heard { border-color: #e0b56a; }
+.mes .lf-wit-f.h-saw { border-color: #8fc4e8; }
+.mes .lf-wit-f.h-hand { box-shadow: 0 0 0 1px rgba(var(--lf-rose-rgb), .85); }
+.lf-wit-list { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.lf-wit-row { display: flex; gap: 10px; align-items: flex-start; }
+.lf-wit-row.away > .lf-ava { filter: grayscale(.8); opacity: .7; }
+.lf-wit-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.lf-wit-rt > b { font-family: var(--lf-serif); font-weight: 500; font-size: 15px; }
+.lf-wit-me { color: var(--lf-dim); font-size: 12.5px; }
+.lf-wit-away { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+.lf-wit-aw { display: flex; align-items: center; gap: 10px; }
+.lf-wit-aw > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lf-wit-aw > span small { color: var(--lf-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-wit-aw .lf-btn { flex: none; }
+
+/* «Тем временем» — отдельная сцена: холодный кадр */
+.mes.lf-cut .mes_text { position: relative; padding: 12px 14px; border-radius: 6px; color: color-mix(in srgb, var(--t-text, var(--lf-text)) 78%, #9fc3d8); background: linear-gradient(180deg, rgba(20, 34, 46, .38), rgba(12, 20, 28, .22)); box-shadow: inset 0 0 40px rgba(0, 0, 0, .35); border-top: 3px solid rgba(143, 190, 220, .25); border-bottom: 3px solid rgba(143, 190, 220, .25); }
+.mes .lf-cutlabel { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 6px; }
+.mes .lf-cutlabel > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 28px); white-space: nowrap; padding: 3px 11px 3px 8px; border-radius: 999px; border: 1px solid rgba(143, 190, 220, .32); background: rgba(143, 190, 220, .06); color: #b9d3e3; font: 600 10.5px/1.4 var(--lf-sans, system-ui); letter-spacing: .14em; text-transform: uppercase; }
+.mes .lf-cutlabel > span i { font-style: normal; letter-spacing: .03em; text-transform: none; font-weight: 500; opacity: .85; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mes .lf-cutlabel > span b { font-weight: 600; flex: none; }
+.mes .lf-cutlabel > span .lf-i { width: 13px; height: 13px; }
+.mes .lf-cutlabel button { border: 0; background: none; color: var(--lf-dim, #8a8a8a); cursor: pointer; padding: 2px; display: inline-grid; place-items: center; }
+.mes .lf-cutlabel button .lf-i { width: 13px; height: 13px; }
+
+/* «Кто ответит?» — панель над «Отправить» */
+#send_but { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+#lf-pick { position: fixed; z-index: 100002; box-sizing: border-box; padding: 10px 12px 12px; border-radius: 18px; background-color: var(--lf-card2, #2a2124); background-image: linear-gradient(180deg, rgba(var(--lf-card2-rgb), .97), rgba(var(--lf-bg2-rgb), .97)); border: 1px solid rgba(var(--lf-rose-rgb), .38); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); color: var(--lf-text); font-family: var(--lf-sans); opacity: 0; transform: translateY(8px) scale(.98); transition: opacity .18s ease, transform .18s ease; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#lf-pick.in { opacity: 1; transform: none; }
+.lf-pk-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.lf-pk-h b { font-family: var(--lf-serif); font-weight: 500; font-size: 17px; }
+.lf-pk-h small { flex: 1; color: var(--lf-dim); font-size: 12px; }
+.lf-pk-x { border: 0; background: none; color: var(--lf-dim); padding: 4px; cursor: pointer; display: inline-grid; place-items: center; align-self: center; }
+.lf-pk-x .lf-i { width: 16px; height: 16px; }
+.lf-pk-l { margin: 9px 0 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--lf-dim); }
+.lf-pk-l small { letter-spacing: 0; text-transform: none; margin-left: 4px; font-size: 11px; }
+.lf-pk-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.lf-pk-row::-webkit-scrollbar { display: none; }
+.lf-pk-it { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 80px; }
+.lf-pk-f { border: 0; background: none; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; color: inherit; cursor: pointer; width: 100%; -webkit-tap-highlight-color: transparent; }
+.lf-pk-ava { position: relative; display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, var(--lf-wine), #2b1f22); border: 2px solid rgba(var(--lf-rose-rgb), .65); }
+.lf-pk-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.lf-pk-ava i { font: 600 18px var(--lf-serif); font-style: normal; color: var(--lf-rose2); }
+.lf-pk-n { font-size: 12px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-pk-it.away .lf-pk-ava { border-color: rgba(var(--lf-text-rgb), .25); filter: saturate(.55); }
+.lf-pk-it.muted .lf-pk-ava { opacity: .55; }
+.lf-pk-f:active .lf-pk-ava { transform: scale(.94); }
+.lf-pk-cut { max-width: 80px; border: 1px solid rgba(143, 190, 220, .32); background: rgba(143, 190, 220, .06); color: #b9d3e3; border-radius: 999px; font: 600 9.5px/1.3 var(--lf-sans); padding: 2px 7px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.lf-pk-cut .lf-i { display: none; }
+.lf-pk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.lf-pk-chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--lf-line2); background: rgba(255, 255, 255, .04); color: var(--lf-text2); font: 500 12.5px var(--lf-sans); cursor: pointer; }
+.lf-pk-chip.on { border-color: rgba(var(--lf-rose-rgb), .6); background: rgba(var(--lf-rose-rgb), .14); color: var(--lf-text); }
+.lf-pk-chip .lf-i { width: 13px; height: 13px; }
+.lf-pk-pin { font-size: 12px; color: var(--lf-rose2); align-self: center; }
+.lf-pk-opt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--lf-line2); font-size: 12px; color: var(--lf-dim); }
+.lf-pk-opt button { height: 26px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--lf-line2); background: none; color: var(--lf-text2); font: 500 12px var(--lf-sans); cursor: pointer; }
+.lf-pk-opt button.on { border-color: rgba(var(--lf-rose-rgb), .6); color: var(--lf-text); background: rgba(var(--lf-rose-rgb), .12); }
+
+/* пульт → «Группа» */
+#lf-cc .lf-grp .cc-chip { gap: 6px; }
+#lf-cc .lf-grp-f.away { opacity: .55; }
+#lf-cc .lf-grp-f.muted span { text-decoration: line-through; text-decoration-color: rgba(var(--lf-rose-rgb), .7); }
+#lf-cc .lf-grp-f i { font-style: normal; font-size: 11px; }
+#lf-cc [data-grp-face] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

@@ -9,6 +9,8 @@
 import { modesOn } from './modes.js';
 import { moodNow } from './mood.js';
 import { knockActive } from './knock.js';
+import { cutArmedFor } from './cut.js';
+import { cardText } from './lore.js';
 
 let A = null;
 export function initDuo(api) {
@@ -175,6 +177,7 @@ export function duoPartner(S, type, consume = false) {
 
 function partnerFor(S, type, consume) {
     if (!A?.hasChat?.() || !duoOn() || !S || NARR.test(S) || type === 'quiet' || type === 'impersonate') return '';
+    try { if (cutArmedFor(S, type)) return ''; } catch { /* */ } // «Тем временем» — его сцена, один
     const chat = A.chatArr();
     if (type === 'continue') { // дописываем пост: если он уже на двоих — тот же второй
         const last = chat[chat.length - 1];
@@ -193,10 +196,64 @@ function partnerFor(S, type, consume) {
         if (consume) { d.hand = { t, u, p: P }; d.armed = ''; A.saveMeta(); }
         return P;
     }
+    // пара закреплена на сцену: второй голос — он, пока оба в сцене и место то же
+    const pin = pinPartner(S, t, u, consume);
+    if (pin) return pin;
     const pr = present();
     if (pr.length && !pr.some(p => A.sameName(p, S))) return ''; // сам не в сцене (звонит, едет) — пишет один
     if (cfg().mode !== 'auto') return '';
     return autoPartner(S, t, u);
+}
+
+// ───────────── пара на всю сцену ─────────────
+
+const sceneTop = () => { try { return A.norm(A.locTop ? A.locTop(A.worldState().scene?.location || '') : (A.worldState().scene?.location || '').split(/[·,]/)[0]); } catch { return ''; } };
+
+/** Закреплённый второй голос на этот ответ ('' — нет). Ушёл из сцены или сменилось место — пара открепляется сама. */
+function pinPartner(S, t, u, consume) {
+    const d = M();
+    const pin = d.pin;
+    if (!pin?.p) return '';
+    const pr = present();
+    const top = sceneTop();
+    const left = pr.length && !pr.some(p => A.sameName(p, pin.p));
+    const moved = pin.loc && top && pin.loc !== top;
+    if (left || moved) {
+        if (consume) {
+            d.pin = null;
+            A.saveMeta();
+            A.toast?.('info', `Пара откреплена: ${moved ? 'сменилось место' : `${esc(A.shortName(pin.p))} больше не в сцене`}`, '✦ Вдвоём', { timeOut: 2400 });
+        }
+        return '';
+    }
+    if (pr.length && !pr.some(p => A.sameName(p, S))) return '';
+    if (!A.sameName(S, pin.p)) return A.canonName(pin.p);
+    // говорит сам закреплённый — второй голос из тех, кто рядом
+    return pickPartner(duoCands(S), userText(u), t) || '';
+}
+
+/** Закреплённая пара (для пульта и Сцены): { p, loc } или null. */
+export function duoPin() { return A?.hasChat?.() ? (M().pin || null) : null; }
+
+// ───────────── карточка второго ─────────────
+
+/** Заметка модели: кто второй голос этого ответа — из его карточки (в группе таверна кладёт только карточку говорящего). */
+export function duoCardPrompt(type) {
+    if (!A?.hasChat?.() || !duoOn() || type === 'quiet' || type === 'impersonate') return '';
+    const S = speakerName();
+    if (!S) return '';
+    const P = partnerFor(S, type, false);
+    if (!P) return '';
+    let card = '';
+    try { card = cardText(P, 2400); } catch { /* */ }
+    card = String(card || '').replace(/\n{3,}/g, '\n\n').trim();
+    return card ? `[Второй голос этого ответа — ${P}. Кто это (из карточки): ${card}]` : '';
+}
+
+/** Для глухих стен: с кем S пишет этот ответ, если пост на двоих уже решён перехватом ('' — один). */
+export function duoLiveFor(S) {
+    if (!live || Date.now() - live.at > 15 * 60e3 || !A.sameName(live.S, S)) return '';
+    return live.P || '';
 }
 
 // ───────────── нудж группы ─────────────
@@ -385,8 +442,12 @@ function partnerChips(at) {
     const armed = M().armed || '';
     const attr = at === 'cc' ? 'data-cc' : 'data-act';
     const cls = at === 'cc' ? 'cc-chip' : 'lf-chip';
-    if (!list.length) return '';
-    return `<button class="${cls}${armed === '*' ? ' on' : ''}" ${attr}="duo-arm" data-v="*">${A.icon('users')}сама решу</button>${list.map(n => `<button class="${cls}${armed && armed !== '*' && A.sameName(armed, n) ? ' on' : ''}" ${attr}="duo-arm" data-v="${esc(n)}">${A.ava(n, 'xs')}${esc(A.shortName(n))}</button>`).join('')}`;
+    const pin = M().pin;
+    const pinChip = pin?.p
+        ? `<button class="${cls} on" ${attr}="duo-pin" data-v="" title="Открепить">📌 ${esc(A.shortName(pin.p))} — до конца сцены ✕</button>`
+        : armed && armed !== '*' ? `<button class="${cls}" ${attr}="duo-pin" data-v="${esc(armed)}" title="Не на один ответ, а пока оба в сцене и место то же">📌 на всю сцену</button>` : '';
+    if (!list.length) return pinChip;
+    return `<button class="${cls}${armed === '*' ? ' on' : ''}" ${attr}="duo-arm" data-v="*">${A.icon('users')}сама решу</button>${list.map(n => `<button class="${cls}${armed && armed !== '*' && A.sameName(armed, n) ? ' on' : ''}" ${attr}="duo-arm" data-v="${esc(n)}">${A.ava(n, 'xs')}${esc(A.shortName(n))}</button>`).join('')}${pinChip}`;
 }
 
 /** Пульт: «Вдвоём — на следующий ответ». */
@@ -401,8 +462,9 @@ export function duoSceneHtml() {
     if (!A?.hasChat?.() || A.settings().enabled === false) return '';
     const p = duoOn() ? partnerChips('hub') : '';
     const armed = M().armed;
+    const pin = M().pin;
     return `${A.sec ? A.sec('Вдвоём', 'пост на двоих') : '<h4>Вдвоём</h4>'}
-        <div class="lf-hint">${armed ? `Следующий ответ пишут двое${armed !== '*' ? ` — с ${esc(A.shortName(A.canonName(armed)))}` : ''}.` : cfg().mode === 'auto' ? 'Когда рядом много своих и сцена горячая, ответ пишут двое — каждый свою часть. Можно и самой: кого позвать в следующий ответ.' : 'Кого позвать в следующий ответ вторым.'}</div>
+        <div class="lf-hint">${pin?.p ? `До конца сцены второй голос — ${esc(A.shortName(pin.p))} (откреплю сама, когда уйдёт или сменится место). ` : ''}${armed ? `Следующий ответ пишут двое${armed !== '*' ? ` — с ${esc(A.shortName(A.canonName(armed)))}` : ''}. «📌 на всю сцену» — не на один ответ.` : cfg().mode === 'auto' ? 'Когда рядом много своих и сцена горячая, ответ пишут двое — каждый свою часть. Можно и самой: кого позвать в следующий ответ.' : 'Кого позвать в следующий ответ вторым.'}</div>
         ${p ? `<div class="lf-chips wrap">${p}</div>` : duoOn() ? '<div class="lf-empty small">Рядом никого из своих — не с кем на двоих.</div>' : ''}
         <div class="lf-chips">${modeChips('hub')}</div>`;
 }
@@ -417,6 +479,18 @@ export function duoClick(act, el) {
         d.armed = d.armed && (d.armed === v || (v !== '*' && d.armed !== '*' && A.sameName(d.armed, v))) ? '' : v;
         A.saveMeta();
         if (d.armed) A.toast('info', d.armed === '*' ? 'Следующий ответ пишут двое — второго выберу сама' : `Следующий ответ — вдвоём с ${esc(A.shortName(A.canonName(d.armed)))}`, '✦ Вдвоём', { timeOut: 1800 });
+    }
+    else if (act === 'duo-pin') {
+        const d = M();
+        const v = el.dataset.v || '';
+        if (!v || d.pin) { d.pin = null; A.toast('info', 'Пара откреплена', '✦ Вдвоём', { timeOut: 1500 }); }
+        else {
+            const p = A.canonName(v);
+            d.pin = { p, loc: sceneTop() };
+            d.armed = '';
+            A.toast('info', `${esc(A.shortName(p))} — второй голос до конца сцены (пока в сцене и место то же)`, '✦ Вдвоём', { timeOut: 2400 });
+        }
+        A.saveMeta();
     }
     try { A.updatePrompt?.(); } catch { /* */ }
     A.render?.();

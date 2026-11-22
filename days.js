@@ -257,7 +257,7 @@ export function daysAfterPost() {
 
 const dot = (t) => (/[.!?…»)]$/.test(String(t).trim()) ? String(t).trim() : `${String(t).trim()}.`);
 
-export function daysPrompt(type) {
+export function daysPrompt(type, opt = {}) {
     if (!A?.hasChat?.() || !daysOn() || type === 'quiet' || type === 'impersonate') return '';
     const days = collectDays();
     if (days.length < 1) return '';
@@ -265,22 +265,34 @@ export function daysPrompt(type) {
     const t = todayOf(days);
     const closed = days.slice(0, -1).slice(-cfg().n);
     const ty = t ? t.key.slice(0, 4) : '';
+    // глухие стены (walls.js): на ход героя — только то, что он видел; сводка дня — если видел весь день, иначе его куски
+    const who = (Array.isArray(opt.who) ? opt.who : opt.who ? [opt.who] : []).filter(Boolean);
+    const sees = who.length && typeof A.wallsSees === 'function' ? (i) => A.wallsSees(i, who) : null;
+    const chat = sees ? A.chatArr() : null;
+    const allSeen = (d) => { if (!sees) return true; for (let i = d.from; i <= d.to; i++) if (isPost(chat[i]) && !sees(i)) return false; return true; };
+    const whoName = who.length ? who.map(n => A.shortName(n)).join(' и ') : '';
     const lines = [];
     let prev = null;
     for (const d of closed) {
         const s = sum[d.key];
         const gap = prev ? gapWord(prev.key, d.key) : '';
         if (gap) lines.push(`(${gap})`);
-        const fb = (d.flash || []).map(f => `флешбек в ${dayLabel(f.key, f.raw, true)}${f.frags.length ? `: ${f.frags[0]}` : ''}`).join('; ');
-        const body = s?.text && !s.today && !hollow(s) ? s.text : [d.frags.filter(f => f.imp).concat(d.frags.filter(f => !f.imp)).slice(0, 4).map(f => f.t).join('; '), fb ? `(${fb})` : ''].filter(Boolean).join(' ');
-        if (body) lines.push(`• ${dayLabel(d.key, d.raw, d.key.slice(0, 4) !== ty)} — ${dot(body)}${s?.open?.length ? ` Открыто: ${s.open.join('; ')}.` : ''}`);
+        const all = allSeen(d);
+        const fb = all ? (d.flash || []).map(f => `флешбек в ${dayLabel(f.key, f.raw, true)}${f.frags.length ? `: ${f.frags[0]}` : ''}`).join('; ') : '';
+        const frags = all ? d.frags : d.frags.filter(f => sees(f.i));
+        let body = all && s?.text && !s.today && !hollow(s) ? s.text : [frags.filter(f => f.imp).concat(frags.filter(f => !f.imp)).slice(0, 4).map(f => f.t).join('; '), fb ? `(${fb})` : ''].filter(Boolean).join(' ');
+        if (!all && !body) body = `${whoName} — весь день не рядом, что было, не ${who.length > 1 ? 'знают' : 'знает'}`;
+        if (body) lines.push(`• ${dayLabel(d.key, d.raw, d.key.slice(0, 4) !== ty)} — ${dot(body)}${all && s?.open?.length ? ` Открыто: ${s.open.join('; ')}.` : ''}`);
         prev = d;
     }
     if (t) {
         const gap = prev ? gapWord(prev.key, t.key) : '';
         if (gap) lines.push(`(${gap})`);
         const s = sum[t.key];
-        if (s?.today && s.text) lines.push(`• Сегодня, ${dayLabel(t.key, t.raw)}, раньше в этот день — ${dot(s.text)}${s.open?.length ? ` Открыто: ${s.open.join('; ')}.` : ''}`);
+        const all = allSeen(t);
+        const seenToday = all ? [] : t.frags.filter(f => sees(f.i)).slice(0, 4).map(f => f.t);
+        if (all && s?.today && s.text) lines.push(`• Сегодня, ${dayLabel(t.key, t.raw)}, раньше в этот день — ${dot(s.text)}${s.open?.length ? ` Открыто: ${s.open.join('; ')}.` : ''}`);
+        else if (seenToday.length) lines.push(`• Сегодня, ${dayLabel(t.key, t.raw)}, раньше — из виденного своими глазами: ${dot(seenToday.join('; '))}`);
         else if (closed.length) lines.push(`• Сегодня — ${dayLabel(t.key, t.raw)}.`);
     }
     if (!lines.some(l => l.startsWith('•'))) return '';
