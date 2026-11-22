@@ -11,6 +11,11 @@
 //     "lust":  { "имя": { "dropCard": true, "traits": [{ "kind": "kink|fetish|nogo|cold|libido|exp", "t": "…" }] } },
 //     "prof":  { "имя": { "hobbies": ["…"], "turnons": ["…"], "bed": ["…"], "drop": ["дословно убрать"], "romance": { "style": "…" } } },
 //     "core":  { "имя": "• строка\n• строка" } }
+//   0.71 — к чату: счета людей, регулярные доходы и платежи дома (wallet.js; карта {{user}} — "phone": true, банк Телефона):
+//   { "chat": "…", "wallet": { "cur": "$", "accs": [{ "id": "h1", "who": "{{user}}", "name": "…", "kind": "card|cash|save|invest|trust|corp",
+//       "phone": true, "main": true, "lock": false, "base": 0, "note": "…" }],
+//     "flows": [{ "id": "…", "kind": "in|out|move", "what": "…", "amount": 0, "acc": "h1", "to": "b1", "day": 1, "months": [1, 7],
+//       "vary": "heat|cool", "home": true, "last": "ГГГГ-ММ" }], "home": { "payer": "h1" } } }
 // Каждая запись применяется один раз (на свою версию текста): что потом поправлено руками — не перезаписывается.
 
 import { restoreDates, setDaySummary } from './days.js';
@@ -20,6 +25,7 @@ import { innerSeed, profSeed } from './inner.js';
 import { prefsSeed } from './sim.js';
 import { lustSeed } from './lust.js';
 import { coreSeed } from './ooc.js';
+import { walletSeed } from './wallet.js';
 
 let A = null;
 export function initSeed(api) { A = api; }
@@ -60,7 +66,7 @@ export async function seedApply() {
         const doneG = new Set(Array.isArray(s.seedDone) ? s.seedDone : []);
         const doneC = new Set(Array.isArray(cm.seedDone) ? cm.seedDone : []);
         const chatId = String(A.ctx().chatId || A.ctx().getCurrentChatId?.() || '');
-        const res = { days: 0, feats: 0, dates: 0, life: 0 };
+        const res = { days: 0, feats: 0, dates: 0, life: 0, money: 0 };
         for (const { id, p } of list) {
             // общее (не к чату) — подвиги
             if (p.feats && typeof p.feats === 'object' && !doneG.has(id)) {
@@ -72,7 +78,7 @@ export async function seedApply() {
                 doneG.add(id);
             }
             // к чату — дни и даты; чужой чат — подождёт, пока откроешь свой
-            const LIFE_KEYS = ['johari', 'inner', 'prefs', 'lust', 'prof', 'core'];
+            const LIFE_KEYS = ['johari', 'inner', 'prefs', 'lust', 'prof', 'core', 'wallet'];
             if (!(p.chat || p.days || p.restoreDates || LIFE_KEYS.some(k => p[k])) || doneC.has(id)) continue;
             if (p.chat && A.norm(p.chat) !== A.norm(chatId)) continue;
             if (p.restoreDates) {
@@ -95,6 +101,7 @@ export async function seedApply() {
                 each(p.lust, lustSeed);
                 each(p.prof, profSeed);
                 each(p.core, coreSeed);
+                try { res.money += walletSeed(p.wallet, who) || 0; } catch (e) { console.warn('[Life] посев: счета', e); }
             }
             doneC.add(id);
         }
@@ -102,8 +109,8 @@ export async function seedApply() {
         s.seedDone = [...doneG].slice(-50);
         A.saveMeta();
         A.saveSettings();
-        if (!res.days && !res.feats && !res.dates && !res.life) return null;
-        A.toast('success', [res.dates ? `вернула даты Horae: ${res.dates}` : '', res.days ? `дни: ${res.days}` : '', res.feats ? `подвиги: ${res.feats}` : '', res.life ? `жизнь и узнавание: ${res.life}` : ''].filter(Boolean).join(' · '), '✦ Life — от Claude', { timeOut: 6000 });
+        if (!res.days && !res.feats && !res.dates && !res.life && !res.money) return null;
+        A.toast('success', [res.dates ? `вернула даты Horae: ${res.dates}` : '', res.days ? `дни: ${res.days}` : '', res.feats ? `подвиги: ${res.feats}` : '', res.life ? `жизнь и узнавание: ${res.life}` : '', res.money ? `счета и платежи: ${res.money}` : ''].filter(Boolean).join(' · '), '✦ Life — от Claude', { timeOut: 6000 });
         A.updatePrompt?.();
         A.render?.();
         return res;

@@ -4273,3 +4273,39 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 #lf-cc .lf-grp-f.muted span { text-decoration: line-through; text-decoration-color: rgba(var(--lf-rose-rgb), .7); }
 #lf-cc .lf-grp-f i { font-style: normal; font-size: 11px; }
 #lf-cc [data-grp-face] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* ───── 0.71: счета людей ───── */
+.lf-wl-accs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.lf-wl-acc { border-radius: 16px; border: 1px solid var(--lf-line); background: var(--lf-card); overflow: hidden; }
+.lf-wl-acc.lock { background: linear-gradient(135deg, rgba(var(--lf-wine2-rgb), .2), var(--lf-card)); }
+.lf-wl-acc.neg { border-color: rgba(255, 107, 121, .55); }
+.lf-wl-h { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 0; background: none; color: inherit; text-align: left; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.lf-wl-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; background: rgba(var(--lf-wine2-rgb), .32); }
+.lf-wl-t { flex: 1; min-width: 0; }
+.lf-wl-t b { display: block; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--lf-text); }
+.lf-wl-t small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--lf-dim); }
+.lf-wl-s { flex: none; font: 500 16px/1 var(--lf-serif); color: var(--lf-text); font-variant-numeric: tabular-nums; }
+.lf-wl-acc.neg .lf-wl-s { color: #ff8a98; }
+.lf-wl-note { padding: 0 12px 8px 62px; font-size: 12px; line-height: 1.4; color: var(--lf-text2); }
+.lf-wl-fl { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 12px 10px 62px; }
+.lf-wl-fl.phone { padding: 4px 0 6px; }
+.lf-wl-fl button { max-width: 100%; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--lf-line2); background: rgba(255, 255, 255, .03); color: var(--lf-text2); font: 11.5px/1.3 var(--lf-sans); text-align: left; cursor: pointer; }
+.lf-wl-jr { padding: 0 12px; }
+.lf-wl-acc .lf-actions { padding: 8px 12px 12px; flex-wrap: wrap; }
+.lf-wl-payer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lf-wl-payer small { flex: 1 1 160px; font-size: 12px; color: var(--lf-dim); }
+.lf-wl-guard { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(232, 164, 106, .5); background: rgba(232, 164, 106, .08); font-size: 12.5px; line-height: 1.4; color: var(--lf-text); }
+.lf-wl-guard span { flex: 1; }
+.lf-wl-guard .lf-btn { flex: none; }
+.lf-wl-est { margin: 8px 0; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--lf-line); opacity: .55; }
+.lf-wl-est.on { opacity: 1; border-color: rgba(var(--lf-rose2-rgb), .4); }
+.lf-wl-est-h { display: block; width: 100%; padding: 2px 0 6px; border: 0; background: none; color: var(--lf-text); text-align: left; font: 600 14px var(--lf-sans); cursor: pointer; }
+.lf-wl-est-r { display: block; padding: 3px 0; font-size: 12.5px; line-height: 1.35; color: var(--lf-text2); }
+.lf-wl-est-r small { display: block; font-size: 11px; color: var(--lf-dim); }
+.lf-wl-est-r.btn { width: 100%; text-align: left; border: 0; background: none; font: 12.5px/1.35 var(--lf-sans); color: var(--lf-text2); cursor: pointer; opacity: .55; }
+.lf-wl-est-r.btn.on { opacity: 1; color: var(--lf-text); }
+.lf-bl .lf-chip.small { flex: none; max-width: 104px; padding: 4px 8px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lf-app input[type="number"] { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--lf-line2); background: rgba(0, 0, 0, .22); color: var(--lf-text); font: 16px var(--lf-sans); outline: none; -webkit-appearance: none; appearance: none; -moz-appearance: textfield; }
+#lf-app input[type="number"]:focus { border-color: rgba(var(--lf-rose-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--lf-wine2-rgb), .3); }
+.lf-wl-fl button { border-radius: 12px; }
+.lf-wl-hf { padding: 0 12px 10px 62px; font-size: 11.5px; line-height: 1.4; color: var(--lf-dim); }

@@ -5,9 +5,12 @@
 // В срок списывается сам (если включено и хватает денег); не хватило — просрочка: через 5 дней пеня, через три
 // недели коммуналку отключают, пока не оплатят. Покупки быта (продукты, прачечная) копятся чеками за день и уходят
 // в банк одной строкой, когда день истории кончился. Без Телефона (1940-е) — платят наличными: всё то же, без банка.
+// 0.71: если у людей заведены счета (wallet.js) — счёт платит тот, кого выбрали (по умолчанию — кто платит за дом),
+// чеки быта — с карты того, кто покупал; коммуналку тогда ведут платежи дома по сезону, почта её не шлёт.
 
 import { storyDay, str, arr, clamp } from './hudkit.js';
 import { moneyView, addTx, bank, bankNow } from './money.js';
+import { walletReady, walletPay, walletPayer, walletBal, walletMainOf, walletHomeText, walletUtilOn, walletAccName, walletPick } from './wallet.js';
 
 let A = null;
 export function initBills(api) { A = api; }
@@ -60,7 +63,8 @@ const unpaid = () => M().list.filter(x => x.st !== 'paid');
 
 let busy = false;
 
-async function fetchMail(util, weeks = 1) {
+async function fetchMail(utilAsk, weeks = 1) {
+    let util = utilAsk;
     if (busy) return 0;
     busy = true;
     try {
@@ -75,7 +79,8 @@ async function fetchMail(util, weeks = 1) {
         try { days = A.daysBrief?.() || ''; } catch { /* */ }
         let place = '';
         try { place = A.homeLoc?.() || st?.scene?.location || ''; } catch { /* */ }
-        const rec = (mv?.bills || []).map(b => `${b.name} ${b.sum}`).join('; ');
+        const rec = [...(mv?.bills || []).map(b => `${b.name} ${b.sum}`), walletHomeText()].filter(Boolean).join('; ');
+        if (walletUtilOn()) util = false;
         const prev = new Date(fromYmd(t)); prev.setMonth(prev.getMonth() - 1);
         const MON = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
         const sys = `Ты ведёшь бытовую бухгалтерию ролевой истории: какие счета пришли по почте (или в приложение) — правдоподобно для места и года. Ответ — строго один JSON по-русски: {"bills":[{"what":"за что, 2-6 слов","amount":0,"kind":"util|repair|vet|fine|medical|sub|gift|other","due_in":10,"note":"почему такая сумма, 3-10 слов, или пусто"}]}.
@@ -108,7 +113,7 @@ function mailDue() {
     if (!t) return null;
     if (!s.lastMail) { s.lastMail = t; s.lastUtil = t.slice(0, 7); A.saveMeta(); return null; }
     const d = daysBetween(s.lastMail, t);
-    const util = cfg().util && s.lastUtil && t.slice(0, 7) > s.lastUtil;
+    const util = cfg().util && !walletUtilOn() && s.lastUtil && t.slice(0, 7) > s.lastUtil;
     if (d < 7 && !util) return null;
     if (d < 0) { s.lastMail = t; return null; }   // ушли в прошлое (флешбек) — не трогаем
     return { util: !!util, weeks: Math.max(1, Math.floor(d / 7)), mail: cfg().mail && d >= 7 };
@@ -118,6 +123,11 @@ function mailDue() {
 
 function pay(x, how = 'tap') {
     const t = today();
+    if (walletReady()) {
+        if (!x.tx) { const r = walletPay(x.acc || walletPayer(), x.amount, x.what, x.kind === 'util' ? 'счета' : KIND[x.kind][0].toLowerCase(), 'bill', x.id); if (r.ok) { x.tx = true; x.acc = r.acc; } }
+        x.st = 'paid'; x.paidOn = t || ''; x.how = how;
+        return;
+    }
     const bk = !!bankNow();
     // одна строка в банке на счёт: откат свайпом и повторная оплата не списывают второй раз
     if (bk && !x.tx) { try { addTx({ amount: -x.amount, label: x.what, category: x.kind === 'util' ? 'счета' : KIND[x.kind][0].toLowerCase() }); x.tx = true; } catch (e) { console.warn('[Life] счёт → банк', e); } }
@@ -133,11 +143,11 @@ export async function billsSweep() {
     const s = M();
     const c = cfg();
     const out = [];
-    const bal = () => { const v = moneyView(); return v ? Number(v.balance) || 0 : Infinity; };
+    const bal = (x) => { if (walletReady()) return walletBal(x.acc || walletPayer()); const v = moneyView(); return v ? Number(v.balance) || 0 : Infinity; };
     for (const x of s.list) {
         if (x.st === 'paid' || !x.due) continue;
         const late = daysBetween(x.due, t);
-        if (late >= 0 && x.st === 'new' && c.autopay && bal() >= x.amount) { pay(x, 'auto'); out.push(`списано: ${x.what} ${fmt(x.amount)}`); continue; }
+        if (late >= 0 && x.st === 'new' && c.autopay && bal(x) >= x.amount) { pay(x, 'auto'); out.push(`списано: ${x.what} ${fmt(x.amount)}`); continue; }
         if (late > 0 && x.st === 'new') { x.st = 'overdue'; out.push(`просрочен: ${x.what}`); }
         if (late >= 5 && !x.fee && x.st !== 'paid') { x.fee = Math.max(1, Math.round(x.amount * 0.1)); x.amount = Math.round((x.amount + x.fee) * 100) / 100; out.push(`пеня: ${x.what} +${fmt(x.fee)}`); }
         if (late >= 21 && x.kind === 'util' && x.st === 'overdue') { x.st = 'cut'; out.push(`отключили: ${x.what}`); }
@@ -146,6 +156,16 @@ export async function billsSweep() {
     const days = [...new Set(s.spend.filter(x => !x.done && x.day && x.day < t).map(x => x.day))];
     for (const d of days) {
         const list = s.spend.filter(x => !x.done && x.day === d);
+        if (walletReady() && c.spend) {
+            const by = new Map();
+            for (const x of list) { const acc = walletMainOf(x.who) || walletPayer(); if (!by.has(acc)) by.set(acc, []); by.get(acc).push(x); }
+            for (const [acc, l] of by) {
+                const sum = Math.round(l.reduce((a, x) => a + x.amount, 0) * 100) / 100;
+                if (acc && sum > 0) walletPay(acc, sum, `Быт ${dmy(d)}: ${[...new Set(l.map(x => x.what))].join(', ')}`, 'быт', 'house', d);
+                for (const x of l) x.done = 'wallet';
+            }
+            continue;
+        }
         const sum = Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) / 100;
         const bk = !!bankNow() && c.spend;
         if (bk && sum > 0) { try { addTx({ amount: -sum, label: `Быт ${dmy(d)}: ${[...new Set(list.map(x => x.what))].join(', ')}`, category: 'быт' }); } catch (e) { console.warn('[Life] чеки → банк', e); } }
@@ -217,7 +237,8 @@ export function billsPrompt(type) {
     if (late.length && n % 3 === 0) out.push(`[Просрочено: ${late.map(x => `${x.what} ${fmt(x.amount)}${x.fee ? ' (уже с пеней)' : ''}`).join('; ')}. Приходят напоминания, звонят.]`);
     const v = moneyView();
     const owe = unpaid().reduce((a, x) => a + x.amount, 0);
-    if (v && owe > 0 && Number(v.balance) < owe && n % 3 === 0) out.push(`[Денег впритык: на счету ${v.balanceText}, а к оплате ${fmt(owe)}.]`);
+    if (walletReady()) { const b = walletBal(walletPayer()); if (owe > 0 && b < owe && n % 3 === 0) out.push(`[Денег впритык: на счету «${walletAccName(walletPayer())}» ${fmt(b)}, а к оплате ${fmt(owe)}.]`); }
+    else if (v && owe > 0 && Number(v.balance) < owe && n % 3 === 0) out.push(`[Денег впритык: на счету ${v.balanceText}, а к оплате ${fmt(owe)}.]`);
     return out.join('\n');
 }
 
@@ -247,10 +268,11 @@ export function billsHtml() {
     const spend = s.spend.filter(x => !x.done);
     const owe = open.reduce((a, x) => a + x.amount, 0);
     const c = cfg();
-    const row = (x) => `<div class="lf-bl ${x.st}"><span class="lf-bl-ic">${KIND[x.kind][1]}</span><span class="lf-bl-t"><b>${esc(x.what)}</b><small>${esc(stTxt(x, t))}${x.note ? ` · ${esc(x.note)}` : ''}</small></span><span class="lf-bl-s">${esc(fmt(x.amount))}</span>${x.st === 'paid' ? '' : `<button class="lf-btn small primary" data-act="bl-pay" data-id="${x.id}">Оплатить</button>`}<button class="lf-iconbtn" data-act="bl-del" data-id="${x.id}" title="убрать">${A.icon('x')}</button></div>`;
+    const wl = walletReady();
+    const row = (x) => `<div class="lf-bl ${x.st}"><span class="lf-bl-ic">${KIND[x.kind][1]}</span><span class="lf-bl-t"><b>${esc(x.what)}</b><small>${esc(stTxt(x, t))}${x.note ? ` · ${esc(x.note)}` : ''}</small></span><span class="lf-bl-s">${esc(fmt(x.amount))}</span>${wl ? `<button class="lf-chip small" data-act="bl-payer" data-id="${x.id}" title="кто платит">${esc(walletAccName(x.acc || walletPayer()))}</button>` : ''}${x.st === 'paid' ? '' : `<button class="lf-btn small primary" data-act="bl-pay" data-id="${x.id}">Оплатить</button>`}<button class="lf-iconbtn" data-act="bl-del" data-id="${x.id}" title="убрать">${A.icon('x')}</button></div>`;
     return `${A.sec('Счета', open.length ? `к оплате ${fmt(owe)}` : 'всё оплачено')}
     ${open.length ? `<div class="lf-bls">${open.map(row).join('')}</div>` : '<div class="lf-hint">Почта приходит раз в неделю истории, коммуналка — в начале месяца. Пока к оплате ничего.</div>'}
-    ${spend.length ? `${A.sec('Чеки за сегодня', fmt(spend.reduce((a, x) => a + x.amount, 0)))}<div class="lf-bls">${spend.map(x => `<div class="lf-bl"><span class="lf-bl-ic">🧾</span><span class="lf-bl-t"><b>${esc(x.what)}</b><small>${x.who ? esc(A.shortName(x.who)) : ''}${bankNow() ? ' · спишется одной строкой, когда день кончится' : ' · наличными'}</small></span><span class="lf-bl-s">${esc(fmt(x.amount))}</span><button class="lf-iconbtn" data-act="bl-sdel" data-id="${x.id}">${A.icon('x')}</button></div>`).join('')}</div>` : ''}
+    ${spend.length ? `${A.sec('Чеки за сегодня', fmt(spend.reduce((a, x) => a + x.amount, 0)))}<div class="lf-bls">${spend.map(x => `<div class="lf-bl"><span class="lf-bl-ic">🧾</span><span class="lf-bl-t"><b>${esc(x.what)}</b><small>${x.who ? esc(A.shortName(x.who)) : ''}${wl ? ` · спишется с «${esc(walletAccName(walletMainOf(x.who) || walletPayer()))}», когда день кончится` : bankNow() ? ' · спишется одной строкой, когда день кончится' : ' · наличными'}</small></span><span class="lf-bl-s">${esc(fmt(x.amount))}</span><button class="lf-iconbtn" data-act="bl-sdel" data-id="${x.id}">${A.icon('x')}</button></div>`).join('')}</div>` : ''}
     ${paid.length ? `<details class="lf-more"><summary>Оплачено недавно — ${paid.length}</summary><div class="lf-bls">${paid.map(row).join('')}</div></details>` : ''}
     <div class="lf-actions tight"><button class="lf-btn" data-act="bl-mail">${A.icon('mail')} Проверить почту</button><button class="lf-btn ghost" data-act="bl-add">${A.icon('plus')} Свой счёт</button></div>
     <div class="lf-chips wrap"><button class="lf-chip${c.autopay ? ' on' : ''}" data-act="bl-set" data-k="autopay">платить самим в срок</button><button class="lf-chip${c.mail ? ' on' : ''}" data-act="bl-set" data-k="mail">почта раз в неделю</button><button class="lf-chip${c.util ? ' on' : ''}" data-act="bl-set" data-k="util">коммуналка раз в месяц</button><button class="lf-chip${c.spend ? ' on' : ''}" data-act="bl-set" data-k="spend">чеки быта — в банк</button></div>`;
@@ -262,6 +284,7 @@ export async function billsClick(act, el) {
     const x = s.list.find(y => y.id === el.dataset.id);
     switch (act) {
         case 'bl-pay': if (x) { await bank(); pay(x); } break;
+        case 'bl-payer': if (x && x.st !== 'paid') walletPick('Кто платит', x.acc || walletPayer(), (id) => { x.acc = id; A.saveMeta(); A.render(); }); return true;
         case 'bl-del': if (x) s.list = s.list.filter(y => y !== x); break;
         case 'bl-sdel': s.spend = s.spend.filter(y => y.id !== el.dataset.id); break;
         case 'bl-set': { const c = cfg(); c[el.dataset.k] = !c[el.dataset.k]; A.saveSettings(); break; }

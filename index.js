@@ -120,6 +120,7 @@ import { initCodex, codexHtml, codexClick, codexReady, codexBehind, codexText, c
 import { initPanel, trackersBar, panelClick, openTracker, addTracker } from './panel.js';
 import { initHouse, housePrompt, houseChron, houseAfterPost, houseHtml, houseClick, houseRecs, houseState, houseIrritants } from './house.js';
 import { initBills, billsPrompt, billsChron, billsAfterPost, billsHtml, billsClick, billsRecs, billsSpend, billsSweep, billsCalEvents, billsIrritants, billsState } from './bills.js';
+import { initWallet, walletPrompt, walletChron, walletAfterPost, walletRecs, walletCalEvents, walletPersonHtml, walletPhoneLine, walletHomeHtml, walletClick, walletSoon, walletSweep, walletHas, walletState } from './wallet.js';
 import { initBicker, bickerPrompt, bickerChron, bickerAfterPost, bickerHtml, bickerClick, bickerInput, bickerRecs, bickerState, partner as bickerPartner } from './bicker.js';
 import { homeBroken, sleepDebtOf } from './home.js';
 // мост: органы чувств для соседних расширений (код-мозг)
@@ -158,7 +159,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.70.1';
+const VERSION = '0.71.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -967,7 +968,7 @@ function moveNote(mark) {
 }
 
 let promptParts = [];
-const BRIDGE_NAMES = { brain: 'код-мозг', 'life-cowriter': 'соавтор', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были', 'life-walls': 'глухие стены: пока тебя не было' };
+const BRIDGE_NAMES = { brain: 'код-мозг', 'life-cowriter': 'соавтор', 'life-heroes': 'герои', 'life-arm': 'рука', 'life-arc': 'сюжетка', 'life-stones': 'Камни', 'life-habits': 'привычки', 'life-crowd': 'массовка', 'life-trig': 'триггеры', 'life-shards': 'осколки памяти', 'life-johari': 'узнавание', 'life-stage': 'мизансцена', 'life-cal': 'календарь', 'life-steps': 'прожитое', 'life-ritual': 'своё', 'life-stance': 'позиции и споры', 'life-voice': 'голос', 'life-echo': 'эхо решений', 'life-canon': 'канон', 'life-lang': 'языки', 'life-ooc': 'ядро характера', 'life-hurt': 'травмы', 'life-call': 'звонок', 'life-see': 'покажи им', 'life-route': 'дорога', 'life-season': 'сезон', 'life-who': 'кто где', 'life-hand': 'почерк', 'life-belly': 'срок', 'life-taste': 'вкус: правила, образцы, темп, нити', 'life-smell': 'запахи', 'life-fight': 'бой', 'life-duel': 'словесная дуэль', 'life-bets': 'пари', 'life-under': 'под словами', 'life-heat': 'близость и следы', 'life-scars': 'шрамы доверия', 'life-diary': 'дневник и сны', 'life-brew': 'назревает', 'life-fac': 'репутация', 'life-know': 'кто что знает', 'life-dice': 'кубик близости', 'life-city': 'город сегодня', ht: 'праздники', 'life-pair': 'тропы и хедканоны', 'life-home': 'быт', 'life-powers': 'способности и эффекты', 'life-stats': 'свои статы', 'life-cue': 'твои команды', 'life-lust': 'близость: тела и вкусы', 'life-inv': 'приглашения', 'life-house': 'дом', 'life-bills': 'счета', 'life-wallet': 'деньги: у каждого свои счета', 'life-bicker': 'перепалки', 'life-pm': 'картинки: под какую рисовалку писать промт', 'life-dp': 'оператор: плёнка, свет сцены, какие кадры уже были', 'life-walls': 'глухие стены: пока тебя не было' };
 function updateMovePrompt(type, consume = false) {
     const c = ctx();
     const p = settings().enabled ? pendingMarker() : null;
@@ -2525,10 +2526,11 @@ function renderPerson() {
     if (bm) { let body = ''; try { body = bm.renderPerson?.(who.slice(bm.id.length + 1)) || ''; } catch (e) { console.warn(`[Life] ${bm.id}`, e); body = `<div class="lf-empty small">${esc(String(e?.message || e))}</div>`; } return `${people}${body}`; }
     if (petMode) return `${people}${renderPet(who.slice(4))}`;
     const me = sameName(who, ctx().name1);
-    if (ui.pTab === 'money' && !me) ui.pTab = 'life';
-    const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(me ? [['money', 'Деньги']] : [])];
+    const money = me || walletHas(who);
+    if (ui.pTab === 'money' && !money) ui.pTab = 'life';
+    const tabList = [['life', 'Жизнь'], ['wardrobe', 'Гардероб'], ['items', 'Вещи'], ['garage', 'Гараж'], ['rel', 'Связи'], ...(money ? [['money', 'Деньги']] : [])];
     const tabs = seg(tabList, ui.pTab, 'p-tab').replace('lf-seg', `lf-seg${tabList.length > 5 ? ' many' : ''}`);
-    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney() : renderItems(who, st);
+    const body = ui.pTab === 'life' ? `${(() => { try { return emoStripHtml(who); } catch (e) { console.warn('[Life] лица', e); return ''; } })()}${renderLife(who)}` : ui.pTab === 'wardrobe' ? renderWardrobe(who, st) : ui.pTab === 'garage' ? renderGarage(who, st) : ui.pTab === 'rel' ? renderRelations(who, st) : ui.pTab === 'money' ? renderMoney(who) : renderItems(who, st);
     return `${people}${tabs}${body}`;
 }
 
@@ -2810,31 +2812,38 @@ function triKeepNote(box) {
 
 // ───── Деньги (банк Телефона) ─────
 
-function renderMoney() {
+function renderMoney(who = canonName(ctx().name1)) {
+    const safe = (f, what) => { try { return f() || ''; } catch (e) { console.warn(`[Life] ${what}`, e); return ''; } };
+    if (!sameName(who, ctx().name1)) return safe(() => walletPersonHtml(who), 'счета') || '<div class="lf-empty small">Счетов нет.</div>';
     const v = moneyView();
     if (!v) {
         const stt = bankState();
         if (stt === 'wait') bank().then(() => { if (ui.open && ui.pTab === 'money') render(); });
-        return `<div class="lf-empty small">${icon('smartphone', 'xl')}Банк живёт в Телефоне (Phone-ST). ${stt === 'none' ? 'Телефон не найден — без него денег нет.' : 'Ищу его…'}</div>`;
+        return `<div class="lf-empty small">${icon('smartphone', 'xl')}Банк живёт в Телефоне (Phone-ST). ${stt === 'none' ? 'Телефон не найден — карта без него не живёт; остальные счета — ниже.' : 'Ищу его…'}</div>${safe(() => walletPersonHtml(who), 'счета')}${safe(() => walletHomeHtml(), 'платежи дома')}${safe(() => billsHtml(), 'счета почты')}`;
     }
     const s = settings();
     const billIc = (c) => /аренд|кварт|жиль/i.test(c) ? 'home' : /свет|газ|вод|коммун|счета/i.test(c) ? 'zap' : /связ|телефон|интернет/i.test(c) ? 'smartphone' : /подпис/i.test(c) ? 'music' : /машин|авто|страх/i.test(c) ? 'car' : 'calendar';
     const stTxt = (b) => b.state === 'paid' ? 'оплачено' : b.state === 'overdue' ? 'просрочено' : b.state === 'due' ? 'пора платить' : b.left != null ? `через ${b.left} ${plural(b.left, 'день', 'дня', 'дней')}` : `${b.day}-го`;
+    // платежи в самом Телефоне — показываю, если они есть или счетов людей нет (иначе платежи дома живут в счетах)
+    const phoneBills = v.bills.length > 0 || !walletHas(who);
     return `<section class="lf-bank${v.balance < 0 ? ' neg' : ''}">
         <span class="lf-bank-k">Счёт ${esc(shortName(canonName(ctx().name1)))}${v.date ? ` · на ${esc(v.date)}` : ''}</span>
         <b class="lf-bank-sum">${esc(v.balanceText)}</b>
         <div class="lf-bank-row"><span>${icon('plus')} ${esc(v.income)}</span><span>${icon('activity')} ${esc(v.expense)}</span>${v.debt ? `<span>${icon('lock')} долг ${esc(v.debt)}</span>` : ''}</div>
         <button class="lf-glass" data-act="money-phone">${icon('smartphone')} В телефоне</button>
     </section>
-    ${sec('Обязательные платежи', v.bills.length ? `${esc(v.monthly)} в месяц` : '')}
+    ${safe(() => walletPhoneLine(), 'счета')}
+    ${safe(() => (walletHas(who) ? walletPersonHtml(who, { skipPhone: true }) : ''), 'счета')}
+    ${safe(() => walletHomeHtml(), 'платежи дома')}
+    ${phoneBills ? `${sec('Обязательные платежи в Телефоне', v.bills.length ? `${esc(v.monthly)} в месяц` : '')}
     ${v.bills.length ? `<div class="lf-bills">${v.bills.map(b => `<div class="lf-bill ${b.state}">
         <span class="lf-bill-ic">${icon(billIc(`${b.category} ${b.name}`))}</span>
         <span class="lf-bill-t"><b>${esc(b.name)}</b><small>${b.day}-го числа · ${stTxt(b)}</small></span>
         <span class="lf-bill-s">${esc(b.sum)}</span>
         ${b.state === 'due' || b.state === 'overdue' ? `<button class="lf-btn small primary" data-act="bill-pay" data-id="${esc(b.id)}">Оплатить</button>` : `<button class="lf-iconbtn" data-act="bill-del" data-id="${esc(b.id)}" title="Убрать">${icon('x')}</button>`}
     </div>`).join('')}</div>` : '<div class="lf-empty small">Счетов пока нет: аренда, свет, связь, страховка — добавь, и они будут списываться сами.</div>'}
-    <button class="lf-btn full" data-act="bill-add">${icon('plus')} Добавить платёж</button>
-    ${(() => { try { return billsHtml(); } catch (e) { console.warn('[Life] счета', e); return ''; } })()}
+    <button class="lf-btn full" data-act="bill-add">${icon('plus')} Добавить платёж</button>` : ''}
+    ${safe(() => billsHtml(), 'счета')}
     ${v.loans.length ? `${sec('Кредиты')}<div class="lf-bills">${v.loans.map(l => `<div class="lf-bill ${l.state}"><span class="lf-bill-ic">${icon('lock')}</span><span class="lf-bill-t"><b>${esc(l.name)}</b><small>осталось ${esc(l.remaining)} · ${esc(l.monthly)} ${l.day}-го</small></span>${l.state === 'due' || l.state === 'overdue' ? `<button class="lf-btn small primary" data-act="loan-pay" data-id="${esc(l.id)}">Платёж</button>` : `<span class="lf-bill-s">${l.state === 'paid' ? 'оплачено' : ''}</span>`}</div>`).join('')}</div>` : ''}
     <label class="lf-switch"><input type="checkbox" data-set="money.autopay" ${s.money.autopay ? 'checked' : ''}><span></span>Списывать сами в день оплаты ${v.hasDate ? '' : '<small>(нет даты истории — ждём её)</small>'}</label>
     ${sec('Операции')}
@@ -2852,6 +2861,7 @@ function billSheet() {
 }
 
 async function runAutopay() {
+    try { if (settings().enabled && hasChat()) { await bank(); walletSweep(); } } catch (e) { console.warn('[Life] счета: по графику', e); }
     if (!settings().money.autopay || !settings().enabled || !hasChat()) return;
     if (!(await bank())) return;
     const paid = autopay();
@@ -4346,7 +4356,8 @@ function onChatChanged() {
     // ядро «Священный таймлайн»: облик людей на дату и правки персоны эпохи (оно само переключается чуть позже)
     for (const ms of [1500, 6000]) setTimeout(() => { coreRefresh(true).catch(e => console.warn('[Life] ядро таймлайна', e)); }, ms);
     // посев «от Claude» (лорбук на сервере): дни, подвиги — один раз на версию
-    setTimeout(() => { seedApply().catch(e => console.warn('[Life] посев', e)); }, 9000);
+    setTimeout(() => { seedApply().catch(e => console.warn('[Life] посев', e)).then(() => { try { walletSweep(); walletSoon(400); } catch (e) { console.warn('[Life] счета', e); } }); }, 9000);
+    walletSoon(3200);
     setTimeout(() => { try { if (claimEra() && ui.open) renderSoon(); } catch (e) { console.warn('[Life] эпохи', e); } }, 7000);
     setTimeout(() => { try { canonEnsure(); } catch (e) { console.warn('[Life] канон', e); } }, 7000);
     setTimeout(() => { try { oocEnsure(); } catch (e) { console.warn('[Life] ядро', e); } }, 12000);
@@ -4939,11 +4950,14 @@ jQuery(async () => {
         initBills({ ...extApi, homeBroken: () => homeBroken(), petsList: () => simPetsList(), homeLoc: () => simHomeLoc(), daysBrief, push: (o) => pushBanner(o), openBills: () => { openHub(); setTimeout(() => openTracker('bills'), 120); } });
         initBicker({ ...extApi, cueArm, cueHas, cueChip, cueStripHtml, coreOf: (w) => coreOf(w), habitsOf: (w) => habitsOf(w), houseState: () => houseState(), houseIrritants: (P) => houseIrritants(P), billsIrritants: () => billsIrritants(),
             sleepDebt: (w) => sleepDebtOf(w), homeLoc: () => simHomeLoc(), modesOn: () => modesOn(), onceArmed: () => onceArmed(), twistArmed: () => twistArmed(), dramaState: () => dramaState(), moodNow, daysBrief });
-        hubMods.push({ pre: 'hs-', click: houseClick, label: 'Дом' }, { pre: 'bl-', click: billsClick, label: 'Счета' }, { pre: 'bk-', click: bickerClick, label: 'Перепалки' });
+        // 0.71: у каждого свои счета (карта Хеди — банк Телефона); платежи дома; траты из истории; свайп не списывает дважды
+        initWallet({ ...extApi, cardText: (w, n) => cardText(w, n), loreFor: (w, o) => loreFor(w, o), namesInText, push: (o) => pushBanner(o), openMoney: () => controlApi.openMoney(), renderSoon });
+        hubMods.push({ pre: 'hs-', click: houseClick, label: 'Дом' }, { pre: 'bl-', click: billsClick, label: 'Счета' }, { pre: 'bk-', click: bickerClick, label: 'Перепалки' }, { pre: 'wl-', click: walletClick, label: 'Счета людей' });
         hubInputs.push((el) => bickerInput(el));
-        addRecs(houseRecs, billsRecs, bickerRecs);
+        addRecs(houseRecs, billsRecs, bickerRecs, walletRecs);
         B3.register({ id: 'life-house', prompt: (type) => housePrompt(type), chron: (i) => houseChron(i), afterPost: (i, j) => houseAfterPost(i, j) });
         B3.register({ id: 'life-bills', prompt: (type) => billsPrompt(type), chron: () => billsChron(), afterPost: (i, j) => billsAfterPost(i, j), calEvents: (from, to) => billsCalEvents(from, to) });
+        B3.register({ id: 'life-wallet', prompt: (type) => walletPrompt(type), chron: (i) => walletChron(i), afterPost: (i, j, m) => walletAfterPost(i, j, m), calEvents: (from, to) => walletCalEvents(from, to) });
         B3.register({ id: 'life-bicker', prompt: (type) => bickerPrompt(type), chron: (i) => bickerChron(i), afterPost: (i, j) => bickerAfterPost(i, j) });
         setTimeout(() => { billsSweep().catch(e => console.warn('[Life] счета', e)); }, 8000);
         const cmx = () => chatMeta();
@@ -4957,7 +4971,7 @@ jQuery(async () => {
             { id: 'bets', ico: '🎲', name: 'Пари', on: sOn('bets'), hint: 'Летописец сам замечает пари: кто с кем, на что, что на кону. Проигравший должен, пока не тапнешь «отдал».', idle: 'Открытых пари нет.', state: () => cnt((cmx().bets?.list || []).filter(x => x.st === 'open' || (!x.paid && x.stake)).length), html: () => betsSceneHtml() },
             { id: 'heat', ico: '🔥', name: 'Близость', on: sOn('heat'), hint: '18+. Ход сцены, тела, следы — сами; ниже пульт: твой тап уходит в промпт.', idle: 'Сцена не идёт, следов нет — но пульт работает и заранее.', state: () => (cmx().heat?.cur ? 'идёт' : cnt((cmx().heat?.marks || []).length)), html: () => `${heatSceneHtml()}${lustSceneHtml()}${diceSceneHtml()}`, extra: () => `${cmx().dice?.cur ? '' : '<button class="lf-btn full" data-act="dc-roll">🎲 Бросить кубик близости</button>'}${lustPultHtml()}` },
             { id: 'bicker', ico: '🙄', name: 'Перепалки', on: sOn('bicker'), hint: 'Он с тобой ссориться не любит и уходит от конфликта — пока ты не доведёшь. Терпение, поводы, вечные темы; Life сама иногда подкидывает мелочь.', state: () => bickerState(), html: () => bickerHtml() },
-            { id: 'bills', ico: '📨', name: 'Счета', on: sOn('bills'), hint: 'Почта раз в неделю истории, коммуналка в начале месяца, чеки быта за день. В срок — списывается сам; не хватило денег — просрочка, пеня, а там и отключат.', state: () => { const b = billsState(); return b.cut ? '!' : cnt(b.open); }, html: () => billsHtml() },
+            { id: 'bills', ico: '📨', name: 'Счета', on: sOn('bills'), hint: 'Почта раз в неделю истории, коммуналка в начале месяца, чеки быта за день. В срок — списывается сам; не хватило денег — просрочка, пеня, а там и отключат.', state: () => { const b = billsState(); return b.cut || walletState().neg ? '!' : cnt(b.open); }, html: () => `${walletHomeHtml()}${billsHtml()}` },
             { id: 'home', ico: '🔧', name: 'Быт', on: sOn('home'), hint: 'Дом сам пылится и пустеет по времени истории; что сломано, кто кому должен, недосып, кто одет не по погоде; действующие эффекты.', idle: 'Ничего не сломано, долгов нет.', state: () => cnt(houseState().filter(x => x.lvl >= 2).length + (cmx().home?.broken || []).filter(x => !x.fixed).length + (cmx().home?.debts || []).filter(x => !x.paid).length), html: () => `${houseHtml()}${homeSceneHtml()}${powersSceneHtml()}` },
             { id: 'stats', ico: '📈', name: 'Свои статы', on: sOn('stats'), hint: 'Придумай показатель — «Ревность», «Подозрения Тони» — Летописец будет вести его после каждого поста.', idle: 'Пока ни одного.', state: () => cnt((cmx().stats?.defs || []).length), html: () => statsSceneHtml(), extra: () => ((cmx().stats?.defs || []).length ? '' : statsAddHtml()) },
             { id: 'inv', ico: '✉', name: 'Приглашения', on: sOn('inv'), hint: 'Кто куда позвал и ждёт ответа. Принятое помнится до дня; обещала и не пришла — он задет.', idle: 'Никто никуда не звал.', state: () => cnt((cmx().inv?.list || []).filter(x => ['open', 'yes', 'missed'].includes(x.st)).length), html: () => invSceneHtml() },
@@ -4987,6 +5001,8 @@ jQuery(async () => {
     for (const ev of [E.MESSAGE_SWIPED, E.MESSAGE_EDITED, E.MESSAGE_DELETED, E.MESSAGE_UPDATED, E.MORE_MESSAGES_LOADED, E.USER_MESSAGE_RENDERED]) if (ev) eventSource.on(ev, later);
     // свайпнула — отложенное чтение того варианта не нужно; удалили пост — номера съехали, таймеры по старым номерам снять
     if (E.MESSAGE_SWIPED) eventSource.on(E.MESSAGE_SWIPED, (id) => { cancelChron(Number(id)); paintChips(); });
+    // 0.71: деньги живут, пока пост в чате; Телефон не списывает дважды за отвергнутый вариант
+    for (const [ev, ms] of [[E.MESSAGE_SWIPED, 700], [E.MESSAGE_DELETED, 700], [E.MESSAGE_EDITED, 900], [E.MESSAGE_RECEIVED, 1500], [E.GENERATION_ENDED, 1600], [E.GENERATION_STOPPED, 1600]]) if (ev) eventSource.on(ev, () => { try { walletSoon(ms); } catch { /* */ } });
     // поправила пост модели руками — «Вкус» учится на правке
     if (E.MESSAGE_EDITED) eventSource.on(E.MESSAGE_EDITED, (id) => { try { tasteEdited(Number(id)); } catch (e) { console.warn('[Life] вкус: правка', e); } });
     if (E.MESSAGE_DELETED) eventSource.on(E.MESSAGE_DELETED, () => { cancelChronAll(); chronForget(); setTimeout(() => { try { if (shotsHeal()) paintChips(); } catch (e) { console.warn('[Life] кадры после удаления', e); } }, 600); });
