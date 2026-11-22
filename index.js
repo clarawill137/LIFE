@@ -161,7 +161,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.72.0';
+const VERSION = '0.73.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4295,7 +4295,7 @@ function registerSlash() {
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'life',
             helpString: 'Life: без аргумента — открыть хаб; cc — пульт; map / person / people / world — вкладка; chron — Летописец по последнему посту; fix — дописать оборванный последний пост; pm — окно промта последней картинки (pm log — журнал кнопок картинок); redraw — перерисовать её; reshoot — оператор переснимет её кадр и нарисует; twist [past|danger|work|guest|secret|drama|body|home|strange|luck|chaos|off] — твист на следующий ответ; theme [graphite|paper|moon|off] — тема; on / off — включить или выключить.',
-            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | nav | pm | redraw | reshoot | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
+            unnamedArgumentList: [SlashCommandArgument.fromProps({ description: 'cc | nav | pm | redraw | reshoot | live | personas | books | exts | link | map | person | world | chron | theme | on | off', typeList: [ARGUMENT_TYPE.STRING], isRequired: false })],
             callback: async (_a, value) => {
                 const v = String(value || '').trim().toLowerCase();
                 if (v === 'on' || v === 'off') { setEnabled(v === 'on'); toast('info', v === 'on' ? 'Life включён' : 'Life выключен — чат как обычно'); return ''; }

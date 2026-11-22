@@ -4583,3 +4583,28 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 .lf-rd-line i { color: var(--lf-dim); }
 #lf-app .lf-ar-find input[type="search"] { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--lf-line2); background: rgba(0, 0, 0, .22); color: var(--lf-text); font: 15px var(--lf-sans); outline: none; -webkit-appearance: none; appearance: none; }
 #lf-app .lf-ar-find input[type="search"]:focus { border-color: rgba(var(--lf-rose-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--lf-wine2-rgb), .3); }
+/* ───── «Оживить» (0.73): ролик поверх картинки поста ───── */
+/* Видео — сосед картинки, лежит ровно на ней (размер и место ставит live.js), без звука по кругу. Тапы проходят сквозь
+   него к картинке: ✎, ↻, «во весь экран» работают как были. z-index не задан нарочно: ↻ SLAY без z-index идёт в DOM после
+   картинки и видео — так он остаётся поверх; ✎ и ↻ Life — с z-index 3. */
+#chat .lf-live-box { position: relative; }
+#chat video.lf-live { position: absolute; display: block; margin: 0; padding: 0; border: 0; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity .6s ease; border-radius: inherit; background: transparent; }
+#chat video.lf-live.on { opacity: 1; }
+#chat video.lf-live.bad { display: none !important; }
+#slay_lightbox .lf-live-box { position: relative; }
+#slay_lightbox video.lf-live-lb { position: absolute; pointer-events: none; object-fit: contain; opacity: 0; transition: opacity .4s ease; }
+#slay_lightbox video.lf-live-lb.on { opacity: 1; }
+#slay_lightbox video.lf-live-lb.bad { display: none !important; }
+#lf-pm-lbx { flex-wrap: wrap; max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); }
+#lf-pm-lbx button[data-lb="sound"].on { background: rgba(244, 114, 182, .32); }
+#lf-pm-lbx button[hidden] { display: none !important; }   /* «Звук» без ролика: display у кнопок перебивает [hidden] */
+#lf-pm .lf-pm-pv { position: relative; display: block; line-height: 0; border-radius: inherit; }
+#lf-pm .lf-pm-pv > video.lf-pm-live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+#lf-pm .lf-pm-chips.lvd > span, #lf-pm .lf-pm-chips.lvr > span { align-self: center; margin-right: 4px; font-size: 12px; opacity: .7; }
+#lf-pm .lf-pm-chips.lv .lf-pm-chip small { display: block; font-size: 11px; opacity: .7; }
+#lf-pm input.lf-pm-key { width: 100%; box-sizing: border-box; }
+@media (max-width: 440px) {
+    /* три кнопки в один ряд на телефоне: «Промт», «Перерисовать», «Оживить» */
+    #lf-pm-lbx { gap: 6px; }
+    #lf-pm-lbx button { padding: 0 11px; gap: 6px; font-size: 13.5px; }
+}

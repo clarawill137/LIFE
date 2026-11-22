@@ -44,6 +44,7 @@ import {
 import { dpCfg, reshoot, lookNow, lookChoices, sceneOf, frameLook } from './dp.js';
 import { LOOKS, LOOK_OWN, LOOK_SAFE, LOOK_INTIM, PAINTED, lookText, lookOfText, lookById, lookMode, safeLookFor, shotOf, shotLabelRu } from './dpcore.js';
 import { MODELS, VIA_RU, modelById, frameFacts, suggestModels, verdict } from './pmpick.js';
+import { initLive, paintLive, isLiveNode, liveLightbox, liveSound, animate, liveHtml, liveClick, liveInput, liveCommand, liveNow, resumeLive, liveRunning } from './live.js';
 
 let A = null;
 const esc = (v) => A.esc(v);
@@ -75,6 +76,8 @@ const DRAW_MS = 6 * 60 * 1000; // дольше SLAY сам не ждёт
 
 export function initPrompts(api) {
     A = api;
+    // «Оживить» (0.73): картинка → ролик на пару секунд; помощники — отсюда, чтобы live.js не тянул весь модуль
+    initLive(A, { tagsOf, swapTag, nodeFor, mesEl, keepLog, pmLog, busyMark, repaint: () => { if (S && box) paint(); } });
     hookToasts();
     hookSlayButtons();
     hookPictureTap();
@@ -259,6 +262,7 @@ function sweep() {
     if (!A?.hasChat?.() || document.hidden || A.settings().enabled === false) return;
     try { fixSplitSrcs(); } catch (e) { console.warn('[Life] промты: разрезанные пути картинок', e); }
     restoreFromLog().catch(e => console.warn('[Life] промты: вернуть версии из журнала', e));
+    resumeLive(chatKey()).catch(e => console.warn('[Life] оживить: задачи после перезагрузки', e));
     const chat = A.chatArr();
     for (let i = chat.length - 1, k = 0; i >= Math.max(0, chat.length - 30) && k < 10; i--) {
         const m = chat[i];
@@ -285,6 +289,7 @@ function heal() {
         try { syncShown(el, id); } catch (e) { console.warn('[Life] промты: сверка картинок', e); }
         const was = el.querySelectorAll('.lf-pm-btn').length;
         try { paintPrompts(el, id); } catch (e) { console.warn('[Life] промты: ✎', e); }
+        try { paintLive(el, id); } catch (e) { console.warn('[Life] оживить: показ', e); }
         const now = el.querySelectorAll('.lf-pm-btn').length;
         if (now > was) pmLog(`✎ вернула на место: пост ${id} (${was} → ${now})`);
     }
@@ -505,7 +510,7 @@ function hookHeal() {
     if (!chatEl) { setTimeout(() => { try { hookHeal(); } catch { /* чата ещё нет */ } }, 1500); return; }
     if (chatEl.dataset.lfPmHeal) return;
     chatEl.dataset.lfPmHeal = '1';
-    const ours = (n) => n.nodeType !== 1 || n.classList?.contains('lf-pm-btn') || n.classList?.contains('lf-pm-re') || n.classList?.contains('lf-pm-pend');
+    const ours = (n) => n.nodeType !== 1 || n.classList?.contains('lf-pm-btn') || n.classList?.contains('lf-pm-re') || n.classList?.contains('lf-pm-pend') || isLiveNode(n);
     new MutationObserver((list) => {
         if (healT) return;
         // свои же кнопки — не повод (иначе сверка будила бы сама себя); посты без картинок — тоже
@@ -1066,27 +1071,30 @@ function lightboxBar() {
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'lf-pm-lbx';
-        bar.innerHTML = `<button type="button" data-lb="open">${icon('pencil')}<span>Промт</span></button><button type="button" data-lb="redraw">${icon('refresh')}<span>Перерисовать</span></button>`;
+        bar.innerHTML = `<button type="button" data-lb="open">${icon('pencil')}<span>Промт</span></button><button type="button" data-lb="redraw">${icon('refresh')}<span>Перерисовать</span></button><button type="button" data-lb="live">${icon('play')}<span>Оживить</span></button><button type="button" data-lb="sound" hidden>${icon('volume')}<span>Звук</span></button>`;
         document.body.append(bar);
     }
     if (!lb.dataset.lfPm) {
         lb.dataset.lfPm = '1';
         // закрыли — кнопки убрать: в следующий раз это окно может открыть галерея стилей, а не картинка поста
-        new MutationObserver(() => { if (!lb.classList.contains('open')) { const x = document.getElementById('lf-pm-lbx'); if (x) x.hidden = true; } }).observe(lb, { attributes: true, attributeFilter: ['class'] });
+        new MutationObserver(() => { if (!lb.classList.contains('open')) { const x = document.getElementById('lf-pm-lbx'); if (x) x.hidden = true; lb.querySelectorAll('video.lf-live-lb').forEach(v => v.remove()); } }).observe(lb, { attributes: true, attributeFilter: ['class'] });
     }
     bar._tap = lastTap;
     bar.hidden = false;
+    try { liveLightbox(lastTap); } catch (e) { console.warn('[Life] оживить: во весь экран', e); }
 }
 
 function lightboxPress(b) {
     const bar = document.getElementById('lf-pm-lbx');
     const t = bar?._tap;
     const act = b.dataset.lb;
-    pmLog(`картинка во весь экран: «${act === 'redraw' ? 'Перерисовать' : 'Промт'}»`, t ? `пост ${t.i}, картинка ${t.k}` : '— картинка неизвестна');
+    if (act === 'sound') { liveSound(b); return; }   // звук ролика — окно не закрываем
+    pmLog(`картинка во весь экран: «${act === 'redraw' ? 'Перерисовать' : act === 'live' ? 'Оживить' : 'Промт'}»`, t ? `пост ${t.i}, картинка ${t.k}` : '— картинка неизвестна');
     document.querySelector('#slay_lightbox .iig-lightbox-close')?.click();
     if (bar) bar.hidden = true;
     if (!t || !A.chatArr()[t.i]) { A.toast('warning', 'Не поняла, какая это картинка, — тапни её в посте ещё раз.', '✎ Промт'); return; }
     if (act === 'redraw') quickDraw(t.i, t.k);
+    else if (act === 'live') animate(t.i, t.k);
     else openPromptManager(tagAdapter(t.i, t.k));
 }
 
@@ -1652,6 +1660,7 @@ function showLog() {
  * true — команда наша.
  */
 export function pmCommand(word) {
+    if (A && liveCommand(word, lastPicture)) return true;   // /life live [что движется]
     const m = /^(pm|промт|redraw|перерисовать|reshoot|переснять)(?:\s+(\S+))?$/.exec(String(word || '').trim().toLowerCase());
     if (!m || !A) return false;
     const act = /^(pm|промт)$/.test(m[1]) ? 'pm' : /^(redraw|перерисовать)$/.test(m[1]) ? 'redraw' : 'reshoot';
@@ -1816,8 +1825,27 @@ const dirty = () => !!S && (S.prompt.trim() !== String(S.base || '').trim() || S
 const saveArgs = (my) => ({ prompt: my.prompt, aspect: my.aspect, style: my.ad.styled ? my.pmStyle : undefined, look: my.ad.kind === 'post' ? my.look : undefined });
 const wordsOf = (t) => (String(t).trim() ? String(t).trim().split(/\s+/).length : 0);
 
+/** Номер картинки окна в её посте (для «Оживить»). */
+function liveK() {
+    if (!S || S.ad?.kind !== 'post') return -1;
+    const t = S.ad.tag?.();
+    return t ? tagsOf(S.ad.mes).findIndex(x => x.full === t.full) : -1;
+}
+/** Раздел «▶ Оживить» — сворачивается, как «Версии»; в заголовке — есть ли ролик. */
+function liveFoldHtml(chev) {
+    if (S.ad?.kind !== 'post' || !S.src) return '';
+    const k = liveK();
+    if (k < 0) return '';
+    const t = tagsOf(S.ad.mes)[k];
+    const has = !!(t && liveNow(t)), run = liveRunning(S.ad.mes, k);
+    return `<button class="lf-pm-fold" data-pm="fold" data-v="live">${icon('play')}<span>Оживить${run ? ' · оживает…' : has ? ' · ролик есть' : ''}</span>${chev('live')}</button>
+            ${S.fold === 'live' ? `<div class="lf-pm-sub">${liveHtml(S, k)}</div>` : ''}`;
+}
+
 function previewHtml() {
-    const pic = S.src ? `<div class="lf-pm-prev"><img src="${esc(S.src)}" alt="" data-pm="zoom"></div>` : (S.err ? '' : `<div class="lf-pm-prev empty">${icon('image')}<span>картинки пока нет</span></div>`);
+    const lv = (() => { try { const k = liveK(); const t = k >= 0 ? tagsOf(S.ad.mes)[k] : null; return t ? liveNow(t) : null; } catch { return null; } })();
+    const film = lv ? `<video class="lf-pm-live" src="${esc(lv.path)}" muted loop playsinline autoplay preload="auto" aria-hidden="true"></video>` : '';
+    const pic = S.src ? `<div class="lf-pm-prev"><span class="lf-pm-pv"><img src="${esc(S.src)}" alt="" data-pm="zoom">${film}</span></div>` : (S.err ? '' : `<div class="lf-pm-prev empty">${icon('image')}<span>картинки пока нет</span></div>`);
     if (!S.err) return pic;
     return `${pic}<div class="lf-pm-err">${icon('shield')}<div>
         <b>Не нарисовалось</b>
@@ -2021,6 +2049,7 @@ function paint() {
             ${S.ad.fixedAspect ? '' : `<div class="lf-pm-chips ar">${AR_SHOWN.map(a => `<button class="lf-pm-chip${a === S.aspect ? ' on' : ''}" data-pm="ar" data-v="${a}">${a}</button>`).join('')}</div>`}
             ${lookRowHtml()}
             ${styleRowHtml()}
+            ${liveFoldHtml(chev)}
             <button class="lf-pm-fold" data-pm="fold" data-v="hist">${icon('clock')}<span>Версии${hist.length > 1 ? ` · ${hist.length}` : ''}</span>${chev('hist')}</button>
             ${S.fold === 'hist' ? histHtml(hist) : ''}
             <button class="lf-pm-fold" data-pm="fold" data-v="set">${icon('sliders')}<span>Настройки</span>${chev('set')}</button>
@@ -2060,6 +2089,7 @@ function onBoxInput(ev) {
     const k = el?.dataset?.in;
     if (!k || !S) return;
     if (k === 'prompt') { S.prompt = el.value; tick(); }
+    else if (k.startsWith('live')) liveInput(k, el, S);
     else if (k === 'fix') S.fix = el.value;
     else if (k === 'looks') { cfg().looks = el.value.slice(0, 1200); A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } }
     else if (k === 'fbtext') { cfg().fb.lib[OWN_STYLE] = el.value.slice(0, 1500); A.saveSettings(); if (ev.type === 'change') paint(); }   // дописала и вышла из поля — обновить строку «Стиль»
@@ -2111,6 +2141,7 @@ async function onBoxClick(ev) {
         paint();
         return;
     }
+    if (act.startsWith('live') && liveClick(act, b, S, liveK(), () => paint())) return;
     if (act === 'src-use') { srcUse(b.dataset.v); return; }
     if (act === 'src-save') { srcSave(); return; }
     if (act === 'src-del') { if (confirm(`Убрать источник «${b.dataset.v}»? Само подключение в SLAY останется как есть.`)) { const l = sources(); const k = l.findIndex(x => x.name === b.dataset.v); if (k >= 0) l.splice(k, 1); saveAll(); paint(); } return; }
