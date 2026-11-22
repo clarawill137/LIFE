@@ -1,4 +1,5 @@
-// Флигель 0.74: Должки, Ивенты, Наружка, Допросная; 0.75 — Доска расследования, Титры, Комикс, Глазами Хеди. Стыки с ядром — здесь (как в annex.js), чтобы index.js почти не
+// Флигель 0.74: Должки, Ивенты, Наружка, Допросная; 0.75 — Доска расследования, Титры, Комикс, Глазами Хеди;
+// 0.76 — Глобальная тревога. Стыки с ядром — здесь (как в annex.js), чтобы index.js почти не
 // менялся: клики, заметки модели, Летописец, «Что записал пост», трекеры Сцены и выключатели в Мир → ⚙.
 
 import { initDebts, dkPrompt, dkChron, dkAfterPost, dkSceneHtml, dkClick, dkRecs, dkState } from './debts.js';
@@ -9,20 +10,22 @@ import { initBoard, bdPrompt, bdChron, bdAfterPost, bdSceneHtml, bdClick, bdRecs
 import { initCredits, ttlPrompt, ttlSceneHtml, ttlClick } from './credits.js';
 import { initComic, cmxSceneHtml, cmxClick, cmxState } from './comic.js';
 import { initEyes, eyeSceneHtml, eyeClick } from './eyes.js';
+import { initAlarm, alarmPrompt, alarmChron, alarmAfterPost, alarmSceneHtml, alarmClick, alarmRecs, alarmState } from './alarm.js';
 
-const KEYS = ['debts', 'events', 'tail', 'interro', 'board', 'credits', 'comic', 'eyes'];
+const KEYS = ['debts', 'events', 'tail', 'interro', 'board', 'credits', 'comic', 'eyes', 'alarm'];
 
 /** host — то же, что ядро отдаёт пристройке (annex.js): hubMods, addRecs, names, hudKeys, tracker, register. */
 export function initWing(api, host) {
     for (const k of KEYS) if (!host.hudKeys.includes(k)) host.hudKeys.push(k);
     initDebts(api); initEvents(api); initTail(api); initInterro(api);
-    initBoard(api); initCredits(api); initComic(api); initEyes(api);
+    initBoard(api); initCredits(api); initComic(api); initEyes(api); initAlarm(api);
     host.hubMods.push({ pre: 'dk-', click: dkClick, label: 'Должки' }, { pre: 'ev-', click: evClick, label: 'Ивенты' },
         { pre: 'tl-', click: tailClick, label: 'Наружка' }, { pre: 'iq-', click: iqClick, label: 'Допросная' },
         { pre: 'bd-', click: bdClick, label: 'Доска' }, { pre: 'ttl-', click: ttlClick, label: 'Титры' },
-        { pre: 'cmx-', click: cmxClick, label: 'Комикс' }, { pre: 'eye-', click: eyeClick, label: 'Глазами Хеди' });
-    host.addRecs(dkRecs, bdRecs);
-    Object.assign(host.names, { 'life-debts': 'должки', 'life-events': 'ивент сегодня', 'life-tail': 'наружка: хвост', 'life-interro': 'допросная', 'life-board': 'доска расследования', 'life-credits': 'сцена после титров' });
+        { pre: 'cmx-', click: cmxClick, label: 'Комикс' }, { pre: 'eye-', click: eyeClick, label: 'Глазами Хеди' },
+        { pre: 'ga-', click: alarmClick, label: 'Тревога' });
+    host.addRecs(dkRecs, bdRecs, alarmRecs);
+    Object.assign(host.names, { 'life-debts': 'должки', 'life-events': 'ивент сегодня', 'life-tail': 'наружка: хвост', 'life-interro': 'допросная', 'life-board': 'доска расследования', 'life-credits': 'сцена после титров', 'life-alarm': 'глобальная тревога' });
     const reg = (m) => host.register(m);
     reg({ id: 'life-debts', prompt: (type) => dkPrompt(type), chron: () => dkChron(), afterPost: (i, j) => dkAfterPost(i, j) });
     reg({ id: 'life-events', prompt: (type) => evPrompt(type) });
@@ -30,6 +33,7 @@ export function initWing(api, host) {
     reg({ id: 'life-interro', prompt: (type) => iqPrompt(type) });
     reg({ id: 'life-board', prompt: (type) => bdPrompt(type), chron: () => bdChron(), afterPost: (i, j) => bdAfterPost(i, j) });
     reg({ id: 'life-credits', prompt: (type) => ttlPrompt(type) });
+    reg({ id: 'life-alarm', prompt: (type) => alarmPrompt(type), chron: () => alarmChron(), afterPost: (i, j) => alarmAfterPost(i, j) });
     const sOn = (k) => () => api.settings()[k]?.on !== false;
     host.tracker({ id: 'debts', ico: '🤝', name: 'Должки', on: sOn('debts'), hint: 'Кто кому должен по-крупному: услуга, сделка, жизнь, тайна. Крупный должок всплывает сам в неудобный момент.', idle: 'Крупных должков нет.', state: () => dkState(), html: () => dkSceneHtml() });
     host.tracker({ id: 'events', ico: '🥂', name: 'Ивенты', on: sOn('events'), hint: 'Гала, свадьба, вечеринка: гости, кто знает, что Хеди жива, рассадка с драмой, наряд, клятвы, кадры.', idle: 'Ивентов нет.', state: () => evState(), html: () => evSceneHtml() });
@@ -39,11 +43,13 @@ export function initWing(api, host) {
     host.tracker({ id: 'comic', ico: '🗯', name: 'Комикс', on: sOn('comic'), hint: 'Сцена → страница комикса: панели, облачка, звуки. Выпуски God Complex #N.', idle: '', state: () => cmxState(), html: () => cmxSceneHtml() });
     host.tracker({ id: 'eyes', ico: '🧿', name: 'Глазами Хеди', on: sOn('eyes'), hint: 'Экран её глазами: выходы, кто вооружён, кто врёт, что чует нюх на энергию.', idle: '', state: () => '', html: () => eyeSceneHtml() });
     host.tracker({ id: 'interro', ico: '🕵', name: 'Допросная', on: sOn('interro'), hint: 'Допрос с полиграфом: подход, кубик против выучки, сколько выдал. В обе стороны.', idle: 'Никого не допрашивают.', state: () => iqState(), html: () => iqSceneHtml() });
+    host.tracker({ id: 'alarm', ico: '🚨', name: 'Тревога', on: sOn('alarm'), hint: 'Глобальная тревога: вторжение, атака на город, катастрофа. Красная полоса над чатом, сводки эпохи, ход кризиса на кубике, кто из героев в деле. Модель держит тревогу в каждой сцене.', idle: '', state: () => alarmState(), html: () => alarmSceneHtml() });
 }
 
 /** Мир → ⚙: выключатели. sw — тот же построитель, что у остальных строк. */
 export function wingCfgHtml(s, sw) {
     for (const k of KEYS) { if (!s[k] || typeof s[k] !== 'object') s[k] = {}; if (s[k].on === undefined) s[k].on = true; }
+    if (s.alarm.bar === undefined) s.alarm.bar = true;
     return `${sw('on', 'Должки: крупные долги и услуги, всплывают сами', s.debts, 'debts.on')}
         ${sw('on', 'Ивенты: гости, рассадка, клятвы, кадры', s.events, 'events.on')}
         ${sw('on', 'Наружка: хвост, проверочный маршрут, отрыв', s.tail, 'tail.on')}
@@ -51,5 +57,7 @@ export function wingCfgHtml(s, sw) {
         ${sw('on', 'Доска расследования: улики, нитки, версии', s.board, 'board.on')}
         ${sw('on', 'Титры и сцена после титров', s.credits, 'credits.on')}
         ${sw('on', 'Комикс: сцена → страница', s.comic, 'comic.on')}
-        ${sw('on', 'Глазами Хеди', s.eyes, 'eyes.on')}`;
+        ${sw('on', 'Глазами Хеди', s.eyes, 'eyes.on')}
+        ${sw('on', 'Глобальная тревога: сводки, ход кризиса, модель держит её в сцене', s.alarm, 'alarm.on')}
+        ${sw('bar', 'Тревога: красная полоса над чатом', s.alarm, 'alarm.bar')}`;
 }
