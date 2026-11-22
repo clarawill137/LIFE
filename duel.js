@@ -4,6 +4,7 @@
 // Идея — блок «Словесная дуэль» TavernOS HUD (alewwi), см. NOTICE-HUD.md.
 
 import { clamp, str, clone } from './hudkit.js';
+import { viewBar, duelViewHtml } from './views.js';
 
 let A = null;
 export function initDuel(api) { A = api; }
@@ -101,9 +102,11 @@ export function duelSceneHtml() {
     }
     const gave = c.rounds.filter(r => r.gave?.who).slice(-4).reverse();
     const mem = c.rounds.filter(r => r.mem).slice(-3).reverse();
-    return `${A.sec('Словесная дуэль', `${HEAT[c.heat]} · ${c.rounds.length} ${A.plural(c.rounds.length, 'обмен', 'обмена', 'обменов')}`)}
+    let alt = '';
+    try { alt = duelViewHtml(c); } catch (e) { console.warn('[Life] вид дуэли', e); }
+    return `${A.sec('Словесная дуэль', `${HEAT[c.heat]} · ${c.rounds.length} ${A.plural(c.rounds.length, 'обмен', 'обмена', 'обменов')}`)}${viewBar('duel')}
     <div class="lf-dl">
-        ${bar(c)}
+        ${alt || bar(c)}
         <div class="lf-dl-lead">ведёт <b>${esc(A.shortName(c.lead))}</b> · ${c.score}/100</div>
         ${gave.length ? `<div class="lf-dl-list">${gave.map(r => `<div><b>${esc(A.shortName(r.gave.who))}</b> уступил(а): ${esc(r.gave.what)}</div>`).join('')}</div>` : ''}
         ${mem.length ? `<div class="lf-dl-list mem">${mem.map(r => `<div>всплыло: ${esc(r.mem)}</div>`).join('')}</div>` : ''}

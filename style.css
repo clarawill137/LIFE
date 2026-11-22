@@ -4309,3 +4309,277 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 #lf-app input[type="number"]:focus { border-color: rgba(var(--lf-rose-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--lf-wine2-rgb), .3); }
 .lf-wl-fl button { border-radius: 12px; }
 .lf-wl-hf { padding: 0 12px 10px 62px; font-size: 11.5px; line-height: 1.4; color: var(--lf-dim); }
+
+/* ═════════ 0.72: виды блоков (views.js) ═════════ */
+.lf-vw { display: flex; gap: 4px; overflow-x: auto; margin: 2px 0 10px; padding-bottom: 2px; scrollbar-width: none; }
+.lf-vw::-webkit-scrollbar { display: none; }
+#lf-app .lf-vw button, .lf-vw button { flex: none; height: auto; min-height: 0; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--lf-line); background: none; color: var(--lf-dim); font: 500 11.5px/1.3 var(--lf-sans); cursor: pointer; }
+#lf-app .lf-vw button.on, .lf-vw button.on { color: var(--lf-text); border-color: rgba(var(--lf-rose-rgb), .55); background: rgba(var(--lf-rose-rgb), .12); }
+.lf-vw-lock .lf-i { width: 11px; height: 11px; opacity: .7; }
+.lf-hint-i { margin-top: 8px; font-size: 11.5px; line-height: 1.4; color: var(--lf-dim); }
+
+/* доверие: сердца, светофор, щит, орбиты */
+.lf-vw-trust { padding: 10px 12px; border-radius: 16px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); cursor: pointer; }
+.lf-vw-th, .lf-vw-tr { display: grid; grid-template-columns: 1.1fr 1fr 1fr; align-items: center; gap: 6px; }
+.lf-vw-th { margin-bottom: 6px; font-size: 11px; color: var(--lf-dim); }
+.lf-vw-th b { font-weight: 500; text-align: center; }
+.lf-vw-tr { padding: 5px 0; border-top: 1px solid var(--lf-line); font-size: 12.5px; }
+.lf-vw-tr > span:first-child { display: flex; align-items: center; gap: 5px; color: var(--lf-text2); }
+.lf-vw-tr > span:first-child .lf-i { width: 14px; height: 14px; opacity: .7; }
+.lf-vw-tr.asym > span:first-child { color: var(--lf-rose2); }
+.lf-vw-hearts { display: flex; justify-content: center; gap: 1px; }
+.lf-vw-hearts i { display: inline-grid; color: rgba(255, 255, 255, .16); }
+.lf-vw-hearts i .lf-i { width: 13px; height: 13px; }
+.lf-vw-hearts i.on { color: var(--lf-rose); }
+.lf-vw-hearts i.on .lf-i { fill: currentColor; }
+.lf-vw-hearts.neg i.on { color: #e0a24a; }
+.lf-vw-light { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.lf-vw-light i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, .08); }
+.lf-vw-light i.r { background: #e0485a; box-shadow: 0 0 8px rgba(224, 72, 90, .7); }
+.lf-vw-light i.y { background: #e8b84a; box-shadow: 0 0 8px rgba(232, 184, 74, .7); }
+.lf-vw-light i.g { background: #5fc98c; box-shadow: 0 0 8px rgba(95, 201, 140, .7); }
+.lf-vw-light b { margin-left: 4px; min-width: 20px; font-size: 11.5px; font-weight: 500; color: var(--lf-text2); }
+.lf-vw-shields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lf-vw-shield { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.lf-vw-shield svg { width: 76px; height: 92px; }
+.lf-vw-shield .bg { fill: rgba(255, 255, 255, .05); }
+.lf-vw-shield .rim { fill: none; stroke: rgba(var(--lf-rose2-rgb), .55); stroke-width: 2; }
+.lf-vw-shield .fill.l0 { fill: #7a2a35; } .lf-vw-shield .fill.l1 { fill: #9a5a3a; } .lf-vw-shield .fill.l2 { fill: #9a8a4a; } .lf-vw-shield .fill.l3 { fill: #4f8a6a; } .lf-vw-shield .fill.l4 { fill: #3f9a7a; }
+.lf-vw-shield text { fill: #fff; font: 700 18px var(--lf-serif); text-anchor: middle; }
+.lf-vw-shield b { font-size: 12.5px; font-weight: 500; color: var(--lf-text); }
+.lf-vw-shield b .lf-i { width: 11px; height: 11px; }
+.lf-vw-shield small { font-size: 11.5px; color: var(--lf-dim); }
+.lf-vw-mini { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.lf-vw-mini span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .05); font-size: 11.5px; color: var(--lf-text2); }
+.lf-vw-mini .lf-i { width: 12px; height: 12px; opacity: .7; }
+.lf-vw-orbit { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1; margin: 4px auto 0; }
+.lf-vw-orbit svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lf-vw-orbit circle { fill: none; stroke: rgba(var(--lf-rose2-rgb), .16); stroke-width: .4; stroke-dasharray: 1.2 1.6; }
+.lf-vw-orb { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.lf-vw-orb .lf-ava { margin: 0; }
+.lf-vw-orb .lf-ava.xs { width: 26px; height: 26px; }
+.lf-vw-orb .lf-ava.sm { width: 34px; height: 34px; }
+.lf-vw-orb .lf-ava.md { width: 44px; height: 44px; }
+.lf-vw-orb small { font-size: 10px; color: var(--lf-dim); }
+.lf-vw-orb.on .lf-ava { box-shadow: 0 0 0 2px var(--lf-rose); }
+.lf-vw-orb.c { left: 50%; top: 50%; }
+.lf-vw-orb.c .lf-ava { width: 56px; height: 56px; box-shadow: 0 0 24px rgba(var(--lf-rose-rgb), .35); }
+
+/* страхи */
+.lf-vw-thermos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.lf-vw-thermo { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); color: inherit; cursor: pointer; text-align: center; }
+.lf-vw-thermo .tube { position: relative; width: 12px; height: 64px; border-radius: 6px 6px 0 0; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.lf-vw-thermo .tube i { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #c8324a, #e8834a); }
+.lf-vw-thermo .bulb { width: 20px; height: 20px; margin-top: -6px; border-radius: 50%; background: #c8324a; box-shadow: 0 0 10px rgba(200, 50, 74, .5); }
+.lf-vw-thermo small { font-size: 11.5px; line-height: 1.3; color: var(--lf-text2); }
+.lf-vw-thermo b { position: absolute; top: 6px; right: 8px; font-size: 11px; font-weight: 500; color: var(--lf-dim); }
+.lf-vw-fl { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.lf-vw-fr { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); color: inherit; text-align: left; font-size: 12.5px; cursor: pointer; }
+.lf-vw-skulls { display: flex; gap: 2px; flex: none; font-style: normal; }
+.lf-vw-skulls i svg { width: 15px; height: 15px; fill: rgba(255, 255, 255, .13); }
+.lf-vw-skulls i.on svg { fill: #e8e0d8; }
+.lf-vw-clouds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.lf-vw-cloud { position: relative; display: flex; flex-direction: column; align-items: center; width: calc(50% - 4px); padding: 4px; border: 0; background: none; color: inherit; cursor: pointer; }
+.lf-vw-cloud svg { width: calc(96px * var(--s)); height: auto; }
+.lf-vw-cloud svg path { fill: rgba(120, 128, 150, var(--d)); stroke: rgba(200, 205, 220, .3); stroke-width: 1; }
+.lf-vw-cloud svg .bolt { fill: #e8c24a; stroke: none; }
+.lf-vw-cloud span { margin-top: 2px; font-size: 11.5px; line-height: 1.3; color: var(--lf-text2); text-align: center; }
+.lf-vw-radar { display: block; width: 100%; max-width: 360px; margin: 0 auto 10px; }
+.lf-vw-radar .ring { fill: none; stroke: rgba(255, 255, 255, .1); stroke-width: .4; }
+.lf-vw-radar line { stroke: rgba(255, 255, 255, .08); stroke-width: .4; }
+.lf-vw-radar .val { fill: rgba(200, 50, 74, .35); stroke: #e0485a; stroke-width: .8; }
+.lf-vw-radar text { fill: var(--lf-text2); font: 4px var(--lf-sans); }
+
+/* секреты */
+.lf-vw-safes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+.lf-vw-safe, .lf-vw-folder, .lf-vw-env { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); color: inherit; text-align: left; cursor: pointer; }
+.lf-vw-safe svg { width: 54px; height: 54px; align-self: center; }
+.lf-vw-safe .box { fill: #3a3236; stroke: rgba(255, 255, 255, .25); }
+.lf-vw-safe .door { fill: #4a4046; stroke: rgba(255, 255, 255, .2); }
+.lf-vw-safe .dial { fill: none; stroke: #c9b27a; stroke-width: 2; }
+.lf-vw-safe .leg { fill: #2a2326; }
+.lf-vw-safe.open .door { fill: #5a4a52; }
+.lf-vw-safe.shut { border-color: rgba(200, 50, 74, .35); }
+.lf-vw-safe b, .lf-vw-folder b, .lf-vw-env b { font-size: 12px; font-weight: 600; color: var(--lf-text); }
+.lf-vw-safe span, .lf-vw-folder span, .lf-vw-env span { font-size: 12px; line-height: 1.35; color: var(--lf-text2); }
+.lf-vw-folders { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.lf-vw-folder { position: relative; padding-top: 22px; border-radius: 4px 14px 14px 14px; background: linear-gradient(180deg, #5a4a34, #44382a); border-color: rgba(201, 178, 122, .35); }
+.lf-vw-folder::before { content: ''; position: absolute; left: -1px; top: -9px; width: 40%; height: 10px; border-radius: 6px 6px 0 0; background: #5a4a34; border: 1px solid rgba(201, 178, 122, .35); border-bottom: 0; }
+.lf-vw-folder em { position: absolute; top: 6px; right: 10px; padding: 1px 6px; border: 1.5px solid #c8324a; border-radius: 3px; color: #e0485a; font: 700 9.5px var(--lf-sans); letter-spacing: .06em; text-transform: uppercase; transform: rotate(-4deg); }
+.lf-vw-folder:not(.top) em { border-color: rgba(201, 178, 122, .7); color: #c9b27a; }
+.lf-vw-folder small { font-size: 10.5px; color: rgba(255, 255, 255, .45); }
+.lf-vw-envs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+.lf-vw-env svg { width: 72px; height: 48px; align-self: center; }
+.lf-vw-env svg rect { fill: #e9e0d0; stroke: #b8a88a; }
+.lf-vw-env svg path { fill: none; stroke: #b8a88a; }
+.lf-vw-env .wax { fill: #a02a3a; stroke: #7a1a28; }
+.lf-vw-env:not(.sealed) svg path { transform: scaleY(-1); transform-origin: 40px 16px; }
+.lf-vw-net { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1; margin: 0 auto 6px; }
+.lf-vw-net svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lf-vw-net line { stroke: rgba(var(--lf-rose-rgb), .4); stroke-width: .5; }
+.lf-vw-np, .lf-vw-ns { position: absolute; transform: translate(-50%, -50%); }
+.lf-vw-np .lf-ava { margin: 0; }
+.lf-vw-ns { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(201, 178, 122, .55); background: #3a3026; color: #c9b27a; cursor: pointer; padding: 0; }
+.lf-vw-ns .lf-i { width: 13px; height: 13px; }
+.lf-vw-ns small { position: absolute; right: -6px; top: -6px; min-width: 14px; height: 14px; border-radius: 7px; background: var(--lf-wine3); color: #fff; font-size: 9px; line-height: 14px; }
+.lf-vw-netl { margin: 4px 0 10px; padding-left: 20px; font-size: 12px; line-height: 1.4; color: var(--lf-text2); }
+.lf-vw-netl small { color: var(--lf-dim); }
+
+/* маршрут дня */
+.lf-vw-scheme { display: flex; flex-direction: column; margin: 2px 0 10px; }
+.lf-vw-scheme button { display: grid; grid-template-columns: 42px 16px 1fr; align-items: start; gap: 8px; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.lf-vw-scheme small { padding-top: 2px; font-size: 11px; color: var(--lf-dim); text-align: right; }
+.lf-vw-scheme i { position: relative; width: 16px; height: 100%; min-height: 38px; }
+.lf-vw-scheme i::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: rgba(var(--lf-rose-rgb), .35); }
+.lf-vw-scheme button:first-child i::before { top: 8px; }
+.lf-vw-scheme button:last-child i::before { bottom: auto; height: 8px; }
+.lf-vw-scheme i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--lf-rose); background: var(--lf-bg); }
+.lf-vw-scheme button.now i::after { background: var(--lf-rose); box-shadow: 0 0 10px rgba(var(--lf-rose-rgb), .6); }
+.lf-vw-scheme span { padding-bottom: 12px; font-size: 13px; }
+.lf-vw-scheme span b { display: block; font-weight: 500; color: var(--lf-text); }
+.lf-vw-scheme span em { font-style: normal; font-size: 11.5px; color: var(--lf-dim); }
+.lf-vw-ribbon { display: flex; gap: 0; overflow-x: auto; margin: 4px 0 10px; padding-bottom: 4px; }
+.lf-vw-ribbon button { position: relative; flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 4px; border: 0; background: none; color: inherit; cursor: pointer; }
+.lf-vw-ribbon small { font-size: 11px; color: var(--lf-dim); }
+.lf-vw-ribbon i { position: relative; width: 100%; height: 12px; }
+.lf-vw-ribbon i::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: rgba(var(--lf-rose-rgb), .35); }
+.lf-vw-ribbon button:first-child i::before { left: 50%; }
+.lf-vw-ribbon button:last-child i::before { right: 50%; }
+.lf-vw-ribbon i::after { content: ''; position: absolute; left: calc(50% - 6px); top: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--lf-bg); border: 2px solid var(--lf-rose); box-sizing: border-box; }
+.lf-vw-ribbon button.now i::after { background: var(--lf-rose); }
+.lf-vw-ribbon b { font-size: 11.5px; font-weight: 500; line-height: 1.25; text-align: center; color: var(--lf-text2); }
+.lf-vw-rmap { position: relative; height: 210px; margin: 4px 0 10px; border-radius: 16px; border: 1px solid var(--lf-line); background: radial-gradient(circle at 30% 20%, rgba(var(--lf-rose-rgb), .07), transparent 60%), repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 22px), repeating-linear-gradient(90deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 22px); overflow: hidden; }
+.lf-vw-rmap svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lf-vw-rmap path { fill: none; stroke: var(--lf-rose); stroke-width: 1.2; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.lf-vw-rmap button { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.lf-vw-rmap button i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--lf-wine2); color: #fff; font: 600 10.5px var(--lf-sans); font-style: normal; }
+.lf-vw-rmap button.now i { background: var(--lf-rose); box-shadow: 0 0 10px rgba(var(--lf-rose-rgb), .6); }
+.lf-vw-rmap button span { padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, .45); font-size: 10.5px; white-space: nowrap; color: var(--lf-text2); }
+.lf-vw-tickets { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
+.lf-vw-ticket { position: relative; display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 8px; padding: 10px 44px 10px 12px; border: 0; border-radius: 10px; background: linear-gradient(90deg, #e9e0d0, #ddd2bf); color: #2a2124; text-align: left; cursor: pointer; }
+.lf-vw-ticket small, #lf-app .lf-vw-ticket small { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: #8a7a68; }
+.lf-vw-ticket b, #lf-app .lf-vw-ticket b { font-size: 12.5px; font-weight: 600; color: #2a2124; }
+.lf-vw-ticket em { font: 700 13px var(--lf-sans); font-style: normal; color: #7b2d3d; }
+.lf-vw-ticket .stub { position: absolute; right: 0; top: 0; bottom: 0; width: 34px; display: grid; place-items: center; border-left: 2px dashed #b8a88a; font: 700 12px var(--lf-sans); font-style: normal; color: #8a7a68; writing-mode: vertical-rl; }
+
+/* фракции */
+.lf-vw-heralds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
+.lf-vw-herald { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); text-align: center; }
+.lf-vw-herald svg { width: 48px; height: 58px; }
+.lf-vw-herald svg path { fill: var(--lf-wine2); stroke: #c9b27a; stroke-width: 2; }
+.lf-vw-herald svg text { fill: #f0e2c0; font: 700 22px var(--lf-serif); text-anchor: middle; }
+.lf-vw-herald b { font-size: 12.5px; font-weight: 600; color: var(--lf-text); }
+.lf-vw-herald > span { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.lf-vw-herald em, .lf-vw-legend i { font-style: normal; }
+.lf-vw-herald em { padding: 1px 7px; border-radius: 999px; font-size: 11px; background: rgba(255, 255, 255, .06); }
+.lf-vw-herald em.g, .lf-vw-seat.g i, .lf-vw-legend .g { background: #3f9a6a; color: #fff; }
+.lf-vw-herald em.lg, .lf-vw-seat.lg i { background: #6a9a5a; color: #fff; }
+.lf-vw-herald em.n, .lf-vw-seat.n i, .lf-vw-legend .n { background: #8a8070; color: #fff; }
+.lf-vw-herald em.o, .lf-vw-seat.o i { background: #b8703a; color: #fff; }
+.lf-vw-herald em.r, .lf-vw-seat.r i, .lf-vw-legend .r { background: #b8323f; color: #fff; }
+.lf-vw-seat.none i, .lf-vw-legend .none { background: rgba(255, 255, 255, .12); }
+.lf-vw-council { position: relative; height: 190px; margin: 6px 0 4px; }
+.lf-vw-council svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lf-vw-council svg path { fill: none; stroke: rgba(255, 255, 255, .12); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lf-vw-seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; width: 70px; text-align: center; }
+.lf-vw-seat i { width: 22px; height: 22px; border-radius: 6px 6px 3px 3px; }
+.lf-vw-seat small { font-size: 10px; line-height: 1.15; color: var(--lf-text2); }
+.lf-vw-podium { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); }
+.lf-vw-podium .lf-ava { margin: 0; width: 40px; height: 40px; }
+.lf-vw-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; font-size: 11px; color: var(--lf-dim); }
+.lf-vw-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.lf-vw-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.lf-vw-garden { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px; }
+.lf-vw-pot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px 10px; border-radius: 14px; border: 1px solid var(--lf-line); background: linear-gradient(180deg, rgba(120, 180, 140, .05), rgba(255, 255, 255, .02)); }
+.lf-vw-pot .plants { display: flex; align-items: flex-end; justify-content: center; gap: 10px; min-height: 76px; padding: 0 6px; border-bottom: 10px solid #6a4a3a; border-radius: 0 0 6px 6px; }
+.lf-vw-pot .plant { display: flex; flex-direction: column; align-items: center; }
+.lf-vw-pot .plant i { position: relative; width: 4px; border-radius: 2px; background: #4fa86a; }
+.lf-vw-pot .plant i::before, .lf-vw-pot .plant i::after { content: ''; position: absolute; top: 30%; width: 10px; height: 6px; border-radius: 6px 0; background: #5fc07a; }
+.lf-vw-pot .plant i::before { right: 3px; transform: rotate(-20deg); }
+.lf-vw-pot .plant i::after { left: 3px; border-radius: 0 6px; transform: rotate(20deg); }
+.lf-vw-pot .plant u { width: 10px; height: 10px; margin-top: -2px; order: -1; border-radius: 50%; background: #e8a0b4; box-shadow: 0 0 6px rgba(232, 160, 180, .6); }
+.lf-vw-pot .plant.wilt i { background: #8a7a4a; transform: rotate(12deg); transform-origin: bottom; }
+.lf-vw-pot .plant.wilt i::before, .lf-vw-pot .plant.wilt i::after { background: #9a8a5a; }
+.lf-vw-pot .plant small { margin-top: 3px; font-size: 9.5px; color: var(--lf-dim); }
+.lf-vw-pot > b { font-size: 12px; font-weight: 600; color: var(--lf-text); text-align: center; }
+
+/* дуэль */
+.lf-vw-clash { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 96px; margin: 4px 0 8px; padding: 0 4px; }
+.lf-vw-clash .side { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 72px; }
+.lf-vw-clash .side .lf-ava { margin: 0; width: 46px; height: 46px; }
+.lf-vw-clash .side b { font-size: 12px; font-weight: 500; }
+.lf-vw-clash .side em { font: 700 15px var(--lf-serif); font-style: normal; color: var(--lf-rose2); }
+.lf-vw-clash .beam { position: absolute; top: 36px; height: 6px; border-radius: 3px; }
+.lf-vw-clash .beam.l { left: 18%; background: linear-gradient(90deg, rgba(var(--lf-rose-rgb), .2), var(--lf-rose)); }
+.lf-vw-clash .beam.r { right: 18%; background: linear-gradient(270deg, rgba(185, 164, 232, .2), #b9a4e8); }
+.lf-vw-clash .spark { position: absolute; z-index: 3; top: 26px; transform: translateX(-50%); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #e8c24a; color: #2a2124; box-shadow: 0 0 16px rgba(232, 194, 74, .8); }
+.lf-vw-clash .spark .lf-i { width: 15px; height: 15px; }
+.lf-vw-clash.h-truce .spark, .lf-vw-clash.h-cold .spark { background: #8fa3c8; box-shadow: 0 0 12px rgba(143, 163, 200, .6); }
+.lf-vw-debate { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 8px; margin: 4px 0 6px; }
+.lf-vw-debate .pod { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.lf-vw-debate .pod .lf-ava { margin: 0; width: 42px; height: 42px; }
+.lf-vw-debate .pod b { font-size: 12px; font-weight: 500; }
+.lf-vw-debate .pod em { font: 700 18px var(--lf-serif); font-style: normal; color: var(--lf-rose2); }
+.lf-vw-debate .pod i { width: 64px; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, var(--lf-wine3), var(--lf-wine)); }
+.lf-vw-debate .pod.r i { background: linear-gradient(180deg, #7a6aa8, #46326e); }
+.lf-vw-debate .mid { display: flex; flex-direction: column; align-items: center; padding-bottom: 10px; font-size: 11px; color: var(--lf-dim); }
+.lf-vw-debate .mid b { font: 700 20px var(--lf-serif); color: var(--lf-text); }
+
+/* ═════════ 0.72: архив — вкладки, поиск, отрезок, другой чат, места, отношения ═════════ */
+.lf-ar-rhy { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin: 6px 0 4px; }
+.lf-ar-rhy button { flex: 1; min-width: 4px; padding: 0; border: 0; border-radius: 3px 3px 0 0; background: rgba(255, 255, 255, .18); cursor: pointer; }
+.lf-ar-rhy .calm, .lf-ar-t.calm { background: #6f86c9; }
+.lf-ar-rhy .mild, .lf-ar-t.mild { background: #7fb7a4; }
+.lf-ar-rhy .warm, .lf-ar-t.warm { background: #d9a441; }
+.lf-ar-rhy .hot, .lf-ar-t.hot { background: #c8324a; }
+.lf-ar-ment { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.lf-ar-ment span { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px 3px 4px; border-radius: 999px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); font-size: 11.5px; }
+.lf-ar-ment .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+.lf-ar-ment i { font-style: normal; color: var(--lf-dim); }
+.lf-ar-ment small { margin-left: 4px; color: var(--lf-text2); }
+.lf-ar-ment b { margin-left: 6px; color: var(--lf-rose2); }
+.lf-ar-fall, .lf-ar-why, .lf-ar-res { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.lf-ar-fall button, .lf-ar-why button, .lf-ar-res button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); color: inherit; text-align: left; font: inherit; font-size: 12.5px; cursor: pointer; }
+.lf-ar-fall .lf-ava.xs, .lf-ar-why .lf-ava.xs { margin: 0; width: 22px; height: 22px; }
+.lf-ar-fall i { font-style: normal; color: #e0485a; }
+.lf-ar-fall button > span:not(.lf-ava), .lf-ar-why button > span:not(.lf-ava), .lf-ar-res button > span:not(.lf-ava) { flex: 1; min-width: 0; line-height: 1.35; }
+.lf-ar-fall button > .lf-ava, .lf-ar-why .lf-ava { flex: none; }
+.lf-ar-fall button > span b { display: block; font-weight: 500; color: var(--lf-text); }
+.lf-ar-fall button > span small { color: var(--lf-dim); }
+.lf-ar-fall button { border-color: rgba(200, 50, 74, .35); }
+.lf-ar-why button > b { flex: none; min-width: 34px; font-size: 12px; text-align: center; }
+.lf-ar-why button.neg > b { color: #e0485a; }
+.lf-ar-why button.pos > b { color: #5fc98c; }
+.lf-ar-res button small { flex: none; max-width: 38%; font-size: 11px; color: var(--lf-dim); }
+.lf-ar-res mark { padding: 0 2px; border-radius: 3px; background: rgba(var(--lf-rose-rgb), .35); color: inherit; }
+.lf-ar-find, .lf-ar-range { display: flex; gap: 6px; align-items: flex-end; margin: 6px 0 8px; }
+.lf-ar-find input { flex: 1; min-width: 0; }
+.lf-ar-range label { display: flex; flex-direction: column; gap: 3px; flex: 1; font-size: 11px; color: var(--lf-dim); }
+.lf-ar-atlas { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+.lf-ar-pl { padding: 8px 10px; border-radius: 14px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .02); }
+.lf-ar-pw { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.lf-ar-pw > span { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.lf-ar-pw small { display: inline-flex; align-items: center; gap: 3px; min-width: 76px; font-size: 11px; color: var(--lf-dim); }
+.lf-ar-pw small .lf-i { width: 12px; height: 12px; }
+.lf-ar-pw em { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 2px; border-radius: 999px; background: rgba(255, 255, 255, .05); font-style: normal; font-size: 11.5px; }
+.lf-ar-pw em.live { background: rgba(127, 183, 164, .16); }
+.lf-ar-pw em.work { background: rgba(217, 164, 65, .16); }
+.lf-ar-pw .lf-ava.xs { margin: 0; width: 20px; height: 20px; }
+.lf-ar-prev { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.35; color: var(--lf-dim); }
+
+/* ═════════ 0.72: радио в сцене ═════════ */
+.lf-rd-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.lf-rd-st { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--lf-line); background: rgba(255, 255, 255, .03); color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.lf-rd-st.on { border-color: rgba(var(--lf-rose-rgb), .55); background: rgba(var(--lf-rose-rgb), .1); }
+.lf-rd-st img, .lf-rd-st > i { flex: none; width: 30px; height: 30px; border-radius: 8px; object-fit: cover; background: rgba(255, 255, 255, .06); display: grid; place-items: center; }
+.lf-rd-st > span { flex: 1; min-width: 0; }
+.lf-rd-st b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-rd-st small { display: block; font-size: 11px; color: var(--lf-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-rd-now { flex: 1; min-width: 0; }
+.lf-rd-now b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-rd-now small { font-size: 11px; color: var(--lf-dim); }
+.lf-rd-line { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(127, 183, 164, .35); background: rgba(127, 183, 164, .07); font-size: 12.5px; }
+.lf-rd-line > span { flex: 1; min-width: 0; }
+.lf-rd-line i { color: var(--lf-dim); }
+#lf-app .lf-ar-find input[type="search"] { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--lf-line2); background: rgba(0, 0, 0, .22); color: var(--lf-text); font: 15px var(--lf-sans); outline: none; -webkit-appearance: none; appearance: none; }
+#lf-app .lf-ar-find input[type="search"]:focus { border-color: rgba(var(--lf-rose-rgb), .6); box-shadow: 0 0 0 3px rgba(var(--lf-wine2-rgb), .3); }

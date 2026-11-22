@@ -5,6 +5,8 @@
 
 import { clamp, str, arr } from './hudkit.js';
 
+import { viewBar, facViewHtml } from './views.js';
+
 let A = null;
 export function initFactions(api) { A = api; }
 const esc = (v) => A.esc(v);
@@ -125,7 +127,10 @@ export function facHtml() {
     const list = M().list;
     const tools = `<div class="lf-actions tight"><button class="lf-btn" data-act="fac-collect">${A.icon('sparkles')} ${list.length ? 'Уточнить по истории' : 'Собрать по истории'}</button><button class="lf-btn ghost" data-act="fac-add">${A.icon('plus')} Своя</button></div>`;
     if (!list.length) return `${A.sec('Фракции и репутация')}<div class="lf-hint">Как к героям относятся группы людей — Щ.И.Т., А.И.М., власти, пресса, соседи. Сдвиги Летописец запишет сам, с причиной; начальный расклад — «Собрать по истории».</div>${tools}`;
-    return `${A.sec('Фракции и репутация', String(list.length))}
+    let alt = '';
+    try { alt = facViewHtml(list); } catch (e) { console.warn('[Life] вид фракций', e); }
+    if (alt) return `${A.sec('Фракции и репутация', String(list.length))}${viewBar('fac')}${alt}${tools}`;
+    return `${A.sec('Фракции и репутация', String(list.length))}${viewBar('fac')}
     <div class="lf-fac">${list.map(f => `<div class="lf-fac-c"><div class="lf-fac-h"><b>${esc(f.name)}</b><button data-act="fac-del" data-id="${f.id}" title="убрать">${A.icon('x')}</button></div>
         ${f.note ? `<small class="lf-fac-n">${esc(f.note)}</small>` : ''}
         ${Object.entries(f.to).map(([n, x]) => `<div class="lf-fac-r">${A.ava(n, 'xs')}<span><b>${esc(x.word || wordOf(x.v))}</b> <small>${x.v > 0 ? '+' : ''}${x.v}</small>${bar(x.v)}</span><span class="lf-fac-pm"><button data-act="fac-dn" data-id="${f.id}" data-who="${esc(n)}">−</button><button data-act="fac-up" data-id="${f.id}" data-who="${esc(n)}">+</button></span></div>`).join('')}

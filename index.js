@@ -107,7 +107,9 @@ import { initScars, scarsPrompt, scarsChron, scarsAfterPost, scarsHtml, scarsCli
 import { initDiary, diaryPrompt, diaryAfterPost, diaryHtml, diaryClick } from './diary.js';
 import { initBrew, brewPrompt, brewAfterPost, brewSceneHtml, brewClick } from './brew.js';
 import { initFactions, facPrompt, facChron, facAfterPost, facHtml, facClick, facRecs } from './factions.js';
-import { initArchive, archiveHtml } from './archive.js';
+import { initArchive, archiveHtml, archiveClick, archiveInput } from './archive.js';
+import { initViews, viewBar, viewsClick, facHeroClick, trustViewHtml, fearsHtml, secretsViewHtml, routeSceneHtml } from './views.js';
+import { initRadio, radioPrompt, radioSceneHtml, radioHtml, radioClick, radioInput, radioChatChanged } from './radio.js';
 import { handOf } from './hand.js';
 import { initKnow, knowPrompt, knowChron, knowAfterPost, paintKnow, knowSceneHtml, knowClick, knowRecs, knowAdd } from './know.js';
 import { initPair, pairPrompt, pairHtml, pairClick } from './pair.js';
@@ -159,7 +161,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.71.0';
+const VERSION = '0.72.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -2698,7 +2700,10 @@ function renderRelations(who, st) {
     const A = shortName(canonName(who)), B = shortName(canonName(other));
     const pinA = relPinOf(who, other), pinB = relPinOf(other, who);
     const meter = (v, locked) => `<i class="lf-meter${locked ? ' locked' : ''}"><b style="width:${v}%"></b></i><small>${locked ? icon('lock') : v}</small>`;
-    const bars = `<div class="lf-bars2" data-act="pair-edit">
+    // 0.72: виды блока доверия (views.js) — полоски остаются здесь, остальные рисует views.js
+    let tview = '';
+    try { tview = trustViewHtml({ who, other, mine, theirs, pinA, pinB, scales: SCALES.filter(([f]) => tiesHas(who, other, f)) }); } catch (e) { console.warn('[Life] вид доверия', e); }
+    const bars = tview ? `${viewBar('trust')}${tview}` : `${viewBar('trust')}<div class="lf-bars2" data-act="pair-edit">
         <div class="lf-b2-head"><span></span><span></span><b>${esc(A)} → ${esc(B)}</b><b>${esc(B)} → ${esc(A)}</b></div>
         ${SCALES.filter(([f]) => tiesHas(who, other, f)).map(([f, label, ic]) => `<div class="lf-b2-row${Math.abs(mine[f] - theirs[f]) >= 25 ? ' asym' : ''}">${icon(ic)}<span>${label}</span><span class="lf-b2-m">${meter(mine[f], Number.isFinite(pinA[f]))}</span><span class="lf-b2-m">${meter(theirs[f], Number.isFinite(pinB[f]))}</span></div>`).join('')}
         <div class="lf-hint-i">Чувства не всегда взаимны: слева — что ${esc(A)} чувствует к ${esc(B)}, справа — наоборот. Нажми, чтобы поправить или запереть шкалу.</div>
@@ -2707,7 +2712,9 @@ function renderRelations(who, st) {
     if (tab === 'tri') {
         body = triListHtml(who, other);
     } else if (tab === 'secrets') {
-        body = secrets.length ? secrets.map(x => `<button class="lf-secret" data-act="jump" data-mes="${x.mes}">${icon('lock')}<span><b>Знает ${esc(x.knows.map(n => shortName(canonName(n))).join(', ') || '—')}</b>${esc(x.text)}</span></button>`).join('')
+        let sview = '';
+        try { sview = secretsViewHtml(secrets, who, other); } catch (e) { console.warn('[Life] вид секретов', e); }
+        body = secrets.length ? `${viewBar('secrets')}${sview || secrets.map(x => `<button class="lf-secret" data-act="jump" data-mes="${x.mes}">${icon('lock')}<span><b>Знает ${esc(x.knows.map(n => shortName(canonName(n))).join(', ') || '—')}</b>${esc(x.text)}</span></button>`).join('')}`
             : `<div class="lf-empty small">Тайн между ними пока нет.</div>`;
         // секреты с легендой (vault.js): свои — сверху; найденные Летописцем остаются списком ниже (их можно забрать оттуда же)
         try { const v = vaultPairHtml(who, other); if (v) body = `${v}${secrets.length ? sec('Все тайны по постам') : ''}${secrets.length ? body : ''}`; } catch (e) { console.warn('[Life] секреты', e); }
@@ -3182,6 +3189,7 @@ function directorSheet() {
             ${playing ? `<button class="lf-btn" data-act="mus-del" data-id="${esc(playing.id)}">${icon('trash')} Убрать этот</button>` : ''}
         </div>
         <label class="lf-switch"><input type="checkbox" data-set="music.auto" ${s.music.auto ? 'checked' : ''}><span></span>Месту — свой трек <small>(задаётся в меню места, играет, если музыка уже включена)</small></label>
+        ${(() => { try { return radioHtml(); } catch (e) { console.warn('[Life] радио', e); return ''; } })()}
         ${sec(`${icon('palette')} Стиль кадров`, 'в этом чате')}
         <div class="lf-chips wrap lf-shot-styles">${styleChips('sh-chat-style', chatStyle())}</div>
         ${chatStyle() === 'custom' ? `<div class="lf-field"><label>Свой стиль <small>(лучше по-английски)</small></label><input type="text" data-set="shot.custom" value="${esc(s.shot.custom || '')}" placeholder="soft pastel gouache, dreamy light, visible paper grain"></div>` : ''}
@@ -4335,6 +4343,7 @@ window.addEventListener('error', (e) => {
 
 function onChatChanged() {
     cancelChronAll();
+    try { radioChatChanged(); } catch { /* */ }
     polishing.clear();
     setTimeout(() => { try { paintOocBar(); } catch { /* */ } }, 800);
     ui.focus = 'last';
@@ -4881,7 +4890,15 @@ jQuery(async () => {
             { pre: 'dy-', click: diaryClick, label: 'Дневник' }, { pre: 'brw-', click: brewClick, label: 'Назревает' }, { pre: 'fac-', click: facClick, label: 'Фракции' });
         painters.push((el, id) => paintUnder(el, id));
         chatClicks.push((act, el) => underClick(act, el));
-        mindParts.push((who) => underHtml(who), (who) => scarsHtml(who), (who) => heatHtml(who), (who) => diaryHtml(who));
+        // 0.72: виды блоков (views.js); страхи — сразу после «Под словами»
+        initViews(extApi);
+        mindParts.push((who) => underHtml(who), (who) => fearsHtml(who), (who) => scarsHtml(who), (who) => heatHtml(who), (who) => diaryHtml(who));
+        hubMods.push({ pre: 'vw-', click: (act, el) => viewsClick(act, el) || facHeroClick(act, el), label: 'Виды блоков' }, { pre: 'arc-', click: archiveClick, label: 'Архив' });
+        hubInputs.push((el) => archiveInput(el));
+        // 0.72: радио в сцене — лист Режиссёра, строка в Сцене, заметка модели
+        initRadio({ ...extApi, rerender: () => { if (document.querySelector('#lf-app .lf-sheet [data-act="mus-play"]')) directorSheet(); else render(); }, musicStop: () => Music.stop() });
+        hubMods.push({ pre: 'rd-', click: radioClick, label: 'Радио' });
+        hubInputs.push((el) => radioInput(el));
         addRecs(fightRecs, duelRecs, betsRecs, underRecs, heatRecs, scarsRecs, facRecs);
         const B = globalThis.LifeBridge;
         B.register({ id: 'life-brew', prompt: (type) => brewPrompt(type), afterPost: (i) => brewAfterPost(i), sceneHtml: () => brewSceneHtml() });
@@ -4894,6 +4911,8 @@ jQuery(async () => {
         // дневник — после близости: ему нужно знать, что сцена закончилась на этом посте
         B.register({ id: 'life-diary', prompt: (type) => diaryPrompt(type), afterPost: (i) => diaryAfterPost(i) });
         B.register({ id: 'life-fac', prompt: (type) => facPrompt(type), chron: () => facChron(), afterPost: (i, j) => facAfterPost(i, j) });
+        B.register({ id: 'life-route-day', sceneHtml: () => routeSceneHtml() });
+        B.register({ id: 'life-radio', prompt: (type) => radioPrompt(type), sceneHtml: () => radioSceneHtml() });
     } catch (e) { console.warn('[Life] HUD-волна', e); }
     // 0.53: кто что знает, что сработало из лорбуков, кубик близости, ассистент сюжета, город сегодня
     try {
