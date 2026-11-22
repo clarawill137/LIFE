@@ -57,7 +57,7 @@ function keepLog(...a) {
         if (!cm.pm || typeof cm.pm !== 'object') cm.pm = {};
         if (!Array.isArray(cm.pm.log)) cm.pm.log = [];
         cm.pm.log.push([Date.now(), a.filter(x => x !== '' && x != null).join(' ').slice(0, 400)]);
-        if (cm.pm.log.length > 80) cm.pm.log.splice(0, cm.pm.log.length - 80);
+        if (cm.pm.log.length > 240) cm.pm.log.splice(0, cm.pm.log.length - 240);
         A.saveMeta();
     } catch { /* журнал — не главное */ }
 }
@@ -251,6 +251,7 @@ function watch(i, m) {
 function sweep() {
     if (!A?.hasChat?.() || document.hidden || A.settings().enabled === false) return;
     try { fixSplitSrcs(); } catch (e) { console.warn('[Life] промты: разрезанные пути картинок', e); }
+    restoreFromLog().catch(e => console.warn('[Life] промты: вернуть версии из журнала', e));
     const chat = A.chatArr();
     for (let i = chat.length - 1, k = 0; i >= Math.max(0, chat.length - 30) && k < 10; i--) {
         const m = chat[i];
@@ -1095,6 +1096,25 @@ function histOf(my = S) {
     const v = id ? store()[id]?.v : null;
     return Array.isArray(v) && v.length ? v : (my?.first ? [my.first] : []);
 }
+// «Версии» картинки: сколько помнить. До 0.68.6 — 9 на картинку (исходная + 8 последних): при упорной перерисовке ранние
+// уходили (22.11: у ванны в посте 833 из 20 перерисовок в «Версиях» осталось 8). Теперь до 60 на картинку и до 400
+// картинок в чате, но весь журнал версий — не больше ~1,2 млн знаков (он лежит в шапке чата и сохраняется с ним):
+// сверх этого первыми уходят картинки, которых дольше всех не трогали; у текущей — самые ранние, исходная остаётся.
+const VERS_MAX = 60, PICS_MAX = 400, HIST_CHARS = 1200000;
+function histTrim(st, keep) {
+    const old = (a, b) => (st[a]?.at || 0) - (st[b]?.at || 0);
+    const keys = Object.keys(st);
+    if (keys.length > PICS_MAX) keys.sort(old).slice(0, keys.length - PICS_MAX).forEach(x => { if (x !== keep) delete st[x]; });
+    const len = {};
+    let size = 0;
+    for (const k of Object.keys(st)) size += (len[k] = JSON.stringify(st[k]).length + k.length + 4);   // + «"ключ":» и запятая
+    for (const k of Object.keys(st).sort(old)) {
+        if (size <= HIST_CHARS) return;
+        if (k !== keep) { size -= len[k]; delete st[k]; }
+    }
+    const v = st[keep]?.v;
+    while (size > HIST_CHARS && Array.isArray(v) && v.length > 2) size -= JSON.stringify(v.splice(1, 1)[0]).length + 1;
+}
 function histPush(my, e) {
     const id = my?.ad.hid();
     if (!id) return;
@@ -1103,11 +1123,63 @@ function histPush(my, e) {
     if (!rec.v.length && my.first) rec.v.push(my.first);
     const last = rec.v[rec.v.length - 1];
     if (!(last && last.p === e.p && last.ar === e.ar && last.src === e.src && (last.sn || '') === (e.sn || ''))) rec.v.push(e);
-    if (rec.v.length > 9) rec.v.splice(1, rec.v.length - 9); // исходный остаётся всегда
+    if (rec.v.length > VERS_MAX) rec.v.splice(1, rec.v.length - VERS_MAX); // исходный остаётся всегда
     rec.at = Date.now();
-    const keys = Object.keys(st);
-    if (keys.length > 120) keys.sort((a, b) => (st[a].at || 0) - (st[b].at || 0)).slice(0, keys.length - 120).forEach(x => delete st[x]);
+    histTrim(st, id);
     A.saveMeta();
+}
+
+// Перерисовки, что выпали из «Версий» по прежнему пределу (9), — вернуть по журналу картинок (там пост, номер картинки
+// и файл; журнал помнит последние строки, так что вернётся то, что в нём осталось). Чья — по времени: у картинки этого
+// поста, чьи «Версии» охватывают это время. Папку файла проверяем запросом к таверне. Промт у таких — как у соседней
+// версии до неё (перерисовка без окна рисует промт поста как есть).
+let logChat = '';
+async function restoreFromLog() {
+    const key = chatKey();
+    if (!key || key === logChat) return;
+    logChat = key;
+    const log = A.chatMeta()?.pm?.log;
+    const st = store();
+    if (!Array.isArray(log) || !log.length || !Object.keys(st).length) return;
+    const name = (src) => String(src || '').split(/[?#]/)[0].split('/').pop();
+    const have = new Set(Object.values(st).flatMap(r => (Array.isArray(r?.v) ? r.v : []).map(v => name(v.src)).filter(Boolean)));
+    const lost = [];
+    for (const [at, t] of log) {
+        const m = /^нарисовано: пост (\d+), картинка (\d+)[^→]*→ (\S+)/.exec(String(t || ''));
+        if (m && !have.has(name(m[3]))) { have.add(name(m[3])); lost.push({ at: Number(at) || 0, i: +m[1], k: +m[2], file: m[3] }); }
+    }
+    if (!lost.length) return;
+    const chat = A.chatArr();
+    // папки картинок этого чата — самые частые первыми, generated (туда SLAY кладёт перерисовки) — в начало
+    const dirs = new Map([['/user/images/generated/', 1e6]]);
+    for (const r of Object.values(st)) for (const v of r?.v || []) { const s = String(v?.src || ''); const d = s.slice(0, s.lastIndexOf('/') + 1); if (d.startsWith('/user/images/')) dirs.set(d, (dirs.get(d) || 0) + 1); }
+    const dirList = [...dirs.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 5);
+    // файл есть, и это картинка (не страница таверны вместо 404)
+    const exists = async (u) => { try { let r = await fetch(u, { method: 'HEAD', cache: 'no-store' }); if (r.status === 405) r = await fetch(u, { cache: 'no-store' }); return r.ok && /^(image|video)\//i.test(r.headers.get('content-type') || ''); } catch { return false; } };
+    const back = new Map();
+    for (const x of lost) {
+        const m = chat[x.i];
+        if (!m) continue;
+        const pms = new Set();
+        for (const s of [m.mes, ...(Array.isArray(m.swipes) ? m.swipes : [])]) { const t = typeof s === 'string' ? scanTags(s)[x.k] : null; if (t?.data?.pm) pms.add(t.data.pm); }
+        const own = [...pms].map(pm => `t:${pm}`).filter(id => { const v = st[id]?.v; return Array.isArray(v) && v.length && (v[0].at || 0) <= x.at && x.at <= (st[id].at || v[v.length - 1].at || 0); });
+        if (own.length !== 1) continue;
+        let src = '';
+        for (const d of dirList) { if (await exists(d + x.file)) { src = d + x.file; break; } }
+        if (!src || A.chatArr() !== chat) continue;
+        const v = st[own[0]].v;
+        let at = v.findIndex(y => (y.at || 0) > x.at);
+        if (at < 1) at = at === 0 ? 1 : v.length;
+        const near = v[at - 1];
+        v.splice(at, 0, { p: near.p, ar: near.ar, src, note: 'перерисовка · вернула из журнала', at: x.at, by: near.by || '', sn: near.sn || '' });
+        back.set(x.i, (back.get(x.i) || 0) + 1);
+    }
+    if (!back.size) return;
+    for (const id of Object.keys(st)) if (st[id].v?.length > VERS_MAX) st[id].v.splice(1, st[id].v.length - VERS_MAX);
+    histTrim(st, '');
+    A.saveMeta();
+    for (const [i, n] of back) keepLog(`вернула в «Версии» ${n} перерисовок поста ${i}, что выпали по прежнему пределу`);
+    if (S && S.ad?.kind === 'post' && back.has(S.ad.mes)) paint();
 }
 
 // ───────────── источники SLAY ─────────────
