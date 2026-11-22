@@ -78,12 +78,12 @@ export function start(x = {}) {
     save();
     return s;
 }
-/** Ход кризиса: d20 + герои в деле + Хеди сама − масштаб. ≤6 — хуже, 7–13 — держится, 14–19 — перелом, 20 — решающий перелом. */
+/** Ход кризиса: d20 + герои на месте + Хеди сама − масштаб. 1 на кубике или ≤6 — хуже, 7–13 — держится, 14–22 — перелом, 20 на кубике или 23+ — решающий перелом. */
 export function modOf(s = M(), hedy = false) {
     const engaged = s.heroes.filter(h => /на месте|в бою|в деле|держит/i.test(h.st)).length;
     const parts = [];
     let m = 0;
-    if (engaged) { const v = Math.min(6, engaged * 2); m += v; parts.push(`+${v} героев в деле: ${engaged}`); }
+    if (engaged) { const v = Math.min(6, engaged * 2); m += v; parts.push(`+${v}: героев на месте — ${engaged}`); }
     if (hedy) { m += 3; parts.push('+3 Хеди сама'); }
     if (s.lvl > 2) { m -= s.lvl - 2; parts.push(`−${s.lvl - 2} масштаб`); }
     return { mod: clamp(m, -4, 8), parts };
@@ -308,7 +308,7 @@ export function alarmSceneHtml() {
         </div>
         ${last ? `<div class="lf-note">${esc(last)}</div>` : ''}
         <div class="lf-actions"><button class="lf-btn primary" data-act="ga-step">🎲 Ход кризиса</button><button class="lf-btn" data-act="ga-news">${esc(E.btn)}</button><button class="lf-btn ghost" data-act="ga-siren">🔊 Сирена</button></div>
-        <label class="lf-ga-hedy"><button class="lf-chip${ui.hedy ? ' on' : ''}" data-act="ga-hedy">⚡ Хеди вмешивается сама</button><small>d20 ${md.mod >= 0 ? '+' : '−'} ${Math.abs(md.mod)}${md.parts.length ? ` (${esc(md.parts.join(', '))})` : ''}: ≤6 хуже · 7–13 держится · 14–19 перелом · 20 решающий</small></label>
+        <label class="lf-ga-hedy"><button class="lf-chip${ui.hedy ? ' on' : ''}" data-act="ga-hedy">⚡ Хеди вмешивается сама</button><small>d20 ${md.mod >= 0 ? '+' : '−'} ${Math.abs(md.mod)}${md.parts.length ? ` (${esc(md.parts.join(', '))})` : ''}: ≤6 хуже · 7–13 держится · 14–22 перелом · 23+ или чистая 20 — решающий</small></label>
         ${A.sec('Лента', E.feeds.slice(0, 3).join(' · '))}
         <div class="lf-ga-feed">${s.feed.slice(0, 8).map(f => `<div class="lf-ga-f k-${esc(f.kind)}"><span>${FEED_ICO[f.kind] || '📺'}</span><div><small>${esc(f.src)}${f.at ? ` · ${esc(f.at)}` : ''}</small><p>${esc(f.t)}</p></div></div>`).join('') || `<div class="lf-empty small">Лента пустая — «${esc(E.btn.replace(/^\S+\s/, ''))}».</div>`}</div>
         ${A.sec('Герои', s.heroes.length ? String(s.heroes.length) : 'никто')}
