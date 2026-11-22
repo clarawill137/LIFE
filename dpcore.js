@@ -34,11 +34,28 @@ export const LOOKS = [
     // а рисованный полу-реализм до того проходил 9 из 10 и в постели, и в ванне. Кадр тот же (план, момент, свет), рисунком.
     ['cine_paint', 'Кино · кисть', 'рисованный кадр с киносветом — сцены без одежды проходят фильтр',
         'Semi-realistic digital painting with cinematic light: detailed faces with soft, slightly stylised proportions, painterly loose brushwork on the background, the warm practical light of the scene against cool shadows with a soft glow on highlights, natural balanced palette, skin that reads as alive with subtle warmth on cheeks, ears and knuckles, shallow depth of field.'],
+    // 22.11 (0.69): её «кадры как фешн-фотография» и «фешн-эротика без лиц — эстетично и свободнее». Плёнка — вид картинки;
+    // правила самого кадра (без лиц, поцелуй, общий план со скрытым лицом) — FASHION18_RULES ниже, их берёт оператор.
+    ['fashion', 'Фешн', 'журнальная фешн-съёмка — для любой сцены',
+        `Editorial fashion photograph on medium-format film, the finish of a fine magazine story: one deliberate light source sculpting faces and fabric, rich tonal depth with a soft roll-off in the highlights, fabric rendered in tactile detail, fine even grain, a considered crop with breathing negative space, colour graded with restraint. ${SKIN}`],
+    ['fashion18', 'Фешн · 18+', 'интим как в журнале: без лиц, намёком',
+        `Intimate editorial photograph on medium-format film, as in a fine fashion magazine: one soft directional light, deep warm shadows that hide as much as they show, skin with real texture and a faint sheen, silk, linen and lace rendered in tactile detail, shallow depth of field, fine grain, an elegant fragmentary crop. ${SKIN}`],
+    // рисованная пара к «Фешн · 18+»: фильтр не пропустил фото — тот же кадр фешн-иллюстрацией (по мотивам стиля
+    // «fashion-sketch, marker and wash» из библиотеки Cadis AI), а не общей кистью
+    ['fsketch', 'Фешн · скетч', 'фешн-иллюстрация маркером — откровенный кадр проходит фильтр',
+        'Fashion illustration in marker and wash, a page from a couture sketchbook: confident loose ink contours that fade on lit edges, translucent marker colour laid in broad flat strokes, warm-tinted shadow shapes, bare paper left for the brightest highlights, elongated elegant proportions, soft natural skin tones.'],
 ];
 /** Рисованные плёнки: их фильтр рисовалки пропускает там, где фото режет. */
-export const PAINTED = new Set(['pencil', 'paint', 'cine_paint']);
+export const PAINTED = new Set(['pencil', 'paint', 'cine_paint', 'fsketch']);
 /** Плёнка-рисунок для сцен без одежды и для повтора после отказа фильтра. */
 export const LOOK_SAFE = 'cine_paint';
+/** Плёнка сцен, где кто-то раздет (0.69): фото как в журнале, без лиц и намёком. Её «кисть» — фешн-скетч. */
+export const LOOK_INTIM = 'fashion18';
+const FASHION_LOOKS = new Set(['fashion', 'fashion18', 'fsketch']);
+/** Какие правила кадра у плёнки: 'fashion18' — интим без лиц (и его рисованная пара), 'fashion' — журнальная съёмка. */
+export const lookMode = (id) => (id === 'fashion18' || id === 'fsketch' ? 'fashion18' : id === 'fashion' ? 'fashion' : '');
+/** Рисованная пара плёнки — на повтор после отказа фильтра: у фешна — фешн-скетч, у остальных — кисть. */
+export const safeLookFor = (id) => (FASHION_LOOKS.has(id) ? 'fsketch' : LOOK_SAFE);
 export const LOOK_AUTO = 'auto';     // по сцене
 export const LOOK_KEEP = 'keep';     // стиль не трогать — как в пресете и SLAY
 export const LOOK_OWN = 'own';       // свой текст
@@ -86,11 +103,12 @@ export function hourOf(time) {
 }
 
 /**
- * Плёнка по сцене. scene: { time, atm, loc, forties, tender }.
+ * Плёнка по сцене. scene: { time, atm, loc, forties, tender, skin, fashion }.
  * Сороковые — Кодахром; слова сцены о свете важнее часов (в декабре в четыре дня уже сумерки).
+ * Кто-то раздет: «Фешн · 18+» (фото как в журнале, без лиц), а с fashion: false — по-старому кистью.
  */
 export function pickLook(scene = {}) {
-    if (scene.skin ?? skinScene(scene)) return LOOK_SAFE;
+    if (scene.skin ?? skinScene(scene)) return scene.fashion === false ? LOOK_SAFE : LOOK_INTIM;
     if (scene.forties) return 'koda40';
     const words = `${scene.atm || ''} ${scene.time || ''}`;
     const h = hourOf(scene.time);
@@ -198,31 +216,58 @@ export const DP_CRAFT = `1. ONE IDEA. Decide in five words what this picture is 
 9. THE PLACE in one sentence: what kind of place, one foreground and one background object with their material, as the story has them — specific, furnished, lived-in.
 10. THE FEELING. End the prompt with one plain sentence: "The feeling: ..." — the emotional truth of the moment in 6-14 words, taken from the post.`;
 
+/** Фешн-съёмка (0.69): плёнки «Фешн» и «Фешн · 18+». Язык позы и света — по мотивам промтов Cadis AI (SCENE / FIGURE:
+ *  кроп, угол корпуса, наклон головы, руки, кто кого перекрывает, свет с местом тени, 2–3 цвета). */
+export const FASHION_CRAFT = `FASHION EDITORIAL — this picture is shot as a fashion story for a fine magazine, not a snapshot:
+- LIGHT IS A DECISION: one deliberate source and what it does — window light through a sheer curtain wrapping the body, a single hard flash throwing a crisp shadow on the wall, a narrow slit of light across skin, a warm practical lamp against cool shadow. Say where the shadow falls (under the jaw, along the spine, across the hip).
+- CROP LIKE A PHOTOGRAPHER: cropped at the collarbone, at the lips, at the waist or the hip; negative space on one side; a door frame, the edge of a mirror or fabric in the foreground breaking the frame.
+- BODIES HAVE GEOMETRY: the angle of the torso to the camera, which shoulder is raised, the tilt of the head and the chin, where each hand is and what it holds, who overlaps whom in depth.
+- TEXTURE IS A SUBJECT: silk sliding off a shoulder, crumpled linen, lace against skin, damp skin, goosebumps, a ring on a knuckle, the seam of a metal arm.
+- Two or three colours of the frame named plainly.`;
+
+/** Интимный кадр (0.69, её слова 22.11): без лиц и без гениталий; с лицами — максимум поцелуй; полный кадр — лица скрыты,
+ *  издалека или намёком. Безликий кадр — без имён: по именам SLAY шлёт фото лиц, и модель тянет лица в кадр. */
+export const FASHION18_RULES = `INTIMATE FASHION FRAME — the rules of this picture (they outrank the general intimacy line):
+- FACELESS BY DEFAULT: the frame is cropped below the eyes or turned away — bodies and fabric in detail, hands on skin, a mouth close to a neck, the line of a back, fingers in hair. Eyes are never in the frame.
+- THE ONE EXCEPTION IS A KISS: then faces may be seen — close, in profile, half in shadow, eyes closed.
+- A FULL FRAME KEEPS FACES HIDDEN: seen from behind, a silhouette against the light, a reflection in a fogged mirror, far away through a doorway, a face lost in hair, shadow or soft focus.
+- Never genitals. Nudity is only implied: a sheet, fabric, a hand, shadow, steam or the edge of the frame covers it.
+- A faceless frame carries NO first names: write "a woman", "a man" with the fixed marks the rough prompt gives them ("an albino pale-skinned woman", "a man with a metal arm"). A kiss frame keeps the first names.
+- Elegance over explicitness: what the frame hides is what makes it charged.`;
+
 /** Короткая выжимка — для раскадровщика кадров Life (у него свой формат и своя длина промта). */
 export const DP_BRIEF = 'Shoot it like a film still caught by a photographer in the room, never people posing: one idea per frame; the action half a second before or after its peak; say where each person looks (not at the camera); a face is muscles and a cause, never a label ("one corner of the mouth pulled up, eyes still wet"), and two people never share one expression; for two people — closeness, uneven heights, bodies overlapping in depth, ONE touch with its exact place and pressure and the answer of the one touched; shot size and camera height chosen by meaning (wide with small figures, over the shoulder, a close-up off-centre, an insert of hands, a silhouette against a window, a reflection, through a doorway, from above, from low) with a soft foreground and depth behind; one real light source of this place and hour with its direction and colour, part of the face in shadow, two or three named colours; end with "The feeling: ..." in a few words.';
 
 const ASPECTS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
 
 /**
- * Задание агенту-оператору. o: { imName, guide, refs, lookText (приметы для рисовалок без рефов), takes, styled }.
- * takes — три дубля вместо одного кадра.
+ * Задание агенту-оператору. o: { imName, guide, refs, lookText (приметы для рисовалок без рефов), takes, styled, mode }.
+ * takes — три дубля вместо одного кадра. mode — правила кадра по плёнке (lookMode): 'fashion18' | 'fashion' | ''.
  */
 export function dpSystem(o = {}) {
+    const intim = o.mode === 'fashion18';
+    const fashion = intim || o.mode === 'fashion';
     const one = '{"idea":"what the picture is about, 4-8 English words","shot":"size, camera height, device — e.g. over the shoulder, low, through a doorway","prompt":"the complete new prompt, one line","aspect_ratio":"one of ' + ASPECTS.join(' | ') + '","note":"3-8 Russian words: what kind of frame it is now"}';
-    return `You are the director of photography and stills photographer of an illustrated roleplay story. The story model wrote a post and a rough prompt for its picture. Re-shoot that picture: the same moment, the same people, clothes and place — but framed, lit and acted the way a very good photographer who was in the room would have caught it. The result is one film still, never people posing for a camera.
+    const readings = intim
+        ? 'A — a detail: hands, skin and fabric, no faces in the frame; B — the two of them close: a kiss in profile with the faces half in shadow, or bodies pressed together with the faces out of the frame; C — the room: a wide frame through a doorway or in a fogged mirror, the faces hidden.'
+        : 'A — the relationship: a two-shot or over-the-shoulder built on body language; B — one face: a close-up built on the eyes with a living background; C — a detail or the place: an insert of hands or an object, or a wide frame where the place speaks.';
+    const names = o.refs === false
+        ? `- This renderer has no reference photos: every name must be replaced by the look of that person.${o.lookText ? ` Looks: ${o.lookText}` : ' Keep the neutral traits the rough prompt already has.'}`
+        : intim
+            ? '- Names follow the intimate rules: a faceless frame has no first names at all; a kiss frame keeps exactly the first names of the rough prompt (the extension maps each name to a reference photo) with the same fixed epithets. Never describe faces, hair colour, eye colour or skin tone of a named person; marks the rough prompt lists (scars, a metal arm, rings) stay, in a few words, when this framing shows them.'
+            : '- People keep exactly the first names of the rough prompt (the extension maps each name to a reference photo), with the same fixed epithets in front of a name if the rough prompt has them ("albino pale-skinned Hedy", "tall built Bucky"). Never describe faces, hair colour, eye colour or skin tone; hair only as the scene changed it (wet, tied back). Marks the rough prompt lists (scars, a metal arm, a bruise, rings) stay, in a few words, when this framing shows them.';
+    return `You are the director of photography and stills photographer of an illustrated roleplay story. The story model wrote a post and a rough prompt for its picture. Re-shoot that picture: the same moment, the same people, clothes and place — but framed, lit and acted the way a very good photographer who was in the room would have caught it. The result is one ${fashion ? 'editorial still' : 'film still'}, never people posing for a camera.
 
 Return ONLY JSON: ${o.takes
-        ? `{"takes":[A,B,C]} — three objects of the form ${one}. Three different readings of the same moment, three different shot sizes: A — the relationship: a two-shot or over-the-shoulder built on body language; B — one face: a close-up built on the eyes with a living background; C — a detail or the place: an insert of hands or an object, or a wide frame where the place speaks.`
+        ? `{"takes":[A,B,C]} — three objects of the form ${one}. Three different readings of the same moment, three different shot sizes: ${readings}`
         : one}
 
 HOW TO SHOOT
-${DP_CRAFT}
+${DP_CRAFT}${fashion ? `\n\n${FASHION_CRAFT}` : ''}${intim ? `\n\n${FASHION18_RULES}` : ''}
 
 HARD RULES
 - The truth of the story: who is present, who does what to whom, clothes, wet or dry, wounds, place and time of day — exactly as the post and the scene data say. Add no touch, kiss or prop the text lacks. Where the rough prompt contradicts the post, the post wins.
-${o.refs === false
-        ? `- This renderer has no reference photos: every name must be replaced by the look of that person.${o.lookText ? ` Looks: ${o.lookText}` : ' Keep the neutral traits the rough prompt already has.'}`
-        : '- People keep exactly the first names of the rough prompt (the extension maps each name to a reference photo), with the same fixed epithets in front of a name if the rough prompt has them ("albino pale-skinned Hedy", "tall built Bucky"). Never describe faces, hair colour, eye colour or skin tone; hair only as the scene changed it (wet, tied back). Marks the rough prompt lists (scars, a metal arm, a bruise, rings) stay, in a few words, when this framing shows them.'}
+${names}
 - At most two named people in one picture; with two, say "a man" or "a woman" once on first mention — never girl, boy, young, petite, teen. Place them by contact and depth, never by left and right.
 - No art-style, medium or quality words (photorealistic, painting, illustration, masterpiece, film grain, Kodak): the look reaches the renderer separately. Lens, aperture, light and colour words are welcome.
 - Intimacy: show the moment, never the act. Nobody is shown nude — water, sheets, a towel, steam, shadow and tight framing do the covering; bare shoulders, back, arms and the bare chest of a man are fine. Never the words sexy, seductive, erotic, sensual, nude, naked, lingerie, underwear, breasts, cleavage, thighs, crotch. Violence without gore.
@@ -280,10 +325,12 @@ export function postForDp(paras, at = -1, limit = 3600) {
     return { text: `${from > 0 ? '…\n' : ''}${lines.slice(from, to).join('\n')}${to < lines.length ? '\n…' : ''}`, marked: k >= from && k < to && k >= 0 };
 }
 
-/** Заметка основной модели на этот ответ: плёнка, свет сцены, недавние кадры и чем отличаться. */
-export function dpNote({ look = '', scene = {}, v = null } = {}) {
+/** Заметка основной модели на этот ответ: плёнка, свет сцены, недавние кадры и чем отличаться. mode — по плёнке (lookMode). */
+export function dpNote({ look = '', scene = {}, v = null, mode = '' } = {}) {
     const parts = ['[Scene picture — note from the director of photography. Shoot the picture of this reply by the image rules: a film still caught in the moment, never people posing.'];
     if (look) parts.push(`LOOK — put this text, word for word, into the "style" field of data-iig-instruction and keep the "prompt" itself free of art-style words: ${look}`);
+    if (mode === 'fashion18') parts.push('INTIMATE FASHION FRAME: an editorial still, elegant rather than explicit — faceless (cropped below the eyes, from behind, a silhouette, a reflection, a detail of hands, skin and fabric); faces only in a kiss; nudity only implied (a sheet, fabric, a hand, shadow, steam); never genitals. In a faceless frame write "a woman" / "a man" with their marks instead of first names.');
+    else if (mode === 'fashion') parts.push('FASHION EDITORIAL: one deliberate light source and where its shadow falls, a photographer\'s crop with negative space, the geometry of the bodies (torso angle, raised shoulder, chin, hands), fabric and skin texture.');
     const light = [scene.loc ? cutTo(scene.loc, 90) : '', scene.time || '', scene.atm ? cutTo(scene.atm, 240) : ''].filter(Boolean).join('; ');
     if (light) parts.push(`THE SCENE NOW: ${light}. Take the light from a real source of this place and hour.`);
     if (v?.recent?.length) parts.push(`RECENT PICTURES, newest first: ${v.recent.map((x, k) => `${k + 1}) ${x}`).join('; ')}. ${v.line}`);

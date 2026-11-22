@@ -128,11 +128,45 @@ export function cleanPrompt(p) {
 
 const MODEL_NAMES = [
     [/nano-banana-pro\/edit-developer/, 'Nano Banana Pro Edit dev'], [/nano-banana-pro\/edit/, 'Nano Banana Pro Edit'], [/nano-banana-pro/, 'Nano Banana Pro'],
-    [/nano[ -]?banana/, 'Nano Banana'], [/gpt-image-2\/edit/, 'GPT Image 2 Edit'], [/gpt-image-2/, 'GPT Image 2'], [/gpt-image/, 'GPT Image'],
-    [/grok-imagine-image-quality\/edit/, 'Grok Image Edit'], [/grok-imagine/, 'Grok Imagine'], [/grok-pro/, 'Grok Pro'], [/grok/, 'Grok'],
+    [/nano[ -]?banana/, 'Nano Banana'], [/gpt-image-2\.6/, 'GPT Image 2.6'], [/gpt-image-2\.5/, 'GPT Image 2.5'], [/gpt-image-2\/edit/, 'GPT Image 2 Edit'], [/gpt-image-2/, 'GPT Image 2'], [/gpt-image/, 'GPT Image'],
+    [/grok-imagine-image-2\.0/, 'Grok Imagine 2.0'], [/grok-imagine-image-quality\/edit/, 'Grok Image Edit'], [/grok-imagine/, 'Grok Imagine'], [/grok-pro/, 'Grok Pro'], [/grok/, 'Grok'],
+    // 0.69: модели порта SLAY (Atlas, OpenRouter images) и вне Atlas (fal.ai, Higgsfield)
+    [/seedream-v5\.5/, 'Seedream 5.5'], [/seedream-v5\.0-pro/, 'Seedream 5.0 Pro'], [/seedream/, 'Seedream'],
+    [/midjourney\/v8\.2\/image-to-image/, 'Midjourney V8.2 · образец'], [/midjourney\/v8\.2/, 'Midjourney V8.2'], [/midjourney/, 'Midjourney'],
+    [/krea\/k3/, 'Krea 3'], [/krea\/v2\/large/, 'Krea 2 Large'], [/krea\/v2\/medium/, 'Krea 2 Medium'], [/krea-2-turbo|krea-2\/turbo/, 'Krea 2 Turbo'], [/krea/, 'Krea'],
+    [/mai-image-2\.7-flash/, 'MAI-Image 2.7 Flash'], [/mai-image-2\.7/, 'MAI-Image 2.7'], [/mai-image-2\.6/, 'MAI-Image 2.6'], [/mai-image/, 'MAI-Image'],
+    [/qwen-image-3/, 'Qwen Image 3.0 Pro'], [/qwen-image/, 'Qwen Image'], [/wan-2\.7/, 'Wan 2.7 Pro'], [/\bwan-2/, 'Wan'],
+    [/soul\/reference/, 'Higgsfield Soul · реф'], [/soul/, 'Higgsfield Soul'], [/higgsfield/, 'Higgsfield'],
+    [/flux-lora/, 'FLUX + твои лоры'], [/flux-3/, 'FLUX 3'],
     [/flux-kontext/, 'FLUX Kontext'], [/flux/, 'FLUX'], [/novelai|nai-diffusion/, 'NovelAI'],
 ];
 const API_NAMES = { atlas: 'Atlas', naistera: 'Naistera', gemini: 'Gemini', openai: 'OpenAI-совместимый', custom: 'свой адрес', novelai: 'NovelAI' };
+/** Через что ходит SLAY: у типа Custom — по формату запроса (OpenRouter images, очередь fal / Higgsfield). */
+function apiName(st, api, m) {
+    if (api === 'custom' && st.customBodyFormat === 'orimages') return 'OpenRouter';
+    if (api === 'custom' && st.customBodyFormat === 'falq') return /higgsfield/.test(m) || /higgsfield/i.test(String(st.endpoint || '')) ? 'Higgsfield' : 'fal.ai';
+    return API_NAMES[api] || api;
+}
+
+/** Диалект по id модели (то же, что в imageModelOf; без SLAY — для каталога моделей). */
+export function kindOfModel(model, api = '') {
+    const m = String(model || '').toLowerCase();
+    if (api === 'novelai' || /novelai|nai-diffusion|\bnai\b/.test(m)) return 'nai';
+    if (/banana|gemini|imagen/.test(m)) return 'banana';
+    if (/gpt-image|gpt image|dall-e|^openai\//.test(m)) return 'gpt';
+    if (/grok|^xai\//.test(m)) return 'grok';
+    if (/midjourney/.test(m)) return 'mj';
+    if (/seedream/.test(m)) return 'seedream';
+    if (/krea/.test(m)) return 'krea';
+    if (/mai-image/.test(m)) return 'mai';
+    if (/qwen-image/.test(m)) return 'qwen';
+    if (/\bwan-2/.test(m)) return 'wan';
+    if (/higgsfield|\bsoul\b/.test(m)) return 'soul';
+    if (/flux|kontext|black-forest/.test(m)) return 'flux';
+    if (api === 'gemini') return 'banana';
+    return 'generic';
+}
+export const modelName = (model) => (MODEL_NAMES.find(([re]) => re.test(String(model || '').toLowerCase())) || [])[1] || String(model || '') || '—';
 
 /** Что сейчас выбрано в SLAY: { api, model, kind, name, label }. kind — «диалект» промта. */
 export function imageModelOf(st) {
@@ -142,15 +176,9 @@ export function imageModelOf(st) {
         : api === 'naistera' ? st.naisteraModel || 'grok'
             : api === 'novelai' ? st.novelModel || 'novelai' : st.model || '');
     const m = model.toLowerCase();
-    let kind = 'generic';
-    if (api === 'novelai' || /novelai|nai-diffusion|\bnai\b/.test(m)) kind = 'nai';
-    else if (/banana|gemini|imagen/.test(m)) kind = 'banana';
-    else if (/gpt-image|gpt image|dall-e|^openai\//.test(m)) kind = 'gpt';
-    else if (/grok|^xai\//.test(m)) kind = 'grok';
-    else if (/flux|kontext|black-forest/.test(m)) kind = 'flux';
-    else if (api === 'gemini') kind = 'banana';
-    const name = (MODEL_NAMES.find(([re]) => re.test(m)) || [])[1] || model || '—';
-    return { api, model, kind, name, label: `${name} · ${API_NAMES[api] || api}` };
+    const kind = kindOfModel(m, api);
+    const name = modelName(m) === m ? (model || '—') : modelName(m);
+    return { api, model, kind, name, label: `${name} · ${apiName(st, api, m)}` };
 }
 
 // ───────────── диалекты ─────────────
@@ -161,7 +189,7 @@ export const DIALECTS = {
     banana: {
         name: 'Nano Banana',
         refs: true,
-        guide: 'Google Nano Banana (Gemini image). A narrative scene description in natural language — one dense paragraph, 60-110 words, never a keyword list. Order: shot type, angle and lens → who is in frame (first names) and what they are doing → clothes → place → light. The art style usually travels separately (the style field of the tag): keep style words only if the current prompt already carries them. Positive framing only: describe what IS there ("an empty street") instead of listing what is not ("no cars"). Reference photos carry the faces — name the people, do not describe faces, hair or eye colour.',
+        guide: 'Google Nano Banana (Gemini image). A narrative scene description in natural language — one dense paragraph, 60-110 words, never a keyword list. Order: shot type, angle and lens → who is in frame (first names) and what they are doing → clothes → place → light. With two people it follows a short structure best, still on one line: "SCENE: framing, crop line, place, light source and where its shadow falls, two or three colours. FIGURE 1 — Hedy: angle of the torso, tilt of the head, where she looks, what each hand does. FIGURE 2 — Bucky: … and who overlaps whom in depth." The art style usually travels separately (the style field of the tag): keep style words only if the current prompt already carries them. Positive framing only: describe what IS there ("an empty street") instead of listing what is not ("no cars"). Reference photos carry the faces — name the people, do not describe faces, hair or eye colour. Its filter is strict about skin: keep intimate frames covered and faceless.',
         note: '',
     },
     gpt: {
@@ -179,8 +207,50 @@ export const DIALECTS = {
     flux: {
         name: 'FLUX',
         refs: true,
-        guide: 'FLUX (Kontext / dev). A plain descriptive caption of the finished picture, 40-80 words: subject, action, clothes, place, light, lens. No negative phrasing at all — "no X" and "without X" are ignored or backfire, describe only what is visible. Kontext takes one reference photo of a face: refer to "the same person as in the reference" for the main subject. LoRA trigger words are added by the extension — never invent them.',
+        guide: 'FLUX (Kontext / dev / FLUX 3). A plain descriptive caption of the finished picture, 40-80 words (FLUX 3 follows longer exact prompts, up to 120): subject, action, clothes, place, light described physically (source, direction, softness, colour), lens. No negative phrasing at all — "no X" and "without X" are ignored or backfire, describe only what is visible. Kontext takes one reference photo of a face: refer to "the same person as in the reference" for the main subject. LoRA trigger words are added by the extension — never invent them.',
         note: 'FLUX: write a plain caption of the finished picture, 40-80 words (subject, action, clothes, place, light, lens). No negative phrasing — skip the "Avoid: …" list for this model and describe only what is visible.',
+    },
+    seedream: {
+        name: 'Seedream',
+        refs: true,
+        guide: 'ByteDance Seedream 5.x. Natural English sentences, 70-140 words — it follows long, structured descriptions and renders skin, fabric and film texture very well. Order: shot size, camera height and lens → who is in the frame (first names) and the exact action → clothes and fabric → place → the light source, its direction and colour → two or three colours. With two people use a short structure on one line: "SCENE: …. FIGURE 1 — Hedy: torso angle, head, gaze, hands. FIGURE 2 — Bucky: …, overlapping her in depth." Reference photos carry the faces (the extension labels them Image 1, Image 2): name the people, never describe faces, hair or eye colour. Concrete camera words, no lists of negatives.',
+        note: 'Seedream: write the prompt in natural English sentences, 70-140 words — shot and lens first, then who is in the frame and the exact action, clothes and fabric, place, the light source with its direction and colour. With two people a short "SCENE: … FIGURE 1 — name: … FIGURE 2 — name: …" structure on one line. No "Avoid: …" list.',
+    },
+    mj: {
+        name: 'Midjourney',
+        refs: true,
+        guide: 'Midjourney V8. Short and literal, 30-60 words, the most important thing first: what is in the frame and what happens, then the light, then the mood. It keeps no faces (the extension sends at most one picture as a sample), so it shines on frames without faces: hands, fabric, silhouettes, a back, a doorway, a place. Plain words, no negatives, no weights and no parameters — the extension adds them. The art style travels separately.',
+        note: 'Midjourney: the prompt is short and literal, 30-60 words — first what is in the frame and what happens, then light, then mood. No negatives, no "Avoid" list, no parameters.',
+    },
+    krea: {
+        name: 'Krea',
+        refs: true,
+        guide: 'Krea (2 / 3). A photographers caption, 40-90 words: the subject and the exact action, the light source and its direction, the lens, the texture of the film. It loves raw film realism — grain, imperfect light, real skin. With two people say plainly that both are in the frame and how they overlap ("Bucky behind her, his chin on her shoulder") — it tends to drop the second person. No negatives.',
+        note: 'Krea: write a photographers caption, 40-90 words — subject and action, light source and direction, lens, film texture. With two people say plainly that both are in the frame and how they overlap. No "Avoid" list.',
+    },
+    mai: {
+        name: 'MAI-Image',
+        refs: true,
+        guide: 'Microsoft MAI-Image. Clear descriptive sentences, 50-100 words, photographic: the framing first, then the people and what they do, place and light. Its moderation is strict — keep the frame clothed, calm and free of names of real people or brands.',
+        note: 'MAI-Image: clear descriptive sentences, 50-100 words — framing first, then the people and the action, place, light. Keep it clothed and calm.',
+    },
+    qwen: {
+        name: 'Qwen Image',
+        refs: true,
+        guide: 'Alibaba Qwen Image. Clear structured English, 50-120 words: framing → subject and action → place → light. Exact about any text inside the picture: put the words to be written in the scene description plainly (a sign that reads OPEN). No negatives.',
+        note: 'Qwen Image: clear structured English, 50-120 words — framing, subject and action, place, light; write any text that must appear in the picture plainly.',
+    },
+    wan: {
+        name: 'Wan',
+        refs: true,
+        guide: 'Alibaba Wan 2.7. Descriptive English, 50-110 words: framing, subject and action, place, light, colours. The frame shape is added by the extension in words — do not describe it. No negatives.',
+        note: 'Wan: descriptive English, 50-110 words — framing, subject and action, place, light, colours. No "Avoid" list.',
+    },
+    soul: {
+        name: 'Higgsfield Soul',
+        refs: true,
+        guide: 'Higgsfield Soul — a fashion-editorial photo model. Write like an art director briefing a shoot, 40-90 words: styling and fabric, pose and its geometry, the light setup, the location, the mood. Fashion vocabulary works best (editorial, campaign, medium format, hard flash, window light). It keeps no faces: perfect for faceless or anonymous editorial frames. No negatives.',
+        note: 'Higgsfield Soul: write like an art director briefing a fashion shoot, 40-90 words — styling and fabric, pose, light setup, location, mood. No "Avoid" list.',
     },
     nai: {
         name: 'NovelAI',

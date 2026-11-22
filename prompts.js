@@ -25,6 +25,10 @@
 // кадры рисует через двойника (его ↻ SLAY ищет тег по промту из поста, по пути и по месту); тап по устаревшей плашке
 // перехватывается и рисуется так же. Журнал картинок (что рисовалось, чем кончилось, что ответил сервер) — ещё и в
 // метаданных чата (pm.log): снимок чата с сервера покажет, что было, без скринов.
+// 0.69: «Фешн» и «Фешн · 18+» (dpcore.js: плёнки и правила кадра; раздетые — фото без лиц, как в журнале, а не кисть);
+// «✦ Под этот кадр» (pmpick.js): какая рисовалка лучше снимет кадр — тап переключает SLAY и переписывает промт под неё;
+// подсказка тостом, когда кадр явно не для этой рисовалки; кнопка «адаптировать» — переписать промт под ту, что стоит.
+// Безликому кадру SLAY (крючок v2) не шлёт фото лиц и «Персонажей»: модель не дорисует лица.
 // 0.67.2: окно промта — свой <dialog> в верхнем слое браузера (showModal), как хаб Life, её окна и Гардероб. Обычным
 // слоем (div с z-index) оно на её iPhone открывалось невидимым — «поверх лежит» верхняя панель таверны, и подъём над
 // чужими слоями не помогал. Верхний слой не перекрыть ничем и не сдвинуть ничьими трансформами. Тосты на время окна
@@ -36,8 +40,9 @@ import {
     scanTags, tagState, isPicture, withIns, withSrc, ordOf, replaceNth, sameButSrc, sigOf, parseIns, encodeIns, cleanPrompt,
     ASPECTS, imageModelOf, DIALECTS, dialectNote, explainError, sourceSnap, sourceIsCurrent,
 } from './pmtags.js';
-import { dpCfg, reshoot, lookNow, lookChoices, sceneOf } from './dp.js';
-import { LOOKS, LOOK_OWN, LOOK_SAFE, PAINTED, lookText, lookOfText, lookById, shotOf, shotLabelRu } from './dpcore.js';
+import { dpCfg, reshoot, lookNow, lookChoices, sceneOf, frameLook } from './dp.js';
+import { LOOKS, LOOK_OWN, LOOK_SAFE, LOOK_INTIM, PAINTED, lookText, lookOfText, lookById, lookMode, safeLookFor, shotOf, shotLabelRu } from './dpcore.js';
+import { MODELS, VIA_RU, modelById, frameFacts, suggestModels, verdict } from './pmpick.js';
 
 let A = null;
 const esc = (v) => A.esc(v);
@@ -88,6 +93,7 @@ function cfg() {
     if (c.tap === undefined) c.tap = false;        // тап по картинке открывает не её на весь экран, а сразу окно промта
     if (c.auto === undefined) c.auto = true;       // после «поправить» сразу рисовать
     if (c.dialect === undefined) c.dialect = true; // подсказка основной модели: под какую рисовалку писать промт
+    if (c.hint === undefined) c.hint = true;       // 0.69: подсказка тостом — кадр не для этой рисовалки, лучше такая-то
     if (!Array.isArray(c.quick)) c.quick = [];     // свои быстрые правки
     if (typeof c.looks !== 'string') c.looks = ''; // приметы персонажей — для рисовалок без рефов
     if (!c.fb || typeof c.fb !== 'object') c.fb = {};   // запасной стиль на случай фильтра
@@ -1249,6 +1255,112 @@ function useSource(name) {
     return true;
 }
 
+// ───────────── «Под этот кадр»: какая рисовалка лучше, переключить на неё (0.69) ─────────────
+// Каталог и выбор — pmpick.js. Здесь — что из каталога SLAY сейчас достаёт (ключ Atlas, сохранённые профили) и как
+// на модель переключиться: Atlas — его же списком моделей (SLAY сам переложит «настройки модели»), остальное — профилем
+// подключения, а модель — списком «OpenRouter images» / «Очередь fal / Higgsfield» в его панели.
+
+/** Имена людей с рефами в SLAY: карточки, юзер, NPC. По ним SLAY решает, чьё фото лица слать, — значит, и мы по ним
+ *  узнаём, назван ли в промте человек (английские имена Life по карточкам может и не знать). */
+function slayRefNames() {
+    const st = slay();
+    const out = new Set();
+    const put = (v) => { for (const x of String(v || '').split(/[,;|/]+/)) { const t = x.trim(); if (t.length >= 3) out.add(t.toLowerCase()); } };
+    try {
+        for (const [k, r] of Object.entries(st?.perCharacterRefs || {})) {
+            if (!k.startsWith('__')) put(k);
+            put(r?.charRef?.name); put(r?.userRef?.name);
+            for (const n of r?.npcReferences || []) put(n?.name);
+        }
+        for (const g of Object.values(st?.slayGroupRefs || {})) put(g?.userRef?.name);
+        put(st?.charRef?.name); put(st?.userRef?.name);
+        for (const n of st?.npcReferences || []) put(n?.name);
+    } catch { /* другой вид настроек */ }
+    return [...out];
+}
+/** Сколько людей в промте названы по имени. */
+function namedIn(prompt) {
+    const p = ` ${String(prompt || '').toLowerCase()} `;
+    const esc2 = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const slayHits = slayRefNames().filter(n => new RegExp(`(^|[^a-zа-яё0-9])${esc2(n)}(?![a-zа-яё0-9])`, 'i').test(p));
+    let cast = [];
+    try { cast = A.namesInText?.(prompt) || []; } catch { /* */ }
+    return Math.max(slayHits.length, cast.length);
+}
+
+const viaOf = (p) => (p?.apiType === 'atlas' ? 'atlas' : p?.apiType === 'custom' && p.customBodyFormat === 'orimages' ? 'or'
+    : p?.apiType === 'custom' && p.customBodyFormat === 'falq' ? (/higgsfield/i.test(`${p.endpoint || ''} ${p.model || ''}`) ? 'hf' : 'fal') : '');
+/** Через что SLAY дотянется до каждой «дороги»: живые настройки или сохранённый профиль. */
+function roads() {
+    const st = slay();
+    const out = {};
+    if (!st) return out;
+    if (String(st.apiKey || '').trim() && viaOf(st)) out[viaOf(st)] = 'live';
+    for (const p of sources()) { const v = viaOf(p); if (v && String(p.apiKey || '').trim() && !out[v]) out[v] = p.name; }
+    return out;
+}
+/** Модели каталога, до которых SLAY сейчас дотянется. */
+function availableModels() {
+    const r = roads();
+    return MODELS.filter(m => !!r[m.via]);
+}
+/** Какая модель каталога стоит в SLAY сейчас; нет её в каталоге — запись по диалекту (без оценок). */
+function currentEntry() {
+    const im = imageModel();
+    const e = modelById(im.model) || { id: im.model, name: im.name, via: '', refs: !!(DIALECTS[im.kind] || DIALECTS.generic).refs, filter: im.kind === 'banana' || im.kind === 'gpt' ? 'strict' : 'medium', tags: [] };
+    // у SLAY включены «Лица вторым проходом»: лица по рефам дорисует Krea 3 — рисовалка без рефов лица всё-таки держит
+    return !e.refs && slay()?.slayFacePass ? { ...e, refs: true, facePass: true } : e;
+}
+/** Что за кадр: промт, его плёнка (текст из поля style; нет — какая будет по сцене) и сцена поста. */
+function factsOf({ prompt, i = -1, look = '' }) {
+    let scene = {};
+    try { scene = sceneOf(Number.isInteger(i) && i >= 0 ? i : undefined); } catch { /* сцена не читается */ }
+    const id = lookOfText(look) || frameLook(scene, null);
+    return frameFacts({ prompt, look: id, names: namedIn(prompt), scene });
+}
+/** Что нужно, чтобы SLAY до модели дотянулся. */
+function needFor(m) {
+    if (m.via === 'atlas') return 'нужен ключ Atlas — запомни его источником (✎ → Источники)';
+    if (m.via === 'or') return 'нужен профиль SLAY «OpenRouter images» с ключом OpenRouter: SLAY → Custom → «OpenRouter images» → 💾';
+    if (m.via === 'fal') return 'нужен профиль SLAY «Очередь fal / Higgsfield» с ключом fal.ai (fal.ai → Dashboard → Keys)';
+    if (m.via === 'hf') return 'нужен профиль SLAY «Очередь fal / Higgsfield» с ключом Higgsfield в виде id:secret (cloud.higgsfield.ai → API keys)';
+    return 'её нет в каталоге';
+}
+
+/** Переключить SLAY на модель каталога. false — не до чего дотянуться (нет ключа или профиля). */
+function useModel(m) {
+    const st = slay();
+    if (!st || !m) return false;
+    const r = roads()[m.via];
+    if (!r) return false;
+    if (r !== 'live' && !useSource(r)) return false;
+    if (m.via === 'atlas') {
+        if (st.atlasModel !== m.id && !setCtl('slay_atlas_model', m.id, 'change')) st.atlasModel = m.id;
+    } else if (st.model !== m.id) {
+        // «OpenRouter images» и очередь — списком моделей в панели SLAY (он сам запомнит выбор), иначе — в настройки
+        if (!setCtl('slay_model_select', m.id, 'change')) { st.model = m.id; setCtl('slay_model', m.id, 'input'); }
+    }
+    saveAll();
+    try { A.updatePrompt?.(); } catch { /* заметка о рисовалке — к следующему ответу */ }
+    keepLog(`под этот кадр: SLAY → ${m.name} (${VIA_RU[m.via] || m.via})`);
+    return true;
+}
+
+const hintAt = new Map();   // причина → когда подсказывали
+/** Подсказка тостом: кадр не для этой рисовалки, лучше такая-то. Не чаще раза в 15 минут на одну причину. */
+function hintFor(f, { refused = false } = {}) {
+    if (!cfg().hint) return;
+    const cur = currentEntry();
+    const v = verdict(f, cur) || (refused && f.skin ? { key: 'refused', text: `Фильтр ${cur.name} не пропустил интимный кадр` } : null);
+    if (!v) return;
+    const best = suggestModels(f, { avail: availableModels() }).find(m => m.id !== cur.id && m.score > 0);
+    if (!best) return;
+    if (Date.now() - (hintAt.get(v.key) || 0) < 15 * 60 * 1000) return;
+    hintAt.set(v.key, Date.now());
+    keepLog(`подсказка: ${v.text} → ${best.name}`);
+    A.toast('info', `${esc(v.text)}. Под него — ${esc(best.name)}: ${esc(best.why[0] || best.note)}. ✎ на картинке → «Под этот кадр».`, '✦ Подсказка', { timeOut: 9000 });
+}
+
 // ───────────── перевод «словами» → промт ─────────────
 
 const TR_SYSTEM = (d, im, lookText) => `You edit image-generation prompts for an illustrated roleplay story. You get the current prompt and, usually, what the player wants changed (in Russian). Return the full new prompt.
@@ -1263,7 +1375,8 @@ Rules:
 ${d.refs
         ? '- People keep their first names exactly as written — the extension maps each name to a reference photo. Never replace a name with a description and never describe faces, hair or eye colour of named people.'
         : `- This model has no reference photos: every name must be replaced by that person's look.${lookText ? ` Looks: ${lookText}` : ' If a look is unknown, keep the neutral traits already in the prompt.'}`}
-- If there is no request, only re-write the same picture in this model's manner.
+- If there is no request, only re-write the same picture in this model's manner — its length, order and structure — keeping every person, action, garment, place and light.
+- A faceless frame (no first names, the faces cropped off or turned away) stays faceless: add no names and no faces.
 - If the request is RESTYLE: delete every sentence or phrase about art style, medium, rendering technique, brushwork, palette, "lens feel" or a style reference, and add none — the new style reaches the renderer separately. Who, pose, clothes, place and light stay word for word where possible.
 - If the last attempt was refused by moderation, remove or soften what most likely caused it — bare skin becomes covered or implied, wounds lose graphic detail, names of real actors, celebrities, brands and franchises go away — and keep the scene, the people and the mood. Say in the note what you softened.
 - English only, one line, no line breaks, no quotation marks inside the prompt.`;
@@ -1375,14 +1488,20 @@ async function autoFallback(i, k, rec) {
     try {
         // до порога — ещё раз в общем стиле. Плёнка была фото (кино, Portra, неон…) — повтор тем же кадром, но рисунком
         // («Кино · кисть»): тот же промт фильтр второй раз почти всегда режет так же, а рисованный кадр пропускает.
+        // 0.69: рисовалка, которой такой кадр не по зубам, — подсказать, на какой он пройдёт (тост, не чаще раза в 15 минут)
+        try { hintFor(factsOf({ prompt: cur.prompt, i, look: cur.look }), { refused: true }); } catch (e) { console.warn('[Life] промты: подсказка', e); }
         while (rec.n < need) {
             const was = ad.read();
-            const photo = !!was && !PAINTED.has(lookOfText(was.look)) && !!lookOfText(was.look);
-            A.toast('info', photo ? `Фильтр не пропустил фото — рисую тот же кадр кистью (отказ ${rec.n} из ${need}).` : `Фильтр не пропустил картинку — пробую ещё раз (отказ ${rec.n} из ${need}).`, T, { timeOut: 4000 });
-            keepLog(`отказ фильтра: пост ${i}, картинка ${k} — ${photo ? 'повтор рисунком («Кино · кисть»)' : 'повтор как есть'} (отказ ${rec.n} из ${need})`);
+            const wasLook = lookOfText(was?.look);
+            const photo = !!was && !PAINTED.has(wasLook) && !!wasLook;
+            // у фешна рисованная пара — фешн-скетч, у остальных плёнок — «Кино · кисть»
+            const safe = lookById(safeLookFor(wasLook));
+            const how = safe[0] === 'fsketch' ? 'фешн-скетчем' : 'кистью';
+            A.toast('info', photo ? `Фильтр не пропустил фото — рисую тот же кадр ${how} (отказ ${rec.n} из ${need}).` : `Фильтр не пропустил картинку — пробую ещё раз (отказ ${rec.n} из ${need}).`, T, { timeOut: 4000 });
+            keepLog(`отказ фильтра: пост ${i}, картинка ${k} — ${photo ? `повтор рисунком («${safe[1]}»)` : 'повтор как есть'} (отказ ${rec.n} из ${need})`);
             busyMark(i, k, true);
             try {
-                if (photo) await ad.save({ prompt: was.prompt, aspect: was.aspect, look: lookById(LOOK_SAFE)[3] });
+                if (photo) await ad.save({ prompt: was.prompt, aspect: was.aspect, look: safe[3] });
                 await ad.draw();
                 rec.done = true;
                 A.toast('success', photo ? 'Рисунком прошло. Вернуть фото — ✎ → «Плёнка».' : 'Повторная попытка прошла — картинка в общем стиле.', T, { timeOut: 3500 });
@@ -1753,6 +1872,8 @@ const DP_ASK = [
     ['другой план', 'другой план и другая высота камеры, не как сейчас'],
     ['шире: место', 'общий план: место тоже герой кадра, фигуры небольшие'],
     ['деталь', 'деталь крупно: руки или жест вместо лиц'],
+    ['фешн', 'как фешн-съёмка для журнала: один продуманный источник света и где ложится тень, кроп фотографа с воздухом, геометрия тел, фактура ткани и кожи'],
+    ['без лиц', 'без лиц: деталь тел и ткани, кадр обрезан ниже глаз или снят со спины; имён в промте нет'],
 ];
 /** SLAY сам зовёт соседей перед отрисовкой (порт 5.1.1+) — значит, новый кадр можно переснять до запроса. */
 const hookAlive = () => Number(globalThis.slayHooks?.version) >= 1;
@@ -1762,6 +1883,38 @@ function operatorHtml() {
     return `<label class="lf-pm-l"><span>Оператор</span><small>переснять кадр по посту</small></label>
         <div class="lf-pm-chips dp"><button class="lf-pm-chip go" data-pm="dp">${icon('film')} Переснять</button><button class="lf-pm-chip" data-pm="dp-takes">${icon('layers')} три дубля</button>${DP_ASK.map(([t, v]) => `<button class="lf-pm-chip" data-pm="dp-ask" data-v="${esc(v)}">${esc(t)}</button>`).join('')}</div>
         ${S.takes.length ? `<div class="lf-pm-takes">${S.takes.map((t, k) => `<button class="lf-pm-take" data-pm="take" data-k="${k}"><b>${esc(t.note || shotLabelRu(shotOf(t.prompt)) || `дубль ${k + 1}`)}</b><small>${esc([t.shot, S.ad.fixedAspect ? '' : t.aspect].filter(Boolean).join(' · '))}</small><p>${esc(A.cut(t.prompt, 170))}</p></button>`).join('')}</div>` : ''}`;
+}
+
+/** «✦ Под этот кадр» (0.69): до трёх рисовалок, которые лучше снимут этот кадр, — из тех, до каких SLAY дотягивается.
+ *  Тап — SLAY переключён на неё, промт переписан под её манеру. Вне Atlas, если там лучше, — строкой «где взять». */
+function pickHtml() {
+    if (S.ad.kind === 'detail' || !slay()) return '';
+    let f = null;
+    try { f = factsOf({ prompt: S.prompt, i: Number.isInteger(S.ad.mes) ? S.ad.mes : -1, look: S.look }); } catch { return ''; }
+    const cur = currentEntry();
+    const list = suggestModels(f, { avail: availableModels() }).filter(m => m.score > 0).slice(0, 3);
+    // вне Atlas — те, до кого SLAY пока не дотянется, а кадр они снимут не хуже лучшей из доступных (и где взять ключ)
+    const far = suggestModels(f).filter(m => (m.via === 'fal' || m.via === 'hf') && !availableModels().some(x => x.id === m.id) && m.score > 0 && m.score >= (list[0]?.score ?? 0));
+    const v = verdict(f, cur);
+    if (!list.length && !far.length) return '';
+    return `<label class="lf-pm-l"><span>✦ Под этот кадр</span><small>тап — сменю SLAY и промт</small></label>
+        ${v ? `<div class="lf-pm-note warn">${icon('shield')}<span>${esc(v.text)}.</span></div>` : ''}
+        <div class="lf-pm-chips pick">${list.map(m => `<button class="lf-pm-chip pick${m.id === cur.id ? ' on' : ''}" data-pm="pick" data-v="${esc(m.id)}" title="${esc(m.note)}"><b>${esc(m.name)}</b><small>${esc(m.why[0] || m.note)}</small></button>`).join('')}</div>
+        ${far.length ? `<div class="lf-pm-dim">Вне Atlas под такой кадр — ${far.slice(0, 2).map(m => `<b>${esc(m.name)}</b> (${esc(VIA_RU[m.via])}: ${esc(m.note)})`).join(', ')}. ${esc(cap([...new Set(far.slice(0, 2).map(needFor))].join('; ')))}.</div>` : ''}`;
+}
+
+const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
+
+/** Тап по рисовалке в «Под этот кадр»: SLAY — на неё, промт — под её манеру (рисовать — кнопкой, как после «адаптировать»). */
+async function pickNow(id) {
+    const my = S;
+    const m = modelById(id);
+    if (!my || my.busy || !m) return;
+    const was = imageModel().name;
+    if (currentEntry().id !== m.id && !useModel(m)) { A.toast('warning', `Не дотянусь до ${esc(m.name)}: ${esc(needFor(m))}.`, '✦ Под этот кадр', { timeOut: 8000 }); return; }
+    A.toast('success', `SLAY: ${esc(was)} → ${esc(m.name)}. Переписываю промт под неё — потом жми «Нарисовать».`, '✦ Под этот кадр', { timeOut: 4500 });
+    paint();
+    await fixNow('', { convert: true });
 }
 
 /** Строка «Плёнка»: вид картинки — текст в поле style её тега. Первой стоит плёнка этой сцены. */
@@ -1787,6 +1940,7 @@ function dpSetHtml() {
     return `<label class="lf-pm-l"><span>Оператор</span><small>кадр как у фотографа</small></label>
         ${tg('on', 'Подсказывать модели на каждый ответ: плёнку, свет сцены и какие кадры уже были')}
         ${tg('auto', 'Новый кадр переснимать самой, до отрисовки')}
+        <button class="lf-pm-tg${c.skin !== 'brush' ? ' on' : ''}" data-pm="dpskin"><i></i><span>Раздетые сцены — «Фешн · 18+»: фото как в журнале, без лиц и намёком (выкл. — кистью, как раньше)</span></button>
         ${c.auto && !hookAlive() ? '<div class="lf-pm-dim">Этот SLAY перед отрисовкой соседей не зовёт — сама пересниму после переезда на SLAY 5.1.1 (порт). Пока — кнопкой «Переснять» в окне.</div>' : ''}
         <select class="lf-pm-sel" data-in="dplook">${lookChoices().map(([id, label, hint]) => `<option value="${id}"${c.look === id ? ' selected' : ''}>${esc(`Плёнка: ${label} — ${hint}`)}</option>`).join('')}</select>
         ${c.look === LOOK_OWN ? `<textarea class="lf-pm-ta small" data-in="dpown" rows="3" placeholder="По-английски, как описывают вид картинки: film stock, light, grain, texture…">${esc(c.own)}</textarea>` : ''}
@@ -1823,6 +1977,7 @@ function setHtml() {
     return `<div class="lf-pm-sub">
         ${tg('auto', 'После «поправить» сразу рисовать')}
         ${tg('dialect', 'Подсказывать модели, под какую рисовалку писать промт в посте')}
+        ${tg('hint', 'Подсказывать мне, какая рисовалка лучше под кадр (тостом, когда эта не годится)')}
         ${tg('on', '✎ на картинках в постах')}
         ${tg('tap', 'Тап по картинке — сразу окно промта (а не на весь экран)')}
         ${dpSetHtml()}
@@ -1830,7 +1985,7 @@ function setHtml() {
         <label class="lf-pm-l"><span>Приметы</span><small>для NovelAI — рефов у неё нет</small></label>
         <textarea class="lf-pm-ta small" data-in="looks" rows="3" placeholder="По-английски, коротко: Hedy — …; Bucky — … Пусто — возьму описания персонажей из настроек SLAY.">${esc(c.looks)}</textarea>
         ${c.quick.length ? `<label class="lf-pm-l"><span>Свои быстрые правки</span><small>тап — убрать</small></label><div class="lf-pm-chips">${c.quick.map((q, k) => `<button class="lf-pm-chip" data-pm="quick-del" data-k="${k}">${esc(q)} ✕</button>`).join('')}</div>` : ''}
-        <div class="lf-pm-dim">Переводит Летописец (профиль — Мир → ⚙). Манера письма берётся по модели, выбранной в SLAY: Nano Banana, GPT Image, Grok, FLUX, NovelAI.</div>
+        <div class="lf-pm-dim">Переводит Летописец (профиль — Мир → ⚙). Манера письма берётся по модели, выбранной в SLAY: Nano Banana, Seedream, Midjourney, Krea, FLUX, GPT Image, Grok, MAI, Qwen, Wan, Higgsfield Soul, NovelAI. «✦ Под этот кадр» — какая из них лучше снимет кадр; тап переключает SLAY и переписывает промт.</div>
     </div>`;
 }
 
@@ -1852,6 +2007,7 @@ function paint() {
             ${previewHtml()}
             <button class="lf-pm-model" data-pm="fold" data-v="src">${icon('plug')}<span><b>${esc(im.name)}</b><small>${esc(im.label.split(' · ')[1] || '')}${eng === 'life' ? ' · эту рисует Гардероб' : ''} · пишу под ${esc(d.name)}</small></span>${chev('src')}</button>
             ${S.fold === 'src' ? sourcesHtml() : ''}
+            ${pickHtml()}
             <label class="lf-pm-l"><span>Что поправить</span><small>словами — переведу в промт</small></label>
             <div class="lf-pm-fix"><input type="text" data-in="fix" enterkeyhint="go" placeholder="ближе кадр · она в красном · он без бороды…" value="${esc(S.fix)}"><button data-pm="quick-add" title="Запомнить как быструю правку">${icon('plus')}</button><button data-pm="fix" class="main" title="Перевести в промт${cfg().auto ? ' и нарисовать' : ''}">${icon('wand')}</button></div>
             <div class="lf-pm-chips quick">${[...QUICK, ...cfg().quick.map(q => [q, q])].map(([t, v]) => `<button class="lf-pm-chip" data-pm="chip" data-v="${esc(v)}">${esc(t)}</button>`).join('')}</div>
@@ -1872,7 +2028,7 @@ function paint() {
             ${S.busy ? `<div class="lf-pm-wait"><i></i><span>${esc(S.step)}</span></div>` : ''}
             <div class="lf-pm-go">
                 <button data-pm="draw" class="main">${icon('camera')} ${S.state === 'ok' ? 'Перерисовать' : 'Нарисовать'}</button>
-                <button data-pm="model" title="Переписать этот же кадр в манере ${esc(d.name)}">${icon('swap')} под модель</button>
+                <button data-pm="model" title="Переписать этот же кадр в манере ${esc(d.name)} — той, что стоит в SLAY">${icon('swap')} адаптировать</button>
                 <button data-pm="save" class="lf-pm-save"${dirty() ? '' : ' disabled'} title="Оставить промт в посте, не рисуя">${icon('check')}</button>
             </div>
         </footer>
@@ -1943,6 +2099,7 @@ async function onBoxClick(ev) {
     if (act === 'fold') { S.fold = S.fold === b.dataset.v ? '' : b.dataset.v; paint(); return; }
     if (act === 'set') { const c = cfg(); if (b.dataset.v === 'fb.auto') c.fb.auto = !c.fb.auto; else c[b.dataset.v] = !c[b.dataset.v]; A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } A.paintSoon?.(); paint(); return; }
     if (act === 'dpset') { const c = dpCfg(); c[b.dataset.v] = !c[b.dataset.v]; A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } paint(); return; }
+    if (act === 'dpskin') { const c = dpCfg(); c.skin = c.skin === 'brush' ? 'fashion' : 'brush'; A.saveSettings(); try { A.updatePrompt?.(); } catch { /* */ } paint(); return; }
     if (act === 'quick-del') { cfg().quick.splice(Number(b.dataset.k), 1); A.saveSettings(); paint(); return; }
     if (act === 'quick-add') {
         const t = S.fix.trim();
@@ -1970,6 +2127,7 @@ async function onBoxClick(ev) {
     if (act === 'fix') { fixNow(S.fix); return; }
     if (act === 'soften') { fixNow('', { soften: true }); return; }
     if (act === 'model') { fixNow('', { convert: true }); return; }
+    if (act === 'pick') { pickNow(b.dataset.v); return; }
     if (act === 'draw') { drawNow(); return; }
     if (act === 'save') { saveNow(); return; }
     if (act === 'hist-load') { const v = histOf()[Number(b.dataset.k)]; if (v) { S.prev = { prompt: S.prompt, aspect: S.aspect, pmStyle: S.pmStyle }; S.prompt = v.p; if (v.ar && !S.ad.fixedAspect) S.aspect = v.ar; if (S.ad.styled) S.pmStyle = v.sn || ''; S.note = 'промт из версии — можно править и рисовать'; paint(); } return; }
@@ -2106,7 +2264,19 @@ function hookSlayDraw() {
 
 const promptSig = (p) => sigOf({ prompt: p });
 
+/** Крючок SLAY: оператор и плёнка (onSlayDraw0), и поверх — пометка безликого интимного кадра (крючок v2 порта SLAY):
+ *  по ней SLAY не шлёт фото лиц и «Персонажей» — иначе модель дорисует лица в кадр, где их быть не должно. */
 async function onSlayDraw(req) {
+    const out = await onSlayDraw0(req);
+    try {
+        if (out && out.faceless !== undefined) return out;
+        const style = out?.style ?? req?.style, prompt = out?.prompt ?? req?.prompt;
+        if (lookMode(lookOfText(style)) === 'fashion18' && namedIn(prompt) === 0) return { ...(out || {}), faceless: true };
+    } catch { /* как есть */ }
+    return out;
+}
+
+async function onSlayDraw0(req) {
     try {
         if (!A?.hasChat?.() || A.settings().enabled === false) return null;
         { const bi = Number(req?.messageId); if (req?.messageId != null && Number.isInteger(bi) && bi >= 0) slayBusy.set(bi, Date.now()); }
@@ -2142,16 +2312,23 @@ async function onSlayDraw(req) {
             return null;
         }
         if (A.chatArr()[i] !== m) { adoptDone(i); return null; }
-        // кто-то в кадре раздет, а в теге фото-плёнка (модель не взяла её из заметки или списала со старого тега):
-        // фото раздетых рисовалка режет фильтром — тот же кадр кистью. Только когда плёнка «Авто»: свою выбранную не трогаем.
-        let look = '';
+        // Плёнка «Авто» и кто-то раздет: «Фешн · 18+» — фото как в журнале, без лиц (0.69); в настройках «кистью» — как до
+        // 0.69: фото раздетых рисовалка режет фильтром, тот же кадр кистью. Свою выбранную плёнку не трогаем.
+        let look = '', lookId = '';
         try {
+            const scene = sceneOf(i);
             const lk = lookOfText(t.data.style);
-            if (dpCfg().look === 'auto' && lk && lk !== LOOK_OWN && !PAINTED.has(lk) && sceneOf(i).skin) look = lookById(LOOK_SAFE)[3];
+            lookId = lk;
+            if (dpCfg().look === 'auto' && scene.skin && lk !== LOOK_OWN) {
+                if (scene.fashion !== false) { const want = frameLook(scene, t); if (want !== lk) { look = lookById(want)[3]; lookId = want; } }
+                else if (lk && !PAINTED.has(lk)) { look = lookById(LOOK_SAFE)[3]; lookId = LOOK_SAFE; }
+            }
         } catch { /* сцена не прочиталась — как в теге */ }
+        const faceless = lookMode(lookId) === 'fashion18' && namedIn(take.prompt) === 0;
+        try { hintFor(factsOf({ prompt: take.prompt, i, look: look || t.data.style })); } catch (e) { console.warn('[Life] промты: подсказка', e); }
         req.status?.('Генерация…');
         adoptLater(i, m, t.data.prompt, take, look).catch(e => console.warn('[Life] оператор: вписать промт в пост', e)).finally(() => adoptDone(i));
-        return { prompt: take.prompt, aspectRatio: take.aspect || undefined, ...(look ? { style: look } : {}) };
+        return { prompt: take.prompt, aspectRatio: take.aspect || undefined, ...(look ? { style: look } : {}), faceless };
     } catch (e) {
         console.warn('[Life] оператор', e);
         return null;
@@ -2183,7 +2360,7 @@ async function adoptLater(i, m, old, take, look = '') {
     if (!cur) return;
     // Кадр не нарисовался: отказ фильтра считаем сейчас — после сохранения пост пересоберётся, и причина с плашки пропадёт.
     const oldId = fbId(i, f.t);
-    keepLog(`оператор: пост ${i} — ${cur.state === 'ok' ? 'нарисовано' : `не нарисовано: ${A.cut(errOf(nodeFor(i, f.k)) || (lastSlayErr && Date.now() - lastSlayErr.at < 120000 ? lastSlayErr.msg : '') || 'причина неизвестна', 300)}`} · кадр: ${take.note || take.shot || ''} · плёнка: ${look ? LOOK_SAFE : lookOfText(f.t.data?.style) || 'нет'}`);
+    keepLog(`оператор: пост ${i} — ${cur.state === 'ok' ? 'нарисовано' : `не нарисовано: ${A.cut(errOf(nodeFor(i, f.k)) || (lastSlayErr && Date.now() - lastSlayErr.at < 120000 ? lastSlayErr.msg : '') || 'причина неизвестна', 300)}`} · кадр: ${take.note || take.shot || ''} · плёнка: ${lookOfText(look || f.t.data?.style) || 'нет'}`);
     if (cur.state === 'error') { try { noteRefusals(i, true); } catch (e) { console.warn('[Life] оператор: счёт отказов', e); } }
     const first = { p: old, ar: cur.aspect, src: '', note: '', at: Date.now(), by: 'как написала модель', sn: '' };
     await ad.save({ prompt: take.prompt, aspect: take.aspect || cur.aspect, look });

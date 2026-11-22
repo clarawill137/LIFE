@@ -153,7 +153,7 @@ import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml
 import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle, navThemeHtml } from './nav.js';
 
 const MODULE = 'life';
-const VERSION = '0.68.6';
+const VERSION = '0.69.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 

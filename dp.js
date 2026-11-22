@@ -10,7 +10,7 @@ import { scanTags, imageModelOf, DIALECTS, cleanPrompt } from './pmtags.js';
 import { sceneAt } from './shots.js';
 import { forties } from './era.js';
 import { moodNow } from './mood.js';
-import { LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, lookById, lookText, pickLook, shotOf, shotKnown, variety, dpSystem, dpUser, dpNote, postForDp, readTakes, skinScene } from './dpcore.js';
+import { LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, LOOK_INTIM, lookById, lookText, lookOfText, lookMode, pickLook, shotOf, shotKnown, variety, dpSystem, dpUser, dpNote, postForDp, readTakes, skinScene } from './dpcore.js';
 
 let A = null;
 export function initDp(api) { A = api; }
@@ -24,6 +24,7 @@ export function dpCfg() {
     if (c.auto === undefined) c.auto = true;   // новый кадр оператор переснимает сам, до отрисовки (нужен крючок SLAY)
     if (typeof c.look !== 'string' || !(c.look === LOOK_AUTO || c.look === LOOK_KEEP || c.look === LOOK_OWN || lookById(c.look))) c.look = LOOK_AUTO;
     if (typeof c.own !== 'string') c.own = '';
+    if (c.skin !== 'fashion' && c.skin !== 'brush') c.skin = 'fashion';   // 0.69: раздетые — «Фешн · 18+» (фото без лиц) или кистью, как было
     return c;
 }
 
@@ -46,6 +47,7 @@ export function sceneOf(i = A.lastAiIndex()) {
         loc: sc.loc || '', time: sc.time || '', date: sc.date || '', atm: sc.atm || '', desc: sc.desc || '', clothes: sc.clothes || '',
         modes: [...tones, intim ? 'an intimate scene — covered and atmospheric' : ''].filter(Boolean).join('; '),
         forties: old, tender: (A.chatMeta().modes?.on || []).includes('tender'), intim,
+        fashion: dpCfg().skin !== 'brush',
     };
     out.skin = skinScene(out);
     return out;
@@ -58,7 +60,17 @@ export function lookNow(scene = null) {
     if (c.look === LOOK_OWN) return { id: LOOK_OWN, name: 'своя', text: c.own.trim().replace(/["']/g, '') };
     const id = c.look === LOOK_AUTO ? pickLook(scene || sceneOf()) : c.look;
     const l = lookById(id);
-    return { id, name: l?.[1] || id, text: l?.[3] || '', auto: c.look === LOOK_AUTO };
+    return { id, name: l?.[1] || id, text: l?.[3] || '', auto: c.look === LOOK_AUTO, mode: lookMode(id) };
+}
+
+/** С какой плёнкой кадр уйдёт рисовалке. Плёнка «Авто» и кто-то раздет — «Фешн · 18+» (так его и подменит оператор
+ *  до отрисовки, см. prompts.js: onSlayDraw); иначе — плёнка из тега, а нет её — плёнка сцены. */
+export function frameLook(scene, t = null) {
+    const c = dpCfg();
+    const inTag = lookOfText(t?.data?.style);
+    if (c.look === LOOK_AUTO && scene?.skin && scene.fashion !== false) return inTag === 'fsketch' ? 'fsketch' : LOOK_INTIM;
+    if (inTag && inTag !== LOOK_OWN) return inTag;
+    return lookNow(scene).id;
 }
 
 /** Ряд плёнок для окна и настроек: [id, ярлык, подсказка]. */
@@ -107,7 +119,8 @@ export function dpPrompt(type) {
     if (imageModelOf(st).kind === 'nai') return '';
     const scene = sceneOf();
     const { shots, seed } = recentShots();
-    return dpNote({ look: lookNow(scene).text, scene, v: variety(shots, seed) });
+    const lk = lookNow(scene);
+    return dpNote({ look: lk.text, scene, v: variety(shots, seed), mode: lk.mode });
 }
 
 /** Абзацы поста без карточек; at — после какого абзаца стоит картинка t. */
@@ -138,7 +151,7 @@ function userBefore(i) {
  * Переснять кадр. i — пост, t — тег картинки в нём (если кадр оттуда), prompt/aspect — что есть сейчас.
  * takes — три дубля. → [{ prompt, aspect, shot, idea, note }]
  */
-export async function reshoot({ i = -1, t = null, prompt, aspect = '', request = '', takes = false, error = '', label = 'Оператор' } = {}) {
+export async function reshoot({ i = -1, t = null, prompt, aspect = '', request = '', takes = false, error = '', label = 'Оператор', mode = null } = {}) {
     const st = slay();
     const im = imageModelOf(st);
     const d = DIALECTS[im.kind] || DIALECTS.generic;
@@ -149,7 +162,7 @@ export async function reshoot({ i = -1, t = null, prompt, aspect = '', request =
     const pf = postForDp(post.paras, post.at);
     const look = lookNow(scene);
     const looksText = String(A.settings().pm?.looks || '').trim() || String(st?.atlasCharacterPrompt || '').trim();
-    const sys = dpSystem({ imName: im.name, guide: d.guide, refs: d.refs, lookText: A.cut(looksText, 900), takes });
+    const sys = dpSystem({ imName: im.name, guide: d.guide, refs: d.refs, lookText: A.cut(looksText, 900), takes, mode: mode ?? lookMode(frameLook(scene, t)) });
     const user = dpUser({
         prompt, aspect, post: pf.text, para: pf.marked, userPost: m ? userBefore(i) : '', scene,
         look: look.text ? look.name : '', v: variety(shots, seed), request, error,
