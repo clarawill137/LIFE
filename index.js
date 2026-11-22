@@ -153,6 +153,7 @@ import { initAide, aideSceneHtml, aideClick } from './aide.js';
 import { initCity, cityPrompt, cityAfterPost, cityHtml, cityClick } from './city.js';
 import { chronSystem, detailSystem, CLEAN_SYSTEM, chronInput, cleanInput, extractJson, normalizeResult, applyItemOps, restoreItems } from './chronicler.js';
 import { initAnnex, annexCfgHtml, annexPill, annexPillAct, tiesHas, tiesPairHtml, vaultPairHtml, sagaHtml } from './annex.js';
+import { initWing, wingCfgHtml } from './wing.js';
 import { initNav, navSync, navKey, navHomeHtml, navAfter, navClick, navCfgHtml, navToggle, navThemeHtml } from './nav.js';
 // 0.70: глухие стены, «пока тебя не было», «тем временем», «кто ответит?» (идеи Immersion Director, moonnsy)
 import { initWalls, wallsFilter, wallsReady, wallsPrompt, wallsChron, wallsAfterPost, wallsSceneHtml, wallsClick, paintWalls, wallsSees, wallsWho, wallsAway, wallsDrop } from './walls.js';
@@ -161,7 +162,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.73.0';
+const VERSION = '0.74.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -3065,6 +3066,7 @@ function renderCfg() {
         ${sw('on', 'Счета капают: почта, коммуналка, просрочки, чеки быта', s.bills, 'bills.on')}
         ${sw('on', 'Перепалки: терпение, поводы, вечные темы', s.bicker, 'bicker.on')}
         ${(() => { try { return annexCfgHtml(s, sw); } catch (e) { console.warn('[Life] 0.62: настройки', e); return ''; } })()}
+        ${(() => { try { return wingCfgHtml(s, sw); } catch (e) { console.warn('[Life] 0.74: настройки', e); return ''; } })()}
         ${sec('Прочее')}
         ${(() => { try { return navCfgHtml(); } catch (e) { console.warn('[Life] навигация: настройка', e); return ''; } })()}
         <label class="lf-switch"><input type="checkbox" data-set="errHelp" ${s.errHelp !== false ? 'checked' : ''}><span></span>Объяснять ошибки по-русски: что случилось и что делать</label>
@@ -4469,6 +4471,7 @@ globalThis.LifeBridge = {
         cal: { today: () => calToday(), between: (from, to) => calBetween(from, to), add: (e) => calAdd(e) },
         season: { now: () => seasonNow(), holidays: (y) => seasonHolidays(y) },
         tastes: (who) => tastesOf(who), brief: (who) => briefOf(who),
+        hand: (who) => { try { return handOf(who); } catch { return null; } },   // 0.74: почерк — соседям (письма Зёрнышка)
         // 0.58.1 — органы чувств: соседнее расширение (код-мозг) читает, что Life знает о теле и нервах, и ничего не ломает
         senses: {
             hurt: (who) => ({ lvl: hurtLevel(who), n: hurtCount(who) }),          // самая тяжёлая свежая рана 0–4 и сколько их
@@ -5003,6 +5006,11 @@ jQuery(async () => {
         initAnnex({ ...globalThis.LifeBridge.api, ...extApi, peopleList, invalidate },
             { hubMods, mindParts, addRecs, names: BRIDGE_NAMES, hudKeys: HUD_KEYS, tracker: (t) => addTracker(t), register: (m) => globalThis.LifeBridge.register(m) });
     } catch (e) { console.warn('[Life] 0.62', e); }
+    // 0.74: Должки, Ивенты, Наружка, Допросная — флигель (wing.js)
+    try {
+        initWing({ ...globalThis.LifeBridge.api, ...extApi, peopleList, invalidate },
+            { hubMods, mindParts, addRecs, names: BRIDGE_NAMES, hudKeys: HUD_KEYS, tracker: (t) => addTracker(t), register: (m) => globalThis.LifeBridge.register(m) });
+    } catch (e) { console.warn('[Life] 0.74', e); }
     setTimeout(() => { try { artTidy(); } catch (e) { console.warn('[Life] карточки', e); } }, 4000);
     try { initErrors({ settings, chatMeta, esc }); } catch (e) { console.warn('[Life] разбор ошибок', e); }
     try { initControl(controlApi); } catch (e) { console.warn('[Life] пульт не поднялся', e); }
