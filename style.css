@@ -4669,3 +4669,66 @@ body.lf-theme.lf-pal-paper .lw-sw i { background: #cfc4bb; }
 #lf-app .lf-mini { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(0, 0, 0, .2); color: inherit; font: 500 12px -apple-system, system-ui, sans-serif; cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none; }
 #lf-app .lf-mini.on { border-color: var(--lf-rose, #f2a2c6); background: rgba(242, 162, 198, .16); }
 #lf-app .lf-mini:active { transform: scale(.96); }
+
+/* ───────────── 0.75 · Доска, Титры, Комикс, Глазами Хеди ───────────── */
+#lf-app .lf-bd { position: relative; width: 100%; margin: 8px 0; border-radius: 12px; overflow: hidden; background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, .06), transparent 60%), repeating-radial-gradient(circle at 20% 40%, #a9784a 0 1px, #b8875a 1px 3px), #b07d4e; box-shadow: inset 0 0 0 6px #6b4527, inset 0 0 24px rgba(0, 0, 0, .45); min-height: 160px; }
+#lf-app .lf-bd svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#lf-app .lf-bd svg line { stroke: #c0182a; stroke-width: .45; filter: drop-shadow(0 .3px .3px rgba(0, 0, 0, .5)); }
+#lf-app .lf-bd-card { position: absolute; width: 29%; padding: 6px 6px 7px; border: 0; border-radius: 2px; background: #f6f1e3; color: #2a2420; font: 500 11px/1.25 -apple-system, system-ui, sans-serif; text-align: left; box-shadow: 0 3px 6px rgba(0, 0, 0, .4); }
+#lf-app .lf-bd-card i { position: absolute; left: 50%; top: -4px; width: 9px; height: 9px; margin-left: -4px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff6b6b, #a11); box-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+#lf-app .lf-bd-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; margin-bottom: 3px; }
+#lf-app .lf-bd-card.k-person { background: #eef3f8; } #lf-app .lf-bd-card.k-place { background: #f3f8ee; } #lf-app .lf-bd-card.k-doc { background: #fffbe0; }
+#lf-app .lf-bd-card.on { outline: 2px solid #c0182a; outline-offset: 2px; }
+#lf-app .lf-bd-link { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 2px; font-size: 13px; border-bottom: 1px dashed rgba(255, 255, 255, .1); }
+#lf-app .lf-ttl-row, #lf-app .lf-cmx-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin: 6px 0; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .07); color: inherit; font: inherit; text-align: left; }
+#lf-app .lf-ttl-row b, #lf-app .lf-cmx-row b { display: block; } #lf-app .lf-ttl-row small, #lf-app .lf-cmx-row small { opacity: .7; font-size: 12px; }
+#lf-app .lf-ttl-row b { flex: 1; } #lf-app .lf-cmx-row img { width: 54px; height: 40px; object-fit: cover; border-radius: 6px; }
+#lf-app .lf-cmx-row.on { border-color: var(--lf-rose, #f2a2c6); }
+.lf-ttl { position: fixed; inset: 0; z-index: 100000; background: #000; color: #f2ece4; overflow: hidden; opacity: 0; transition: opacity .8s ease; font-family: Georgia, 'Times New Roman', serif; }
+.lf-ttl.on { opacity: 1; }
+.lf-ttl-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; animation: lfTtlKen 8s ease-in-out forwards; filter: brightness(.35) saturate(.8); }
+@keyframes lfTtlKen { 0% { opacity: 0; transform: scale(1.08); } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+.lf-ttl-roll { position: absolute; left: 0; right: 0; top: 100%; text-align: center; padding: 0 24px; animation: lfTtlRoll var(--dur, 26s) linear forwards; }
+@keyframes lfTtlRoll { to { transform: translateY(calc(-100% - 100vh)); } }
+.lf-ttl-logo { margin: 0 0 30vh; font: 700 38px/1 'Didot', Georgia, serif; letter-spacing: .3em; color: #e8c98a; text-shadow: 0 0 24px rgba(232, 201, 138, .5); }
+.lf-ttl h1 { font-size: 30px; margin: 0 0 8px; } .lf-ttl-tag { font-style: italic; opacity: .8; margin-bottom: 18vh; }
+.lf-ttl h2 { margin: 12vh 0 18px; font: 600 13px/1 -apple-system, system-ui, sans-serif; letter-spacing: .4em; text-transform: uppercase; color: #e8c98a; }
+.lf-ttl-cast { display: flex; flex-direction: column; gap: 22px; align-items: center; }
+.lf-ttl-p img { width: 74px; height: 74px; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 8px; border: 1px solid rgba(232, 201, 138, .5); }
+.lf-ttl-p b { display: block; font-size: 20px; } .lf-ttl-p small { opacity: .6; }
+.lf-ttl-end { margin: 30vh 0 20vh; font-size: 18px; font-style: italic; opacity: .85; }
+.lf-ttl-post { position: absolute; inset: auto 0 0; padding: 26px 22px calc(26px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0, 0, 0, .92) 30%); opacity: 0; transform: translateY(20px); transition: all 1s ease; pointer-events: none; }
+.lf-ttl.post .lf-ttl-post { opacity: 1; transform: none; pointer-events: auto; }
+.lf-ttl-post small { letter-spacing: .3em; text-transform: uppercase; color: #e8c98a; font: 600 11px/1 -apple-system, system-ui, sans-serif; }
+.lf-ttl-post p { font-size: 17px; line-height: 1.5; margin: 10px 0 14px; }
+.lf-ttl-post button, .lf-ttl-x { padding: 9px 16px; margin-right: 8px; border-radius: 99px; border: 1px solid rgba(232, 201, 138, .6); background: rgba(0, 0, 0, .4); color: #f2ece4; font: 600 14px -apple-system, system-ui, sans-serif; }
+.lf-ttl-x { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top)); padding: 6px 11px; }
+#lf-app .lf-cmx-page { margin: 10px 0; padding: 8px; border-radius: 6px; background: #f4efe2; color: #111; box-shadow: 0 8px 20px rgba(0, 0, 0, .4); }
+#lf-app .lf-cmx-head { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 4px 8px; font: 900 15px/1 Impact, 'Arial Black', sans-serif; letter-spacing: .04em; }
+#lf-app .lf-cmx-head span { font: 700 12px/1.2 'Comic Sans MS', 'Chalkboard SE', sans-serif; }
+#lf-app .lf-cmx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#lf-app .lf-cmx-grid.n3 .lf-cmx-p:first-child, #lf-app .lf-cmx-grid.n5 .lf-cmx-p:first-child { grid-column: 1 / -1; }
+#lf-app .lf-cmx-p { position: relative; aspect-ratio: 4 / 3; border: 3px solid #111; background: #ddd; overflow: hidden; }
+#lf-app .lf-cmx-p img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#lf-app .st-retro .lf-cmx-p img { filter: sepia(.25) contrast(1.05); }
+#lf-app .lf-cmx-wait { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; color: #555; }
+#lf-app .lf-cmx-cap { position: absolute; left: 0; top: 0; max-width: 70%; padding: 3px 6px; background: #fff3a8; border: 2px solid #111; font: 700 10px/1.2 'Comic Sans MS', 'Chalkboard SE', sans-serif; }
+#lf-app .lf-cmx-b { position: absolute; bottom: 8px; max-width: 58%; padding: 5px 8px; border: 2px solid #111; border-radius: 14px; background: #fff; font: 700 10.5px/1.2 'Comic Sans MS', 'Chalkboard SE', sans-serif; }
+#lf-app .lf-cmx-b.b0 { left: 6px; } #lf-app .lf-cmx-b.b1 { right: 6px; bottom: 34%; }
+#lf-app .lf-cmx-b small { display: block; font-size: 8px; opacity: .6; text-transform: uppercase; }
+#lf-app .lf-cmx-b.think { border-style: dotted; border-radius: 40%; background: #f8f8ff; font-style: italic; }
+#lf-app .lf-cmx-sfx { position: absolute; right: 8px; top: 6px; font: 900 22px/1 Impact, 'Arial Black', sans-serif; color: #ffd400; -webkit-text-stroke: 1.5px #111; transform: rotate(-12deg); }
+.lf-eyes { position: fixed; inset: 0; z-index: 100000; background: rgba(4, 10, 14, .86); color: #c9f6ff; opacity: 0; transition: opacity .35s ease; overflow-y: auto; font: 500 14px/1.35 ui-monospace, 'SF Mono', Menlo, monospace; }
+.lf-eyes.on { opacity: 1; }
+.lf-eyes-scan { position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(transparent 0 3px, rgba(120, 240, 255, .05) 3px 4px); animation: lfEyesScan 6s linear infinite; }
+@keyframes lfEyesScan { to { background-position: 0 200px; } }
+.lf-eyes-in { position: relative; padding: calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom)); max-width: 620px; margin: 0 auto; }
+.lf-eyes-h { display: flex; align-items: center; gap: 10px; } .lf-eyes-h b { letter-spacing: .2em; color: #7ef0ff; } .lf-eyes-h span { flex: 1; opacity: .6; font-size: 12px; }
+.lf-eyes-h button { border: 1px solid rgba(126, 240, 255, .4); background: none; color: inherit; border-radius: 8px; padding: 4px 10px; }
+.lf-eyes-note { margin: 10px 0; padding: 8px 10px; border-left: 2px solid #7ef0ff; background: rgba(126, 240, 255, .06); }
+.lf-eyes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; } .lf-eyes-grid small { color: #7ef0ff; letter-spacing: .2em; } .lf-eyes-grid p { margin: 4px 0; font-size: 13px; }
+.lf-eyes-ppl { display: flex; flex-direction: column; gap: 8px; }
+.lf-eyes-p { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(126, 240, 255, .25); background: rgba(126, 240, 255, .04); color: inherit; font: inherit; text-align: left; }
+.lf-eyes-p.t2 { border-color: rgba(255, 170, 60, .6); } .lf-eyes-p.t3 { border-color: rgba(255, 70, 70, .8); box-shadow: 0 0 12px rgba(255, 70, 70, .25); }
+.lf-eyes-p span { opacity: .7; font-size: 12px; } .lf-eyes-p em { font-style: normal; font-size: 12.5px; color: #ffb36b; } .lf-eyes-p em.lie { color: #ff8ad8; } .lf-eyes-p em.en { color: #b9a4ff; }
+.lf-eyes-p q { display: block; margin-top: 6px; color: #fff; font-family: -apple-system, system-ui, sans-serif; } .lf-eyes-act { align-self: flex-start; margin-top: 6px; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(126, 240, 255, .5); opacity: 1 !important; color: #7ef0ff; }
