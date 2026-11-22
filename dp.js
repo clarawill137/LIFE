@@ -24,7 +24,7 @@ export function dpCfg() {
     if (c.auto === undefined) c.auto = true;   // новый кадр оператор переснимает сам, до отрисовки (нужен крючок SLAY)
     if (typeof c.look !== 'string' || !(c.look === LOOK_AUTO || c.look === LOOK_KEEP || c.look === LOOK_OWN || lookById(c.look))) c.look = LOOK_AUTO;
     if (typeof c.own !== 'string') c.own = '';
-    if (c.skin !== 'fashion' && c.skin !== 'brush') c.skin = 'fashion';   // 0.69: раздетые — «Фешн · 18+» (фото без лиц) или кистью, как было
+    if (c.skin !== 'fashion' && c.skin !== 'brush') c.skin = 'fashion';   // 0.69: раздетые — «Фешн · 18+» (фото; спокойное прикрыто, откровенное без лиц) или кистью, как было
     return c;
 }
 
