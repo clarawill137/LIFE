@@ -6,7 +6,7 @@
 // Под твоим постом — чипы сработавших правил (тап — не в этот раз). «Собрать из лорбука» — стартовый набор.
 // Это не «Твои правила» из «Вкуса»: те про то, как писать всегда, эти — про ситуацию.
 
-import { inEra, eraId } from './scope.js';
+import { inEra, eraId, legacyOf, defaultEra, erasText } from './scope.js';
 import { loreFor, cardText } from './lore.js';
 import { userIndexFor } from './reply.js';
 
@@ -308,7 +308,9 @@ function editSheet(r) {
     const names = castList();
     if (str(x.who) && !names.some(n => A.sameName(n, x.who))) names.push(x.who);
     const era = eraId();
-    const eras = Array.isArray(x.eras) ? x.eras.filter(Boolean) : [];
+    const own = Array.isArray(x.eras) ? x.eras.filter(Boolean) : [];
+    // старое правило без эпох — основной ролки (2024), «*» и новое без эпох — везде
+    const eras = own.includes('*') ? [] : own.length ? own : (!isNew && legacyOf(x) && defaultEra() ? [defaultEra()] : []);
     const onlyHere = eras.length === 1 && eras[0] === era;
     const other = eras.length && !onlyHere;
     A.openSheet(`${A.icon('target')} ${isNew ? 'Новое правило' : 'Правило'}`, `
@@ -322,7 +324,7 @@ function editSheet(r) {
         ${era ? `<div class="lf-field"><label>Эпоха</label><select data-in="rl-era">
             <option value="all" ${!eras.length ? 'selected' : ''}>везде</option>
             <option value="here" ${onlyHere ? 'selected' : ''}>только эта — ${esc(eraLabel())}</option>
-            ${other ? `<option value="keep" selected>как было: ${esc(eras.join(', '))}</option>` : ''}
+            ${other ? `<option value="keep" selected>как было: ${esc(erasText(x) || eras.join(', '))}</option>` : ''}
         </select></div>` : ''}
         <button class="lf-btn primary full" data-act="rl-save" data-id="${esc(x.id || '')}">${A.icon('check')} Записать</button>
         <div class="lf-hint">«Когда» — ситуация своими словами, чем конкретнее, тем точнее отбор. Пусто — сверяться будет по самой подсказке. Подсказка уходит модели как есть.</div>`);
@@ -340,7 +342,7 @@ function ruleCard(r) {
     const away = !inEra(r);
     const meta = [
         str(r.who) ? short(r.who) : '',
-        Array.isArray(r.eras) && r.eras.length ? `эпоха: ${r.eras.join(', ')}` : '',
+        erasText(r) ? `эпоха: ${erasText(r)}` : '',
         r.src === 'lore' ? 'из лорбука' : '',
         Number(r.n) ? `сработало ×${Number(r.n)}` : '',
         away ? 'не в этой эпохе' : '',
@@ -422,7 +424,7 @@ export async function rulesClick(act, el) {
             x.who = val('rl-who');
             x.prio = [1, 2, 3].includes(Number(val('rl-prio'))) ? Number(val('rl-prio')) : 2;
             const era = val('rl-era');
-            if (era === 'all') delete x.eras;
+            if (era === 'all') x.eras = ['*'];
             else if (era === 'here' && eraId()) x.eras = [eraId()];
             if (!r) c.list.push(x);
             A.closeSheet();

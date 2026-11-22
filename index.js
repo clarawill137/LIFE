@@ -162,7 +162,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.74.0';
+const VERSION = '0.74.1';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -473,7 +473,7 @@ const regionsNow = () => settings().regions.filter(inEra);
 const placesNow = () => Object.entries(settings().places).filter(([, p]) => inEra(p));
 /**
  * Что появилось в этом чате — этой эпохи: места из его истории (и их комнаты), их районы, люди. Список эпох
- * у записи только растёт; «ничьи» записи видны везде, как раньше.
+ * у записи только растёт; записи без эпох из основной ролки — эпохи мира по умолчанию (scope.js).
  */
 function claimEra() {
     if (!eraId() || !hasChat()) return false;
