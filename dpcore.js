@@ -24,6 +24,9 @@ export const LOOKS = [
         `Black-and-white 35mm photograph on Kodak Tri-X 400 pushed one stop: rich grain, deep blacks, luminous skin, available light, documentary intimacy. ${SKIN}`],
     ['noir40', 'Нуар 40-х', 'ч/б Голливуд сороковых',
         'Black-and-white 1940s studio film still: hard key light, deep sculpted shadows, a glowing rim of light on the hair, soft glamour lens, period film grain. Photographic realism, true-to-life proportions.'],
+    // 22.11 (её «да» на «стиль кадров по эпохе: сороковые — ч/б плёнка, как её аватарки»): в сороковых «Авто» — она
+    ['war40', 'Ч/б 40-х', 'ч/б фото сороковых, как военная хроника',
+        'Black-and-white photograph from the 1940s, period 35mm rangefinder on Kodak Super-XX: silver-gelatin tones, soft period lens, coarse grain, slight motion blur, natural available light, the candour of wartime photojournalism. Photographic realism, true-to-life proportions.'],
     ['koda40', 'Кодахром 40-х', 'цветное фото сороковых',
         'Colour photograph of the 1940s on Kodachrome: saturated reds and deep blues, warm skin, soft contrast, period lens softness and film texture. Photographic realism, true-to-life proportions.'],
     ['pencil', 'Карандаш', 'рисунок цветным карандашом',
@@ -107,12 +110,13 @@ export function hourOf(time) {
 
 /**
  * Плёнка по сцене. scene: { time, atm, loc, forties, tender, skin, fashion }.
- * Сороковые — Кодахром; слова сцены о свете важнее часов (в декабре в четыре дня уже сумерки).
+ * Сороковые — ч/б «Ч/б 40-х» (её решение 22.11; Кодахром и нуар — руками); слова сцены о свете важнее часов (в декабре
+ * в четыре дня уже сумерки).
  * Кто-то раздет: «Фешн · 18+» (фото как в журнале, без лиц), а с fashion: false — по-старому кистью.
  */
 export function pickLook(scene = {}) {
     if (scene.skin ?? skinScene(scene)) return scene.fashion === false ? LOOK_SAFE : LOOK_INTIM;
-    if (scene.forties) return 'koda40';
+    if (scene.forties) return 'war40';
     const words = `${scene.atm || ''} ${scene.time || ''}`;
     const h = hourOf(scene.time);
     const night = NIGHT_WORDS.test(words) || (h != null && (h >= 18 || h < 6) && !DAY_WORDS.test(String(scene.atm || '')));
