@@ -8,9 +8,9 @@
 
 import { scanTags, imageModelOf, DIALECTS, cleanPrompt } from './pmtags.js';
 import { sceneAt } from './shots.js';
-import { forties } from './era.js';
+import { forties, coreNow } from './era.js';
 import { moodNow } from './mood.js';
-import { LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, LOOK_INTIM, lookById, lookText, lookOfText, lookMode, pickLook, shotOf, shotKnown, variety, dpSystem, dpUser, dpNote, postForDp, readTakes, skinScene } from './dpcore.js';
+import { LOOKS, LOOK_AUTO, LOOK_KEEP, LOOK_OWN, LOOK_INTIM, lookById, lookText, lookOfText, lookMode, pickLook, shotOf, shotKnown, variety, dpSystem, dpUser, dpNote, postForDp, readTakes, skinScene, eraLooks } from './dpcore.js';
 
 let A = null;
 export function initDp(api) { A = api; }
@@ -161,7 +161,8 @@ export async function reshoot({ i = -1, t = null, prompt, aspect = '', request =
     const post = m ? postParas(m, t) : { paras: [], at: -1 };
     const pf = postForDp(post.paras, post.at);
     const look = lookNow(scene);
-    const looksText = String(A.settings().pm?.looks || '').trim() || String(st?.atlasCharacterPrompt || '').trim();
+    // приметы для рисовалок без рефов — по эпохе чата: в сороковых Хеди не «альбинос» из основной ролки (0.73.1)
+    const looksText = eraLooks(String(A.settings().pm?.looks || '').trim() || String(st?.atlasCharacterPrompt || '').trim(), prompt, globalThis.slayRefBook, coreNow());
     const sys = dpSystem({ imName: im.name, guide: d.guide, refs: d.refs, lookText: A.cut(looksText, 900), takes, mode: mode ?? lookMode(frameLook(scene, t)) });
     const user = dpUser({
         prompt, aspect, post: pf.text, para: pf.marked, userPost: m ? userBefore(i) : '', scene,

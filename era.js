@@ -29,6 +29,17 @@ export function storyYear() {
     return null;
 }
 
+/** Снимок ядра «Священный таймлайн» этого чата или null (ядра нет, вне мира, снимок ещё от прошлого чата). */
+export function coreNow() {
+    try {
+        const cx = globalThis.SacredTimeline?.context?.();
+        if (!cx) return null;
+        const chat = A?.ctx?.()?.getCurrentChatId?.();
+        if (cx.chatId && chat && String(cx.chatId) !== String(chat)) return null;
+        return cx;
+    } catch { return null; }
+}
+
 export function eraOf(y) {
     if (!y) return '';
     if (y < 1960) return '40s';

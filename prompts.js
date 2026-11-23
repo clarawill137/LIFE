@@ -42,7 +42,8 @@ import {
     ASPECTS, imageModelOf, DIALECTS, dialectNote, explainError, sourceSnap, sourceIsCurrent,
 } from './pmtags.js';
 import { dpCfg, reshoot, lookNow, lookChoices, sceneOf, frameLook } from './dp.js';
-import { LOOKS, LOOK_OWN, LOOK_SAFE, LOOK_INTIM, PAINTED, lookText, lookOfText, lookById, lookMode, safeLookFor, shotOf, shotLabelRu } from './dpcore.js';
+import { LOOKS, LOOK_OWN, LOOK_SAFE, LOOK_INTIM, PAINTED, lookText, lookOfText, lookById, lookMode, safeLookFor, shotOf, shotLabelRu, eraLooks } from './dpcore.js';
+import { coreNow } from './era.js';
 import { MODELS, VIA_RU, modelById, frameFacts, suggestModels, verdict } from './pmpick.js';
 import { initLive, paintLive, isLiveNode, liveLightbox, liveSound, animate, liveHtml, liveClick, liveInput, liveCommand, liveNow, resumeLive, liveRunning } from './live.js';
 
@@ -1401,7 +1402,7 @@ async function translate({ prompt, aspect, request = '', error = '', soften = fa
         styled && !restyle ? 'NOTE: the art style of this picture reaches the renderer separately — keep the prompt free of art-style, medium and rendering-technique words.' : '',
         error ? `THE LAST ATTEMPT FAILED WITH: ${A.cut(error, 400)}` : '',
     ].filter(Boolean).join('\n\n');
-    const raw = await A.askModel([{ role: 'system', content: TR_SYSTEM(d, im, A.cut(looks(), 900)) }, { role: 'user', content: user }], 1500, 'Промты');
+    const raw = await A.askModel([{ role: 'system', content: TR_SYSTEM(d, im, A.cut(eraLooks(looks(), prompt, globalThis.slayRefBook, coreNow()), 900)) }, { role: 'user', content: user }], 1500, 'Промты');
     const j = A.extractJson(raw);
     const p = cleanPrompt(j?.prompt);
     if (p.length < 12) throw new Error('Летописец не вернул промт — попробуй ещё раз');

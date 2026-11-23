@@ -240,7 +240,7 @@ export const FASHION_CRAFT = `FASHION EDITORIAL — this picture is shot as a fa
 export const FASHION18_RULES = `INTIMATE FASHION FRAME — the rules of this picture (they outrank the general intimacy line). First decide which kind of moment this is:
 - A CALM UNDRESSED MOMENT (a bath, a shower, a towel after it, getting dressed, lying in bed talking, sleeping): shoot it as an ordinary editorial frame — whatever shot size the moment asks for (a wide frame of the room, a medium two-shot in the tub, an over-the-shoulder, a close-up of one face), the faces seen and the people named as usual. The composition does the covering: water, foam, steam, the rim of the tub, a towel, a sheet, an arm, hair, the edge of the frame, shadow. Not every intimate picture is a close-up or a crop — vary it like any other scene.
 - AN EROTIC MOMENT (sex, a caress where the body is the subject, nudity the composition cannot cover): faceless — cropped below the eyes or turned away: bodies and fabric in detail, hands on skin, a mouth close to a neck, the line of a back, fingers in hair; or a full frame with the faces hidden — seen from behind, a silhouette against the light, a reflection in a fogged mirror, far away through a doorway, a face lost in hair, shadow or soft focus. The one exception is a kiss: then the faces may be seen — close, in profile, half in shadow, eyes closed.
-- A faceless frame carries NO first names: write "a woman", "a man" with the fixed marks the rough prompt gives them ("an albino pale-skinned woman", "a man with a metal arm"). Every other frame — faces seen, a kiss — keeps the first names.
+- A faceless frame carries NO first names: write "a woman", "a man" with the fixed marks the rough prompt gives them ("a woman in a red dress", "a man with a metal arm"). Every other frame — faces seen, a kiss — keeps the first names.
 - Never genitals. Nudity is only implied: water, a sheet, fabric, a hand, shadow, steam or the edge of the frame covers it.
 - Elegance over explicitness: what the frame hides is what makes it charged.`;
 
@@ -248,6 +248,32 @@ export const FASHION18_RULES = `INTIMATE FASHION FRAME — the rules of this pic
 export const DP_BRIEF = 'Shoot it like a film still caught by a photographer in the room, never people posing: one idea per frame; the action half a second before or after its peak; say where each person looks (not at the camera); a face is muscles and a cause, never a label ("one corner of the mouth pulled up, eyes still wet"), and two people never share one expression; for two people — closeness, uneven heights, bodies overlapping in depth, ONE touch with its exact place and pressure and the answer of the one touched; shot size and camera height chosen by meaning (wide with small figures, over the shoulder, a close-up off-centre, an insert of hands, a silhouette against a window, a reflection, through a doorway, from above, from low) with a soft foreground and depth behind; one real light source of this place and hour with its direction and colour, part of the face in shadow, two or three named colours; end with "The feeling: ..." in a few words.';
 
 const ASPECTS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+
+/**
+ * Приметы людей для рисовалки без рефов — по эпохе чата (0.73.1; её слова 23.11: «кроме будущего, у Хеди везде тёмные
+ * волосы»). Текст «как выглядят» (Life или «Персонажи» SLAY) написан про основную ролку. В чате другой эпохи мира строки
+ * (и куски через «;» или «|») про людей, у которых в лорбуке рефов SLAY есть облик этой эпохи с внешностью, заменяются
+ * этой внешностью. rb — window.slayRefBook (облик сам выбирает по ядру), cx — снимок ядра этого чата; нет их, эпоха мира
+ * по умолчанию или в кадре таких нет — текст как есть.
+ */
+export function eraLooks(text, scene, rb, cx) {
+    const t = String(text || '').trim();
+    const era = String(cx?.era?.id || ''), def = String(cx?.world?.defaultEra || '');
+    if (typeof rb?.match !== 'function' || !era || !def || era === def) return t;
+    let hits = [];
+    try { hits = rb.match(String(scene || '')) || []; } catch { hits = []; }
+    const mine = [];
+    for (const e of hits) {
+        if (!e?.identity || (e.eras || []).includes(def) || !/:\s*\S/.test(String(e.description || ''))) continue;
+        if (!mine.some(x => x.identity === e.identity)) mine.push(e);
+    }
+    if (!mine.length) return t;
+    const named = (seg) => mine.some(e => { try { return !!rb.names?.(e, seg); } catch { return false; } });
+    const keep = t.split('\n')
+        .map(line => line.split(/(?<=[;|])/).filter(seg => !named(seg)).join('').replace(/[;|]\s*$/, '').trim())
+        .filter(Boolean);
+    return [...keep, ...mine.map(e => String(e.description).trim())].join('\n');
+}
 
 /**
  * Задание агенту-оператору. o: { imName, guide, refs, lookText (приметы для рисовалок без рефов), takes, styled, mode }.
@@ -264,7 +290,7 @@ export function dpSystem(o = {}) {
         ? `- This renderer has no reference photos: every name must be replaced by the look of that person.${o.lookText ? ` Looks: ${o.lookText}` : ' Keep the neutral traits the rough prompt already has.'}`
         : intim
             ? '- Names follow the intimate rules: a faceless frame has no first names at all; every other frame (faces seen, a kiss) keeps exactly the first names of the rough prompt (the extension maps each name to a reference photo) with the same fixed epithets. Never describe faces, hair colour, eye colour or skin tone of a named person; marks the rough prompt lists (scars, a metal arm, rings) stay, in a few words, when this framing shows them.'
-            : '- People keep exactly the first names of the rough prompt (the extension maps each name to a reference photo), with the same fixed epithets in front of a name if the rough prompt has them ("albino pale-skinned Hedy", "tall built Bucky"). Never describe faces, hair colour, eye colour or skin tone; hair only as the scene changed it (wet, tied back). Marks the rough prompt lists (scars, a metal arm, a bruise, rings) stay, in a few words, when this framing shows them.';
+            : '- People keep exactly the first names of the rough prompt (the extension maps each name to a reference photo), with the same fixed epithets in front of a name if the rough prompt has them ("lean-muscled Bucky", "tall built Steve"). Never describe faces, hair colour, eye colour or skin tone; hair only as the scene changed it (wet, tied back). Marks the rough prompt lists (scars, a metal arm, a bruise, rings) stay, in a few words, when this framing shows them.';
     return `You are the director of photography and stills photographer of an illustrated roleplay story. The story model wrote a post and a rough prompt for its picture. Re-shoot that picture: the same moment, the same people, clothes and place — but framed, lit and acted the way a very good photographer who was in the room would have caught it. The result is one ${fashion ? 'editorial still' : 'film still'}, never people posing for a camera.
 
 Return ONLY JSON: ${o.takes

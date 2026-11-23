@@ -162,7 +162,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.76.2';
+const VERSION = '0.76.3';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
