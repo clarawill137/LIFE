@@ -7,6 +7,8 @@
 // внизу хаба (TABS в index.js) — чипом во «Всё». Упала навигация — хаб возвращается к прежним пяти вкладкам.
 // Выключатель: «Всё» внизу, Мир → ⚙ → «Прочее», /life nav.
 // В index.js только крючки: navKey/navSync/navHomeHtml/navAfter в render, hubMods «nv-», выключатель, команда.
+// Свой атрибут группы — data-nvg (0.76.2): с общим data-g «История» глотал Ангар — его перехват кликов на документе
+// ловил любой [data-g] со своим обработчиком «story» («из истории»), и до хаба тап не доходил.
 
 let A = null;
 let broken = false;           // навигация упала — до перезагрузки работаем по-старому
@@ -188,7 +190,7 @@ export function navKey() {
 // ───────────── панель внизу ─────────────
 
 function barHtml() {
-    return `${TREE.map(g => `<button class="lf-tab" data-act="nv-g" data-g="${g.id}">${icon(ICON[g.id])}<span>${g.t}</span></button>`).join('')}<i class="lf-tab-ink"></i>`;
+    return `${TREE.map(g => `<button class="lf-tab" data-act="nv-g" data-nvg="${g.id}">${icon(ICON[g.id])}<span>${g.t}</span></button>`).join('')}<i class="lf-tab-ink"></i>`;
 }
 
 /** Поставить нашу панель вместо стоковой или вернуть стоковую — по выключателю. */
@@ -255,7 +257,7 @@ export function navSync(app) {
         const cur = homeOf() || here()[0].id;
         const tabs = [...app.querySelectorAll('nav.lf-nv .lf-tab')];
         tabs.forEach((b, i) => {
-            const on = b.dataset.g === cur;
+            const on = b.dataset.nvg === cur;
             b.classList.toggle('on', on);
             if (on) { const ink = app.querySelector('nav.lf-nv .lf-tab-ink'); if (ink) ink.style.transform = `translateX(${i * 100}%)`; }
         });
@@ -463,7 +465,7 @@ export function navHomeHtml() {
     const id = homeOf();
     try {
         const html = id === 'heroes' ? heroesHome() : id === 'world' ? worldHome() : id === 'story' ? storyHome() : allHome();
-        return `<div class="lf-nv-home" data-g="${esc(id)}">${html}</div>`;
+        return `<div class="lf-nv-home" data-nvg="${esc(id)}">${html}</div>`;
     } catch (e) {
         fail(`дом «${id}»`, e);
         return `<div class="lf-empty small">Навигация споткнулась. Нажми любую вкладку внизу.</div>`;
@@ -511,7 +513,7 @@ export function navAfter(app, body) {
         const gg = group(g.id) || g;
         const crumbs = document.createElement('div');
         crumbs.className = 'lf-nv-crumbs';
-        crumbs.innerHTML = `<button class="lf-nv-back" data-act="nv-g" data-g="${gg.id}">${icon('left')}<span>${esc(gg.t)}</span></button>${sb ? `<i>·</i><b>${esc(sb.t)}</b>` : ''}`;
+        crumbs.innerHTML = `<button class="lf-nv-back" data-act="nv-g" data-nvg="${gg.id}">${icon('left')}<span>${esc(gg.t)}</span></button>${sb ? `<i>·</i><b>${esc(sb.t)}</b>` : ''}`;
         body.prepend(crumbs);
     } catch (e) { fail('крошки', e); }
 }
@@ -537,7 +539,7 @@ function goTo(d) {
 export async function navClick(act, el) {
     const u = A.ui;
     if (act === 'nv-g') {
-        const g = group(el.dataset.g);
+        const g = group(el.dataset.nvg);
         if (!g) return;
         if (!g.subs) { goTo({ tab: 'scene' }); return; }
         u.tab = HOME + g.id;
