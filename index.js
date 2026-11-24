@@ -84,7 +84,7 @@ import { initHeroes, heroesPrompt, heroesChron, heroesAfterPost, heroesRecs, her
 import { initDrama, dramaPrompt, dramaSceneHtml, dramaClick } from './drama.js';
 import { initRoute, estimate as routeEstimate, cached as routeCached, routeNote, routeHtml, routeSvg, routeClick } from './route.js';
 import { initAmbient, update as ambUpdate, ambLabel, ambLevel, cycleAmb, smellPrompt, smellAfterPost, smellSceneHtml, ambClick } from './ambient.js';
-import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, showRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
+import { initRecap, maybeShow as recapMaybe, markSeen as recapSeen, openRecap, recapCfgHtml, recapClick, recapInput } from './recap.js';
 import { fmRescue, fmWatch, fmStatus } from './rescue.js';
 import { initPress, renderPress, pressPrompt, pressClick } from './press.js';
 import { initPlates, platesSync, platesPrompt } from './plates.js';
@@ -162,7 +162,7 @@ import { initPick, pickCCHtml, pickCC } from './pick.js';
 import { duoCardPrompt } from './duo.js';
 
 const MODULE = 'life';
-const VERSION = '0.76.3';
+const VERSION = '0.77.0';
 const PROMPT_KEY = 'life_move';
 const WARDROBE_DRAW = '/scripts/extensions/third-party/wardrobe/draw.js';
 
@@ -4317,7 +4317,7 @@ function registerSlash() {
                     return '';
                 }
                 if (v === 'fix' || v === 'дописать' || v === 'mend') { mendLast(); return ''; }
-                if (v === 'recap' || v === 'ранее') { showRecap({}); return ''; }
+                if (v === 'recap' || v === 'ранее') { openRecap({}); return ''; }
                 if (v === 'guide' || v === 'гайд' || v === 'что где') { guideSheet(); return ''; }
                 if (v === 'twist' || v.startsWith('twist ') || v.startsWith('твист')) {
                     const arg = v.split(/\s+/).slice(1).join(' ');
@@ -4418,6 +4418,7 @@ const controlApi = {
     twistCC: (act, el, ui) => twistClick(act, el, { at: 'data-cc', busy: withBusy, ...ui }),
     duoHtml: () => (hasChat() && settings().enabled ? duoCCHtml() : ''),
     guide: () => guideSheet(),
+    recap: () => openRecap({}),
     feel: () => feelOn(),
     toggleFeel: () => toggleFeel(),
     duoCC: (act, el) => duoClick(act, el),
